@@ -133,12 +133,14 @@ Added `resolve_file_id_or_alias()` support to all gdocs tools that accept `docum
 
 **Verification**: ✅ All 123 tests pass, ruff clean
 
-### Task 4.2: Complete download_doc_tabs Implementation
-`gdrive/sync_tools.py` has a placeholder for tab-level document sync.
+### Task 4.2: Complete download_doc_tabs Implementation ✅ COMPLETE
+`gdrive/sync_tools.py` now fully implements tab-level document sync.
 
-- [ ] Integrate Google Docs API to fetch individual tab content
-- [ ] Save each tab as `[TabName].md` in the output directory
-- [ ] Maintain the `_Full_Export.md` for complete document
+- [x] Integrate Google Docs API to fetch individual tab content (using `includeTabsContent=True`)
+- [x] Save each tab as `[TabName].md` in the output directory (with duplicate name handling)
+- [x] Maintain the `_Full_Export.md` for complete document
+
+**Verification**: ✅ All 123 tests pass, ruff clean, main.py --help works
 
 ### Task 4.3: Expand Test Coverage
 Current gaps identified:

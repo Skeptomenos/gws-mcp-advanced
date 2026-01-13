@@ -21,7 +21,7 @@ from collections import deque
 from googleapiclient.errors import HttpError
 from googleapiclient.http import MediaFileUpload
 
-from auth.service_decorator import require_google_service
+from auth.service_decorator import require_google_service, require_multiple_services
 from core.errors import (
     GDriveError,
     LinkNotFoundError,
@@ -568,9 +568,15 @@ async def mirror_drive_folder(
 
 @server.tool()
 @handle_http_errors("download_doc_tabs", is_read_only=False, service_type="drive")
-@require_google_service("drive", "drive_read")
+@require_multiple_services(
+    [
+        {"service_type": "drive", "scopes": "drive_read", "param_name": "drive_service"},
+        {"service_type": "docs", "scopes": "docs_read", "param_name": "docs_service"},
+    ]
+)
 async def download_doc_tabs(
-    service,
+    drive_service,
+    docs_service,
     user_google_email: str,
     local_dir: str,
     file_id: str,
@@ -591,20 +597,109 @@ async def download_doc_tabs(
 
         os.makedirs(local_dir, exist_ok=True)
 
-        # Download full export as markdown
-        full_content = await download_doc_as_text(service, real_id, "text/plain")
+        # Download full export as markdown (high fidelity)
+        full_content = await download_doc_as_text(drive_service, real_id, "text/plain")
         full_export_path = os.path.join(local_dir, "_Full_Export.md")
-        with open(full_export_path, "w") as f:
+        with open(full_export_path, "w", encoding="utf-8") as f:
             f.write(full_content)
 
-        # Get document structure for tabs
-        # Note: This requires the Docs API, not Drive API
-        # For now, we'll just save the full export
-        version = await get_file_version(service, real_id)
+        # Get document structure with tabs using Docs API
+        doc_data = await asyncio.to_thread(
+            docs_service.documents().get(documentId=real_id, includeTabsContent=True).execute
+        )
+
+        # Extract text from document elements (paragraphs, tables)
+        def extract_text_from_elements(elements: list, depth: int = 0) -> str:
+            """Extract text from document elements (paragraphs, tables, etc.)"""
+            if depth > 5:  # Prevent infinite recursion
+                return ""
+            text_parts = []
+            for element in elements:
+                if "paragraph" in element:
+                    paragraph = element.get("paragraph", {})
+                    para_elements = paragraph.get("elements", [])
+                    line_text = ""
+                    for pe in para_elements:
+                        text_run = pe.get("textRun", {})
+                        if text_run and "content" in text_run:
+                            line_text += text_run["content"]
+                    if line_text.strip():
+                        text_parts.append(line_text)
+                elif "table" in element:
+                    table = element.get("table", {})
+                    table_rows = table.get("tableRows", [])
+                    for row in table_rows:
+                        row_cells = row.get("tableCells", [])
+                        for cell in row_cells:
+                            cell_content = cell.get("content", [])
+                            cell_text = extract_text_from_elements(cell_content, depth=depth + 1)
+                            if cell_text.strip():
+                                text_parts.append(cell_text)
+            return "".join(text_parts)
+
+        def process_tab(tab: dict, level: int = 0) -> tuple[str, str]:
+            """Process a tab and return (tab_title, tab_content)."""
+            tab_title = "Untitled Tab"
+            tab_content = ""
+
+            if "documentTab" in tab:
+                props = tab.get("tabProperties", {})
+                tab_title = props.get("title", "Untitled Tab")
+                tab_body = tab.get("documentTab", {}).get("body", {}).get("content", [])
+                tab_content = extract_text_from_elements(tab_body)
+
+            return tab_title, tab_content
+
+        def collect_all_tabs(tabs: list, level: int = 0) -> list[tuple[str, str]]:
+            """Recursively collect all tabs and their content."""
+            result = []
+            for tab in tabs:
+                tab_title, tab_content = process_tab(tab, level)
+                if tab_content.strip():
+                    result.append((tab_title, tab_content))
+                child_tabs = tab.get("childTabs", [])
+                if child_tabs:
+                    result.extend(collect_all_tabs(child_tabs, level + 1))
+            return result
+
+        # Get all tabs from document
+        tabs = doc_data.get("tabs", [])
+        all_tabs = collect_all_tabs(tabs)
+
+        # Save each tab as a separate file
+        saved_tabs = []
+        tab_name_counts: dict[str, int] = {}
+
+        for tab_title, tab_content in all_tabs:
+            # Sanitize filename (remove invalid characters)
+            safe_name = re.sub(r'[<>:"/\\|?*]', "_", tab_title)
+            safe_name = safe_name.strip() or "Untitled"
+
+            # Handle duplicate tab names
+            if safe_name in tab_name_counts:
+                tab_name_counts[safe_name] += 1
+                safe_name = f"{safe_name}_{tab_name_counts[safe_name]}"
+            else:
+                tab_name_counts[safe_name] = 0
+
+            tab_file_path = os.path.join(local_dir, f"{safe_name}.md")
+            with open(tab_file_path, "w", encoding="utf-8") as f:
+                f.write(tab_content)
+            saved_tabs.append(safe_name)
+
+        # Link files for sync tracking
+        version = await get_file_version(drive_service, real_id)
         sync_manager.link_file(local_dir, real_id, version)
         sync_manager.link_file(full_export_path, real_id, version)
 
-        return f"Hybrid Sync Complete in '{local_dir}'. Saved _Full_Export.md."
+        # Build result message
+        if saved_tabs:
+            tab_list = ", ".join(saved_tabs)
+            return (
+                f"Hybrid Sync Complete in '{local_dir}'. Saved _Full_Export.md and {len(saved_tabs)} tab(s): {tab_list}"
+            )
+        else:
+            return f"Hybrid Sync Complete in '{local_dir}'. Saved _Full_Export.md. (No tabs found or document uses legacy structure)"
 
     except HttpError as e:
         return format_error("Download tabs", handle_http_error(e, file_id))
