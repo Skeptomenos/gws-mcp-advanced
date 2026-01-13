@@ -253,3 +253,73 @@ class TestOAuthStatePersistence:
 
         result = store2.validate_and_consume_oauth_state(state, session_id=session_id)
         assert result["session_id"] == session_id
+
+
+class TestSessionRemovalPersistence:
+    """Test that session removal is persisted to disk."""
+
+    @pytest.fixture
+    def temp_dir(self, tmp_path, monkeypatch):
+        """Create and configure temporary directory."""
+        monkeypatch.setenv("GOOGLE_MCP_CREDENTIALS_DIR", str(tmp_path))
+        return str(tmp_path)
+
+    def test_removed_session_does_not_survive_restart(self, temp_dir):
+        """Verify that removed sessions don't reappear after restart."""
+        user_email = "removed@example.com"
+        session_id = "mcp_session_to_remove"
+
+        # Create and store a session
+        store1 = OAuth21SessionStore()
+        store1.store_session(
+            user_email=user_email,
+            access_token="test_token",
+            token_uri="https://oauth2.googleapis.com/token",
+            mcp_session_id=session_id,
+        )
+
+        # Verify it exists
+        assert store1.get_user_by_mcp_session(session_id) == user_email
+
+        # Remove the session
+        store1.remove_session(user_email)
+
+        # Verify it's gone from the current store
+        assert store1.get_user_by_mcp_session(session_id) is None
+
+        # Create a new store (simulating server restart)
+        store2 = OAuth21SessionStore()
+
+        # Verify the removed session does NOT reappear
+        assert store2.get_user_by_mcp_session(session_id) is None
+
+    def test_partial_removal_preserves_other_sessions(self, temp_dir):
+        """Removing one session should not affect other sessions."""
+        user1 = "user1@example.com"
+        user2 = "user2@example.com"
+        session1 = "session_1"
+        session2 = "session_2"
+
+        store1 = OAuth21SessionStore()
+        store1.store_session(
+            user_email=user1,
+            access_token="token1",
+            token_uri="https://oauth2.googleapis.com/token",
+            mcp_session_id=session1,
+        )
+        store1.store_session(
+            user_email=user2,
+            access_token="token2",
+            token_uri="https://oauth2.googleapis.com/token",
+            mcp_session_id=session2,
+        )
+
+        # Remove only user1
+        store1.remove_session(user1)
+
+        # Restart
+        store2 = OAuth21SessionStore()
+
+        # user1 should be gone, user2 should remain
+        assert store2.get_user_by_mcp_session(session1) is None
+        assert store2.get_user_by_mcp_session(session2) == user2

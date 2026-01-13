@@ -10,6 +10,7 @@ import contextvars
 import json
 import logging
 import os
+import tempfile
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from threading import RLock
@@ -45,6 +46,40 @@ def _get_oauth_states_file_path() -> str:
         os.makedirs(base_dir, exist_ok=True)
 
     return os.path.join(base_dir, "oauth_states.json")
+
+
+def _atomic_write_json(file_path: str, data: dict, mode: int = 0o600) -> None:
+    """
+    Atomically write JSON data to a file with restrictive permissions.
+
+    Uses a temporary file + rename pattern to ensure the file is never
+    left in a corrupted state if the process crashes mid-write.
+
+    Args:
+        file_path: Target file path
+        data: Dictionary to serialize as JSON
+        mode: File permission mode (default: 0o600 = owner read/write only)
+    """
+    dir_path = os.path.dirname(file_path)
+    if dir_path and not os.path.exists(dir_path):
+        os.makedirs(dir_path, exist_ok=True)
+
+    # Create temp file in same directory to ensure same filesystem (for atomic rename)
+    fd, temp_path = tempfile.mkstemp(dir=dir_path, suffix=".tmp")
+    try:
+        # Set restrictive permissions before writing sensitive data
+        os.fchmod(fd, mode)
+        with os.fdopen(fd, "w") as f:
+            json.dump(data, f, indent=2)
+        # Atomic rename (POSIX guarantees this is atomic on same filesystem)
+        os.replace(temp_path, file_path)
+    except Exception:
+        # Clean up temp file on failure
+        try:
+            os.unlink(temp_path)
+        except OSError:
+            pass
+        raise
 
 
 def _normalize_expiry_to_naive_utc(expiry: Any | None) -> datetime | None:
@@ -283,7 +318,9 @@ class OAuth21SessionStore:
             )
 
         except json.JSONDecodeError as e:
-            logger.warning("Failed to parse OAuth states file: %s", e)
+            logger.warning("OAuth states file corrupted, starting fresh: %s", e)
+        except PermissionError as e:
+            logger.error("Permission denied reading OAuth states file: %s", e)
         except OSError as e:
             logger.warning("Failed to read OAuth states file: %s", e)
         except Exception as e:
@@ -301,9 +338,7 @@ class OAuth21SessionStore:
                     "created_at": data["created_at"].isoformat() if data.get("created_at") else None,
                 }
 
-            with open(self._states_file_path, "w") as f:
-                json.dump(serializable_data, f, indent=2)
-
+            _atomic_write_json(self._states_file_path, serializable_data)
             logger.debug("Persisted %d OAuth states to disk", len(serializable_data))
 
         except OSError as e:
@@ -334,14 +369,19 @@ class OAuth21SessionStore:
             self._mcp_session_mapping = data.get("mcp_session_mapping", {})
             self._session_auth_binding = data.get("session_auth_binding", {})
 
-            for user_email, session_info in data.get("sessions", {}).items():
-                if user_email not in self._sessions:
-                    self._sessions[user_email] = {
-                        "session_id": session_info.get("session_id"),
-                        "mcp_session_id": session_info.get("mcp_session_id"),
-                        "issuer": session_info.get("issuer"),
-                        "scopes": session_info.get("scopes", []),
-                    }
+            # NOTE: We intentionally do NOT populate self._sessions from disk.
+            # The _sessions dict requires full credential data (access_token, etc.)
+            # which we don't persist for security reasons. Sessions will be
+            # populated lazily when credentials are retrieved from the file store
+            # and bound to an MCP session via store_session().
+            #
+            # What we DO persist and restore:
+            # - _mcp_session_mapping: Maps MCP session ID -> user email
+            # - _session_auth_binding: Immutable session-to-user bindings
+            #
+            # This allows auto-recovery to work: when a request comes in with
+            # a known MCP session ID, we can look up the user email and then
+            # load their credentials from the file-based credential store.
 
             logger.info(
                 "Loaded session mappings: %d MCP sessions, %d auth bindings",
@@ -350,7 +390,9 @@ class OAuth21SessionStore:
             )
 
         except json.JSONDecodeError as e:
-            logger.warning("Failed to parse session mappings file: %s", e)
+            logger.warning("Session mappings file corrupted, starting fresh: %s", e)
+        except PermissionError as e:
+            logger.error("Permission denied reading session mappings file: %s", e)
         except OSError as e:
             logger.warning("Failed to read session mappings file: %s", e)
         except Exception as e:
@@ -360,23 +402,15 @@ class OAuth21SessionStore:
         """Persist session mappings to disk. Caller must hold lock."""
         sessions_file = self._get_sessions_file_path()
         try:
+            # Only persist the mappings, not the full session data.
+            # Session data contains tokens which should not be persisted here.
+            # Credentials are stored separately in the credential store.
             data = {
                 "mcp_session_mapping": self._mcp_session_mapping,
                 "session_auth_binding": self._session_auth_binding,
-                "sessions": {
-                    email: {
-                        "session_id": info.get("session_id"),
-                        "mcp_session_id": info.get("mcp_session_id"),
-                        "issuer": info.get("issuer"),
-                        "scopes": info.get("scopes", []),
-                    }
-                    for email, info in self._sessions.items()
-                },
             }
 
-            with open(sessions_file, "w") as f:
-                json.dump(data, f, indent=2)
-
+            _atomic_write_json(sessions_file, data)
             logger.debug("Persisted session mappings to %s", sessions_file)
 
         except OSError as e:
@@ -516,15 +550,32 @@ class OAuth21SessionStore:
             self._sessions[user_email] = session_info
 
             # Store MCP session mapping if provided
+            # Import diagnostics here to avoid circular imports
+            from auth.diagnostics import log_session_binding
+
             if mcp_session_id:
                 # Create immutable session binding (first binding wins, cannot be changed)
                 if mcp_session_id not in self._session_auth_binding:
                     self._session_auth_binding[mcp_session_id] = user_email
                     logger.info(f"Created immutable session binding: {mcp_session_id} -> {user_email}")
+                    log_session_binding(
+                        mcp_session_id=mcp_session_id,
+                        user_email=user_email,
+                        action="bind",
+                        success=True,
+                        reason="new_binding",
+                    )
                 elif self._session_auth_binding[mcp_session_id] != user_email:
                     # Security: Attempt to bind session to different user
                     logger.error(
                         f"SECURITY: Attempt to rebind session {mcp_session_id} from {self._session_auth_binding[mcp_session_id]} to {user_email}"
+                    )
+                    log_session_binding(
+                        mcp_session_id=mcp_session_id,
+                        user_email=user_email,
+                        action="bind",
+                        success=False,
+                        reason=f"already_bound_to_{self._session_auth_binding[mcp_session_id]}",
                     )
                     raise ValueError(f"Session {mcp_session_id} is already bound to a different user")
 
@@ -581,21 +632,108 @@ class OAuth21SessionStore:
         """
         Get Google credentials using FastMCP session ID.
 
+        This method first checks in-memory sessions, then falls back to the
+        file-based credential store. This enables session recovery after
+        server restart: the MCP session mapping survives (persisted to disk),
+        and credentials are loaded from the credential store.
+
         Args:
             mcp_session_id: FastMCP session ID
 
         Returns:
             Google Credentials object or None
         """
+        # Import diagnostics here to avoid circular imports
+        from auth.diagnostics import log_credential_lookup, log_session_binding
+
         with self._lock:
             # Look up user email from MCP session mapping
             user_email = self._mcp_session_mapping.get(mcp_session_id)
             if not user_email:
                 logger.debug(f"No user mapping found for MCP session {mcp_session_id}")
+                log_credential_lookup(
+                    source="mcp_session_mapping",
+                    user_email=None,
+                    session_id=mcp_session_id,
+                    found=False,
+                    reason="no_mapping",
+                )
                 return None
 
             logger.debug(f"Found user {user_email} for MCP session {mcp_session_id}")
-            return self.get_credentials(user_email)
+            log_session_binding(
+                mcp_session_id=mcp_session_id,
+                user_email=user_email,
+                action="lookup",
+                success=True,
+                reason="mapping_found",
+            )
+
+            # First try in-memory session
+            credentials = self.get_credentials(user_email)
+            if credentials:
+                log_credential_lookup(
+                    source="memory_session",
+                    user_email=user_email,
+                    session_id=mcp_session_id,
+                    found=True,
+                )
+                return credentials
+
+            log_credential_lookup(
+                source="memory_session",
+                user_email=user_email,
+                session_id=mcp_session_id,
+                found=False,
+                reason="not_in_memory",
+            )
+
+            # Fall back to credential store (for post-restart recovery)
+            # Import here to avoid circular imports
+            from auth.credential_store import get_credential_store
+
+            cred_store = get_credential_store()
+            credentials = cred_store.get_credential(user_email)
+            if credentials:
+                logger.info(
+                    f"Recovered credentials for {user_email} from credential store (MCP session {mcp_session_id})"
+                )
+                log_credential_lookup(
+                    source="file_store",
+                    user_email=user_email,
+                    session_id=mcp_session_id,
+                    found=True,
+                    reason="auto_recovery",
+                )
+                log_session_binding(
+                    mcp_session_id=mcp_session_id,
+                    user_email=user_email,
+                    action="auto_recover",
+                    success=True,
+                )
+                # Re-populate the in-memory session for future requests
+                self._sessions[user_email] = {
+                    "access_token": credentials.token,
+                    "refresh_token": credentials.refresh_token,
+                    "token_uri": credentials.token_uri,
+                    "client_id": credentials.client_id,
+                    "client_secret": credentials.client_secret,
+                    "scopes": credentials.scopes,
+                    "expiry": credentials.expiry,
+                    "mcp_session_id": mcp_session_id,
+                    "issuer": "https://accounts.google.com",
+                }
+                return credentials
+
+            logger.debug(f"No credentials found for {user_email} in any store")
+            log_credential_lookup(
+                source="file_store",
+                user_email=user_email,
+                session_id=mcp_session_id,
+                found=False,
+                reason="not_in_file_store",
+            )
+            return None
 
     def get_credentials_with_validation(
         self,
@@ -712,29 +850,52 @@ class OAuth21SessionStore:
     def remove_session(self, user_email: str):
         """Remove session for a user."""
         with self._lock:
+            removed_something = False
+
+            # Get session IDs from in-memory session if available
+            session_info = self._sessions.get(user_email, {})
+            mcp_session_id = session_info.get("mcp_session_id")
+            session_id = session_info.get("session_id")
+
+            # Remove from in-memory sessions
             if user_email in self._sessions:
-                # Get session IDs to clean up mappings
-                session_info = self._sessions.get(user_email, {})
-                mcp_session_id = session_info.get("mcp_session_id")
-                session_id = session_info.get("session_id")
-
-                # Remove from sessions
                 del self._sessions[user_email]
+                removed_something = True
 
-                # Remove from MCP mapping if exists
-                if mcp_session_id and mcp_session_id in self._mcp_session_mapping:
-                    del self._mcp_session_mapping[mcp_session_id]
-                    # Also remove from auth binding
-                    if mcp_session_id in self._session_auth_binding:
-                        del self._session_auth_binding[mcp_session_id]
-                    logger.info(f"Removed OAuth 2.1 session for {user_email} and MCP mapping for {mcp_session_id}")
+            # Remove from MCP mapping - check both by session ID and by scanning for email
+            if mcp_session_id and mcp_session_id in self._mcp_session_mapping:
+                del self._mcp_session_mapping[mcp_session_id]
+                if mcp_session_id in self._session_auth_binding:
+                    del self._session_auth_binding[mcp_session_id]
+                removed_something = True
+                logger.info(f"Removed MCP session mapping for {user_email}: {mcp_session_id}")
+            else:
+                # Scan mappings for this user email (handles post-restart case)
+                sessions_to_remove = [sid for sid, email in self._mcp_session_mapping.items() if email == user_email]
+                for sid in sessions_to_remove:
+                    del self._mcp_session_mapping[sid]
+                    if sid in self._session_auth_binding:
+                        del self._session_auth_binding[sid]
+                    removed_something = True
+                    logger.info(f"Removed MCP session mapping for {user_email}: {sid}")
 
-                # Remove OAuth session binding if exists
-                if session_id and session_id in self._session_auth_binding:
-                    del self._session_auth_binding[session_id]
+            # Remove OAuth session binding if exists
+            if session_id and session_id in self._session_auth_binding:
+                del self._session_auth_binding[session_id]
+                removed_something = True
 
-                if not mcp_session_id:
-                    logger.info(f"Removed OAuth 2.1 session for {user_email}")
+            # Also scan auth bindings for this user email
+            bindings_to_remove = [sid for sid, email in self._session_auth_binding.items() if email == user_email]
+            for sid in bindings_to_remove:
+                del self._session_auth_binding[sid]
+                removed_something = True
+
+            if removed_something:
+                logger.info(f"Removed OAuth 2.1 session for {user_email}")
+                # Persist the removal to disk
+                self._save_session_mappings_to_disk()
+            else:
+                logger.debug(f"No session found to remove for {user_email}")
 
     def has_session(self, user_email: str) -> bool:
         """Check if a user has an active session."""

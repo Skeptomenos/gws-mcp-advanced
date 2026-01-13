@@ -7,10 +7,11 @@ This project is an advanced fork of [taylorwilsdon/google_workspace_mcp](https:/
 ## Features
 
 - **10 Google Services**: Gmail, Drive, Calendar, Docs, Sheets, Chat, Forms, Slides, Tasks, Search
-- **50+ Tools**: Comprehensive API coverage for each service
+- **100+ Tools**: Comprehensive API coverage for each service
 - **Advanced Sync Tools**: Bidirectional file synchronization between local files and Google Drive (based on `drive-synapsis`)
 - **Search Aliases**: Quick reference to search results using A-Z aliases
-- **OAuth 2.0/2.1**: Secure authentication with modern session management
+- **OAuth 2.0/2.1**: Secure authentication with persistent session management
+- **Session Persistence**: Credentials survive server restarts - no re-authentication required
 - **Async Architecture**: Non-blocking operations for high performance
 
 ## Quick Start
@@ -82,9 +83,12 @@ This server uses OAuth 2.0/2.1 credentials. On first use:
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `USER_GOOGLE_EMAIL` | Your Google email | Required |
+| `GOOGLE_OAUTH_CLIENT_ID` | OAuth client ID | Required |
+| `GOOGLE_OAUTH_CLIENT_SECRET` | OAuth client secret | Required |
 | `MCP_SINGLE_USER_MODE` | Bypass session mapping | `false` |
 | `WORKSPACE_MCP_PORT` | HTTP server port | `9876` |
 | `WORKSPACE_MCP_CONFIG_DIR` | Directory for credentials | `~/.config/gws-mcp-advanced` |
+| `AUTH_DIAGNOSTICS` | Enable auth debug logging | `false` |
 
 
 ## Available Tools
@@ -227,8 +231,42 @@ google-workspace-mcp/
 ### Running Tests
 
 ```bash
-pytest tests/
+# Run all tests
+uv run pytest
+
+# Run with coverage
+uv run pytest tests/ --cov=.
+
+# Run specific test file
+uv run pytest tests/integration/test_auth_flow.py
 ```
+
+### Linting & Formatting
+
+```bash
+# Check linting
+uv run ruff check .
+
+# Auto-fix issues
+uv run ruff check --fix .
+
+# Format code
+uv run ruff format .
+```
+
+## Recent Updates
+
+### v0.9.0 - Session Persistence & Auth Improvements
+- **Session persistence**: Credentials now survive server restarts
+- **Atomic file writes**: Prevents credential corruption on crash
+- **Credential recovery**: Automatic recovery from file store on restart
+- **Auth diagnostics**: Enable with `AUTH_DIAGNOSTICS=1` for debugging
+- **100+ tools**: Expanded tool coverage across all services
+
+### v0.8.0 - Architecture Improvements
+- Consolidated auth providers and middleware
+- Added DI container and extended error hierarchy
+- Improved single-user mode auto-recovery
 
 ## License
 
