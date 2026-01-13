@@ -2,7 +2,7 @@
 
 > **Generated**: 2026-01-13  
 > **Based on**: specs/01_diagnostics_and_testing.md, specs/02_session_persistence_and_recovery.md, specs/03_architecture_and_consolidation.md, AUTH_IMPROVEMENT_PLAN.md  
-> **Status**: Phase 5a COMPLETE (v0.5.0) - Phase 5b ready for implementation
+> **Status**: Phase 5b COMPLETE (v0.6.0) - Phase 5c ready for implementation
 
 ---
 
@@ -162,19 +162,21 @@ The gws-mcp-advanced project has resolved P0-P3 code quality issues. The remaini
   - Create shims in old locations for backward compatibility
 - **Note**: Session extraction deferred to Phase 5b (requires provider refactoring first)
 
-## Phase 5b: Auth Consolidation - Logic & Middleware
+## Phase 5b: Auth Consolidation - Logic & Middleware ✅ COMPLETE (v0.6.0)
 **Goal**: Move business logic and request handling.
+**Status**: All tasks completed. 115 tests passing.
 
-### P4-1b: Move Providers & Middleware
+### P4-1b: Move Providers & Middleware ✅
 - **Files**: `auth/providers/*.py`, `auth/middleware/*.py`
 - **Spec**: specs/03_architecture_and_consolidation.md
 - **Effort**: 2 hours
 - **Dependencies**: Phase 5a
 - **Description**:
-  - Extract `auth/providers/google.py` from `google_auth.py`
-  - Move `auth/providers/external.py`
-  - Move `auth/middleware/*.py`
-  - Create shims
+  - Created `auth/providers/external.py` (moved from `external_oauth_provider.py`)
+  - Created `auth/middleware/auth_info.py` (moved from `auth_info_middleware.py`)
+  - Created `auth/middleware/session.py` (moved from `mcp_session_middleware.py`)
+  - Created backward-compatibility shims with deprecation warnings at old locations
+- **Note**: `google_auth.py` extraction deferred to Phase 5c (requires more refactoring)
 
 ## Phase 5c: Auth Consolidation - Cleanup
 **Goal**: Finalize migration and cleanup.
@@ -280,6 +282,11 @@ Week 4+: Full Consolidation
 | `auth/credential_types/__init__.py` | 5a | P4 | ✅ Created |
 | `auth/credential_types/types.py` | 5a | P4 | ✅ Created |
 | `auth/credential_types/store.py` | 5a | P4 | ✅ Created |
+| `auth/providers/__init__.py` | 5b | P4 | ✅ Created |
+| `auth/providers/external.py` | 5b | P4 | ✅ Created |
+| `auth/middleware/__init__.py` | 5b | P4 | ✅ Created |
+| `auth/middleware/auth_info.py` | 5b | P4 | ✅ Created |
+| `auth/middleware/session.py` | 5b | P4 | ✅ Created |
 | `tests/unit/tools/test_gmail_tools.py` | - | P3 |
 
 ## Files to Modify
