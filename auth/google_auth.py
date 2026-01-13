@@ -15,14 +15,14 @@ from google_auth_oauthlib.flow import Flow
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 
-from auth.credential_store import get_credential_store
-from auth.google_oauth_config import (
+from auth.config import (
     GOOGLE_WORKSPACE_MCP_APP_NAME,
     get_credentials_directory,
     get_google_oauth_config,
+    is_stateless_mode,
 )
+from auth.credential_store import get_credential_store
 from auth.oauth21_session_store import get_oauth21_session_store
-from auth.oauth_config import is_stateless_mode
 from auth.scopes import SCOPES, get_current_scopes  # noqa
 from core.context import get_fastmcp_session_id
 from core.errors import AuthenticationError

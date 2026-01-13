@@ -1,6 +1,7 @@
 # Make the auth directory a Python package
+# Public API exports from canonical locations
 
-from auth.google_oauth_config import (
+from auth.config import (
     GOOGLE_OAUTH_CLIENT_ID_EMBEDDED,
     GOOGLE_OAUTH_CLIENT_SECRET_EMBEDDED,
     GOOGLE_WORKSPACE_MCP_APP_NAME,

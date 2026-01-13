@@ -767,7 +767,7 @@ async def get_gmail_attachment_content(
     base64_data = attachment.get("data", "")
 
     # Check if we're in stateless mode (can't save files)
-    from auth.oauth_config import is_stateless_mode
+    from auth.config import is_stateless_mode
 
     if is_stateless_mode():
         result_lines = [

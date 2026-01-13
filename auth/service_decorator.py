@@ -9,13 +9,13 @@ from fastmcp.server.dependencies import get_access_token, get_context
 from google.auth.exceptions import RefreshError
 from googleapiclient.discovery import build
 
+from auth.config import get_oauth_config, is_oauth21_enabled
 from auth.google_auth import GoogleAuthenticationError, get_authenticated_google_service
 from auth.oauth21_session_store import (
     ensure_session_from_access_token,
     get_auth_provider,
     get_oauth21_session_store,
 )
-from auth.oauth_config import get_oauth_config, is_oauth21_enabled
 from auth.scopes import (
     CALENDAR_EVENTS_SCOPE,
     CALENDAR_READONLY_SCOPE,

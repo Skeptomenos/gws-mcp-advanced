@@ -814,7 +814,7 @@ def _resolve_client_credentials() -> tuple[str | None, str | None]:
 
     if not client_id or not client_secret:
         try:
-            from auth.oauth_config import get_oauth_config
+            from auth.config import get_oauth_config
 
             cfg = get_oauth_config()
             client_id = client_id or cfg.client_id

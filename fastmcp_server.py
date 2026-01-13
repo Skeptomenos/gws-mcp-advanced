@@ -13,7 +13,7 @@ from dotenv import load_dotenv
 dotenv_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env")
 load_dotenv(dotenv_path=dotenv_path)
 
-from auth.oauth_config import reload_oauth_config, is_stateless_mode
+from auth.config import is_stateless_mode, reload_oauth_config
 from core.log_formatter import EnhancedLogFormatter, configure_file_logging
 from core.utils import check_credentials_directory_permissions
 from core.server import server, set_transport_mode, configure_server_for_http

@@ -2,7 +2,7 @@
 
 > **Generated**: 2026-01-13  
 > **Based on**: specs/01_diagnostics_and_testing.md, specs/02_session_persistence_and_recovery.md, specs/03_architecture_and_consolidation.md, AUTH_IMPROVEMENT_PLAN.md  
-> **Status**: Phase 5b COMPLETE (v0.6.0) - Phase 5c ready for implementation
+> **Status**: Phase 5c COMPLETE (v0.7.0) - Auth consolidation cleanup finished
 
 ---
 
@@ -178,18 +178,22 @@ The gws-mcp-advanced project has resolved P0-P3 code quality issues. The remaini
   - Created backward-compatibility shims with deprecation warnings at old locations
 - **Note**: `google_auth.py` extraction deferred to Phase 5c (requires more refactoring)
 
-## Phase 5c: Auth Consolidation - Cleanup
+## Phase 5c: Auth Consolidation - Cleanup ✅ COMPLETE (v0.7.0)
 **Goal**: Finalize migration and cleanup.
+**Status**: All tasks completed. 115 tests passing.
 
-### P4-1c: Fix Imports & Cleanup
+### P4-1c: Fix Imports & Cleanup ✅
 - **Files**: All consumer files
 - **Spec**: specs/03_architecture_and_consolidation.md
 - **Effort**: 2 hours
 - **Dependencies**: Phase 5b
 - **Description**:
-  - Update imports in `main.py`, `fastmcp_server.py`, `gdrive/*.py`, etc.
-  - Verify all tests pass with new locations
-  - Mark old files as deprecated (or delete if safe)
+  - Updated imports in `main.py`, `fastmcp_server.py`, `core/server.py`, `core/config.py`, `core/managers.py`
+  - Updated imports in `auth/google_auth.py`, `auth/service_decorator.py`, `auth/oauth21_session_store.py`
+  - Updated imports in `gdrive/drive_tools.py`, `gmail/gmail_tools.py`
+  - Updated `auth/__init__.py` to use canonical imports from `auth.config`
+  - All consumer files now import from canonical locations (`auth.config`, `auth.middleware.*`, `auth.providers.*`)
+  - Shim files remain for backward compatibility with deprecation warnings
 
 ---
 

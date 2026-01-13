@@ -11,7 +11,7 @@ import threading
 from dataclasses import dataclass
 from typing import Any
 
-from auth.google_oauth_config import get_sync_map_path
+from auth.config import get_sync_map_path
 
 # ============================================================================
 # Data Classes

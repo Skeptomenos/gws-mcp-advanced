@@ -7,7 +7,7 @@ from importlib import import_module, metadata
 
 from dotenv import load_dotenv
 
-from auth.oauth_config import is_stateless_mode, reload_oauth_config
+from auth.config import is_stateless_mode, reload_oauth_config
 from core.log_formatter import EnhancedLogFormatter, configure_file_logging
 from core.server import configure_server_for_http, server, set_transport_mode
 from core.tool_registry import (

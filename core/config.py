@@ -9,7 +9,7 @@ This module now imports from there for backward compatibility.
 
 import os
 
-from auth.oauth_config import (
+from auth.config import (
     get_oauth_base_url,
     get_oauth_redirect_uri,
     get_transport_mode,

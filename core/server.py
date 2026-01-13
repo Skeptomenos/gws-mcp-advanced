@@ -9,9 +9,9 @@ from starlette.applications import Starlette
 from starlette.middleware import Middleware
 from starlette.requests import Request
 
-from auth.auth_info_middleware import AuthInfoMiddleware
 from auth.google_auth import check_client_secrets, handle_auth_callback, start_auth_flow
-from auth.mcp_session_middleware import MCPSessionMiddleware
+from auth.middleware.auth_info import AuthInfoMiddleware
+from auth.middleware.session import MCPSessionMiddleware
 from auth.oauth21_session_store import get_oauth21_session_store, set_auth_provider
 from auth.oauth_responses import (
     create_error_response,
@@ -97,7 +97,7 @@ def configure_server_for_http():
         return
 
     # Use centralized OAuth configuration
-    from auth.oauth_config import get_oauth_config
+    from auth.config import get_oauth_config
 
     config = get_oauth_config()
 
@@ -301,7 +301,7 @@ def configure_server_for_http():
             # Check if external OAuth provider is configured
             if config.is_external_oauth21_provider():
                 # External OAuth mode: use custom provider that handles ya29.* access tokens
-                from auth.external_oauth_provider import ExternalOAuthProvider
+                from auth.providers.external import ExternalOAuthProvider
 
                 provider = ExternalOAuthProvider(
                     client_id=config.client_id,

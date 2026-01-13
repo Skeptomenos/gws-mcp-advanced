@@ -19,7 +19,7 @@ from googleapiclient.errors import HttpError
 from googleapiclient.http import MediaIoBaseDownload, MediaIoBaseUpload
 from pydantic import BaseModel, Field
 
-from auth.oauth_config import is_stateless_mode
+from auth.config import is_stateless_mode
 from auth.service_decorator import require_google_service
 from core.attachment_storage import get_attachment_storage, get_attachment_url
 from core.config import get_transport_mode
