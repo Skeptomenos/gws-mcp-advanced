@@ -53,7 +53,7 @@ class TestSearchGmailMessages:
     @pytest.mark.asyncio
     async def test_search_returns_formatted_results(self, mock_gmail_service):
         """Verify search returns properly formatted message list."""
-        from gmail.gmail_tools import _extract_message_body
+        from gmail.helpers import _extract_message_body
 
         payload = {
             "body": {"data": "VGVzdCBib2R5IGNvbnRlbnQ="},
@@ -100,7 +100,7 @@ class TestGetGmailMessageContent:
 
     def test_extract_plain_text_from_multipart(self, mock_message_payload):
         """Verify plain text extraction from multipart messages."""
-        from gmail.gmail_tools import _extract_message_bodies
+        from gmail.helpers import _extract_message_bodies
 
         bodies = _extract_message_bodies(mock_message_payload)
 
@@ -109,7 +109,7 @@ class TestGetGmailMessageContent:
 
     def test_html_to_text_conversion(self):
         """Verify HTML is properly converted to readable text."""
-        from gmail.gmail_tools import _html_to_text
+        from gmail.helpers import _html_to_text
 
         html = "<html><body><p>Hello <strong>World</strong></p></body></html>"
         result = _html_to_text(html)
@@ -131,7 +131,7 @@ class TestGmailToolIntegration:
 
     def test_empty_body_returns_no_content_message(self):
         """Verify empty body content returns appropriate fallback message."""
-        from gmail.gmail_tools import _format_body_content
+        from gmail.helpers import _format_body_content
 
         result = _format_body_content("", "")
 

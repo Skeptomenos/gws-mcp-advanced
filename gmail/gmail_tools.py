@@ -5,11 +5,8 @@ This module provides MCP tools for interacting with the Gmail API.
 """
 
 import asyncio
-import base64
 import logging
 import ssl
-from email.mime.text import MIMEText
-from html.parser import HTMLParser
 from typing import Any, Literal
 
 from fastapi import Body
@@ -26,352 +23,22 @@ from core.errors import ValidationError
 from core.server import server
 from core.utils import handle_http_errors
 
+from .helpers import (
+    _extract_attachments,
+    _extract_headers,
+    _extract_message_bodies,
+    _format_body_content,
+    _format_gmail_results_plain,
+    _format_thread_content,
+    _generate_gmail_web_url,
+    _prepare_gmail_message,
+)
+
 logger = logging.getLogger(__name__)
 
 GMAIL_BATCH_SIZE = 25
 GMAIL_REQUEST_DELAY = 0.1
-HTML_BODY_TRUNCATE_LIMIT = 20000
 GMAIL_METADATA_HEADERS = ["Subject", "From", "To", "Cc", "Message-ID"]
-
-
-class _HTMLTextExtractor(HTMLParser):
-    """Extract readable text from HTML using stdlib."""
-
-    def __init__(self):
-        super().__init__()
-        self._text = []
-        self._skip = False
-
-    def handle_starttag(self, tag, attrs):
-        self._skip = tag in ("script", "style")
-
-    def handle_endtag(self, tag):
-        if tag in ("script", "style"):
-            self._skip = False
-
-    def handle_data(self, data):
-        if not self._skip:
-            self._text.append(data)
-
-    def get_text(self) -> str:
-        return " ".join("".join(self._text).split())
-
-
-def _html_to_text(html: str) -> str:
-    """Convert HTML to readable plain text."""
-    try:
-        parser = _HTMLTextExtractor()
-        parser.feed(html)
-        return parser.get_text()
-    except Exception as e:
-        logger.warning(f"Failed to parse HTML, returning raw content: {e}")
-        return html
-
-
-def _extract_message_body(payload):
-    """
-    Helper function to extract plain text body from a Gmail message payload.
-    (Maintained for backward compatibility)
-
-    Args:
-        payload (dict): The message payload from Gmail API
-
-    Returns:
-        str: The plain text body content, or empty string if not found
-    """
-    bodies = _extract_message_bodies(payload)
-    return bodies.get("text", "")
-
-
-def _extract_message_bodies(payload):
-    """
-    Helper function to extract both plain text and HTML bodies from a Gmail message payload.
-
-    Args:
-        payload (dict): The message payload from Gmail API
-
-    Returns:
-        dict: Dictionary with 'text' and 'html' keys containing body content
-    """
-    text_body = ""
-    html_body = ""
-    parts = [payload] if "parts" not in payload else payload.get("parts", [])
-
-    part_queue = list(parts)  # Use a queue for BFS traversal of parts
-    while part_queue:
-        part = part_queue.pop(0)
-        mime_type = part.get("mimeType", "")
-        body_data = part.get("body", {}).get("data")
-
-        if body_data:
-            try:
-                decoded_data = base64.urlsafe_b64decode(body_data).decode("utf-8", errors="ignore")
-                if mime_type == "text/plain" and not text_body:
-                    text_body = decoded_data
-                elif mime_type == "text/html" and not html_body:
-                    html_body = decoded_data
-            except Exception as e:
-                logger.warning(f"Failed to decode body part: {e}")
-
-        # Add sub-parts to queue for multipart messages
-        if mime_type.startswith("multipart/") and "parts" in part:
-            part_queue.extend(part.get("parts", []))
-
-    # Check the main payload if it has body data directly
-    if payload.get("body", {}).get("data"):
-        try:
-            decoded_data = base64.urlsafe_b64decode(payload["body"]["data"]).decode("utf-8", errors="ignore")
-            mime_type = payload.get("mimeType", "")
-            if mime_type == "text/plain" and not text_body:
-                text_body = decoded_data
-            elif mime_type == "text/html" and not html_body:
-                html_body = decoded_data
-        except Exception as e:
-            logger.warning(f"Failed to decode main payload body: {e}")
-
-    return {"text": text_body, "html": html_body}
-
-
-def _format_body_content(text_body: str, html_body: str) -> str:
-    """
-    Helper function to format message body content with HTML fallback and truncation.
-    Detects useless text/plain fallbacks (e.g., "Your client does not support HTML").
-
-    Args:
-        text_body: Plain text body content
-        html_body: HTML body content
-
-    Returns:
-        Formatted body content string
-    """
-    text_stripped = text_body.strip()
-    html_stripped = html_body.strip()
-
-    # Detect useless fallback: HTML comments in text, or HTML is 50x+ longer
-    use_html = html_stripped and (
-        not text_stripped or "<!--" in text_stripped or len(html_stripped) > len(text_stripped) * 50
-    )
-
-    if use_html:
-        content = _html_to_text(html_stripped)
-        if len(content) > HTML_BODY_TRUNCATE_LIMIT:
-            content = content[:HTML_BODY_TRUNCATE_LIMIT] + "\n\n[Content truncated...]"
-        return content
-    elif text_stripped:
-        return text_body
-    else:
-        return "[No readable content found]"
-
-
-def _extract_attachments(payload: dict) -> list[dict[str, Any]]:
-    """
-    Extract attachment metadata from a Gmail message payload.
-
-    Args:
-        payload: The message payload from Gmail API
-
-    Returns:
-        List of attachment dictionaries with filename, mimeType, size, and attachmentId
-    """
-    attachments = []
-
-    def search_parts(part):
-        """Recursively search for attachments in message parts"""
-        # Check if this part is an attachment
-        if part.get("filename") and part.get("body", {}).get("attachmentId"):
-            attachments.append(
-                {
-                    "filename": part["filename"],
-                    "mimeType": part.get("mimeType", "application/octet-stream"),
-                    "size": part.get("body", {}).get("size", 0),
-                    "attachmentId": part["body"]["attachmentId"],
-                }
-            )
-
-        # Recursively search sub-parts
-        if "parts" in part:
-            for subpart in part["parts"]:
-                search_parts(subpart)
-
-    # Start searching from the root payload
-    search_parts(payload)
-    return attachments
-
-
-def _extract_headers(payload: dict, header_names: list[str]) -> dict[str, str]:
-    """
-    Extract specified headers from a Gmail message payload.
-
-    Args:
-        payload: The message payload from Gmail API
-        header_names: List of header names to extract
-
-    Returns:
-        Dict mapping header names to their values
-    """
-    headers = {}
-    target_headers = {name.lower(): name for name in header_names}
-    for header in payload.get("headers", []):
-        header_name_lower = header["name"].lower()
-        if header_name_lower in target_headers:
-            # Store using the original requested casing
-            headers[target_headers[header_name_lower]] = header["value"]
-    return headers
-
-
-def _prepare_gmail_message(
-    subject: str,
-    body: str,
-    to: str | None = None,
-    cc: str | None = None,
-    bcc: str | None = None,
-    thread_id: str | None = None,
-    in_reply_to: str | None = None,
-    references: str | None = None,
-    body_format: Literal["plain", "html"] = "plain",
-    from_email: str | None = None,
-) -> tuple[str, str | None]:
-    """
-    Prepare a Gmail message with threading support.
-
-    Args:
-        subject: Email subject
-        body: Email body content
-        to: Optional recipient email address
-        cc: Optional CC email address
-        bcc: Optional BCC email address
-        thread_id: Optional Gmail thread ID to reply within
-        in_reply_to: Optional Message-ID of the message being replied to
-        references: Optional chain of Message-IDs for proper threading
-        body_format: Content type for the email body ('plain' or 'html')
-        from_email: Optional sender email address
-
-    Returns:
-        Tuple of (raw_message, thread_id) where raw_message is base64 encoded
-    """
-    # Handle reply subject formatting
-    reply_subject = subject
-    if in_reply_to and not subject.lower().startswith("re:"):
-        reply_subject = f"Re: {subject}"
-
-    # Prepare the email
-    normalized_format = body_format.lower()
-    if normalized_format not in {"plain", "html"}:
-        raise ValueError("body_format must be either 'plain' or 'html'.")
-
-    message = MIMEText(body, normalized_format)
-    message["Subject"] = reply_subject
-
-    # Add sender if provided
-    if from_email:
-        message["From"] = from_email
-
-    # Add recipients if provided
-    if to:
-        message["To"] = to
-    if cc:
-        message["Cc"] = cc
-    if bcc:
-        message["Bcc"] = bcc
-
-    # Add reply headers for threading
-    if in_reply_to:
-        message["In-Reply-To"] = in_reply_to
-
-    if references:
-        message["References"] = references
-
-    # Encode message
-    raw_message = base64.urlsafe_b64encode(message.as_bytes()).decode()
-
-    return raw_message, thread_id
-
-
-def _generate_gmail_web_url(item_id: str, account_index: int = 0) -> str:
-    """
-    Generate Gmail web interface URL for a message or thread ID.
-    Uses #all to access messages from any Gmail folder/label (not just inbox).
-
-    Args:
-        item_id: Gmail message ID or thread ID
-        account_index: Google account index (default 0 for primary account)
-
-    Returns:
-        Gmail web interface URL that opens the message/thread in Gmail web interface
-    """
-    return f"https://mail.google.com/mail/u/{account_index}/#all/{item_id}"
-
-
-def _format_gmail_results_plain(messages: list, query: str, next_page_token: str | None = None) -> str:
-    """Format Gmail search results in clean, LLM-friendly plain text."""
-    if not messages:
-        return f"No messages found for query: '{query}'"
-
-    lines = [
-        f"Found {len(messages)} messages matching '{query}':",
-        "",
-        "📧 MESSAGES:",
-    ]
-
-    for i, msg in enumerate(messages, 1):
-        # Handle potential null/undefined message objects
-        if not msg or not isinstance(msg, dict):
-            lines.extend(
-                [
-                    f"  {i}. Message: Invalid message data",
-                    "     Error: Message object is null or malformed",
-                    "",
-                ]
-            )
-            continue
-
-        # Handle potential null/undefined values from Gmail API
-        message_id = msg.get("id")
-        thread_id = msg.get("threadId")
-
-        # Convert None, empty string, or missing values to "unknown"
-        if not message_id:
-            message_id = "unknown"
-        if not thread_id:
-            thread_id = "unknown"
-
-        if message_id != "unknown":
-            message_url = _generate_gmail_web_url(message_id)
-        else:
-            message_url = "N/A"
-
-        if thread_id != "unknown":
-            thread_url = _generate_gmail_web_url(thread_id)
-        else:
-            thread_url = "N/A"
-
-        lines.extend(
-            [
-                f"  {i}. Message ID: {message_id}",
-                f"     Web Link: {message_url}",
-                f"     Thread ID: {thread_id}",
-                f"     Thread Link: {thread_url}",
-                "",
-            ]
-        )
-
-    lines.extend(
-        [
-            "💡 USAGE:",
-            "  • Pass the Message IDs **as a list** to get_gmail_messages_content_batch()",
-            "    e.g. get_gmail_messages_content_batch(message_ids=[...])",
-            "  • Pass the Thread IDs to get_gmail_thread_content() (single) or get_gmail_threads_content_batch() (batch)",
-        ]
-    )
-
-    # Add pagination info if there's a next page
-    if next_page_token:
-        lines.append("")
-        lines.append(
-            f"📄 PAGINATION: To get the next page, call search_gmail_messages again with page_token='{next_page_token}'"
-        )
-
-    return "\n".join(lines)
 
 
 @server.tool()
@@ -401,27 +68,22 @@ async def search_gmail_messages(
     """
     logger.info(f"[search_gmail_messages] Email: '{user_google_email}', Query: '{query}', Page size: {page_size}")
 
-    # Build the API request parameters
     request_params = {"userId": "me", "q": query, "maxResults": page_size}
 
-    # Add page token if provided
     if page_token:
         request_params["pageToken"] = page_token
         logger.info("[search_gmail_messages] Using page_token for pagination")
 
     response = await asyncio.to_thread(service.users().messages().list(**request_params).execute)
 
-    # Handle potential null response (but empty dict {} is valid)
     if response is None:
         logger.warning("[search_gmail_messages] Null response from Gmail API")
         return f"No response received from Gmail API for query: '{query}'"
 
     messages = response.get("messages", [])
-    # Additional safety check for null messages array
     if messages is None:
         messages = []
 
-    # Extract next page token for pagination
     next_page_token = response.get("nextPageToken")
 
     formatted_output = _format_gmail_results_plain(messages, query, next_page_token)
@@ -450,7 +112,6 @@ async def get_gmail_message_content(service, message_id: str, user_google_email:
 
     logger.info(f"[get_gmail_message_content] Using service for: {user_google_email}")
 
-    # Fetch message metadata first to get headers
     message_metadata = await asyncio.to_thread(
         service.users()
         .messages()
@@ -470,28 +131,24 @@ async def get_gmail_message_content(service, message_id: str, user_google_email:
     cc = headers.get("Cc", "")
     rfc822_msg_id = headers.get("Message-ID", "")
 
-    # Now fetch the full message to get the body parts
     message_full = await asyncio.to_thread(
         service.users()
         .messages()
         .get(
             userId="me",
             id=message_id,
-            format="full",  # Request full payload for body
+            format="full",
         )
         .execute
     )
 
-    # Extract both text and HTML bodies using enhanced helper function
     payload = message_full.get("payload", {})
     bodies = _extract_message_bodies(payload)
     text_body = bodies.get("text", "")
     html_body = bodies.get("html", "")
 
-    # Format body content with HTML fallback
     body_data = _format_body_content(text_body, html_body)
 
-    # Extract attachment metadata
     attachments = _extract_attachments(payload)
 
     content_lines = [
@@ -509,7 +166,6 @@ async def get_gmail_message_content(service, message_id: str, user_google_email:
 
     content_lines.append(f"\n--- BODY ---\n{body_data or '[No text/plain body found]'}")
 
-    # Add attachment information if present
     if attachments:
         content_lines.append("\n--- ATTACHMENTS ---")
         for i, att in enumerate(attachments, 1):
@@ -553,23 +209,13 @@ async def get_gmail_messages_content_batch(
 
     output_messages = []
 
-    # Process in smaller chunks to prevent SSL connection exhaustion
     for chunk_start in range(0, len(message_ids), GMAIL_BATCH_SIZE):
         chunk_ids = message_ids[chunk_start : chunk_start + GMAIL_BATCH_SIZE]
         results: dict[str, dict] = {}
 
         def _batch_callback(request_id, response, exception, results=results):
-            """Handle Gmail batch API request callback.
-
-            Args:
-                request_id: Unique identifier for the request in the batch.
-                response: The API response if successful, None if exception.
-                exception: The exception if request failed, None if successful.
-                results: Mutable dict to collect results (closure variable).
-            """
             results[request_id] = {"data": response, "error": exception}
 
-        # Try to use batch API
         try:
             batch = service.new_batch_http_request(callback=_batch_callback)
 
@@ -589,25 +235,14 @@ async def get_gmail_messages_content_batch(
                     req = service.users().messages().get(userId="me", id=mid, format="full")
                 batch.add(req, request_id=mid)
 
-            # Execute batch request
             await asyncio.to_thread(batch.execute)
 
         except Exception as batch_error:
-            # Fallback to sequential processing instead of parallel to prevent SSL exhaustion
             logger.warning(
                 f"[get_gmail_messages_content_batch] Batch API failed, falling back to sequential processing: {batch_error}"
             )
 
             async def fetch_message_with_retry(mid: str, max_retries: int = 3):
-                """Fetch a single Gmail message with exponential backoff retry.
-
-                Args:
-                    mid: The Gmail message ID to fetch.
-                    max_retries: Maximum number of retry attempts. Defaults to 3.
-
-                Returns:
-                    Tuple of (message_id, message_data, error) where error is None on success.
-                """
                 for attempt in range(max_retries):
                     try:
                         if format == "metadata":
@@ -629,7 +264,6 @@ async def get_gmail_messages_content_batch(
                         return mid, msg, None
                     except ssl.SSLError as ssl_error:
                         if attempt < max_retries - 1:
-                            # Exponential backoff: 1s, 2s, 4s
                             delay = 2**attempt
                             logger.warning(
                                 f"[get_gmail_messages_content_batch] SSL error for message {mid} on attempt {attempt + 1}: {ssl_error}. Retrying in {delay}s..."
@@ -643,14 +277,11 @@ async def get_gmail_messages_content_batch(
                     except Exception as e:
                         return mid, None, e
 
-            # Process messages sequentially with small delays to prevent connection exhaustion
             for mid in chunk_ids:
                 mid_result, msg_data, error = await fetch_message_with_retry(mid)
                 results[mid_result] = {"data": msg_data, "error": error}
-                # Brief delay between requests to allow connection cleanup
                 await asyncio.sleep(GMAIL_REQUEST_DELAY)
 
-        # Process results for this chunk
         for mid in chunk_ids:
             entry = results.get(mid, {"data": None, "error": "No result"})
 
@@ -662,7 +293,6 @@ async def get_gmail_messages_content_batch(
                     output_messages.append(f"⚠️ Message {mid}: No data returned\n")
                     continue
 
-                # Extract content based on format
                 payload = message.get("payload", {})
 
                 if format == "metadata":
@@ -685,7 +315,6 @@ async def get_gmail_messages_content_batch(
 
                     output_messages.append(msg_output)
                 else:
-                    # Full format - extract body too
                     headers = _extract_headers(payload, GMAIL_METADATA_HEADERS)
                     subject = headers.get("Subject", "(no subject)")
                     sender = headers.get("From", "(unknown sender)")
@@ -693,12 +322,10 @@ async def get_gmail_messages_content_batch(
                     cc = headers.get("Cc", "")
                     rfc822_msg_id = headers.get("Message-ID", "")
 
-                    # Extract both text and HTML bodies using enhanced helper function
                     bodies = _extract_message_bodies(payload)
                     text_body = bodies.get("text", "")
                     html_body = bodies.get("html", "")
 
-                    # Format body content with HTML fallback
                     body_data = _format_body_content(text_body, html_body)
 
                     msg_output = f"Message ID: {mid}\nSubject: {subject}\nFrom: {sender}\n"
@@ -713,7 +340,6 @@ async def get_gmail_messages_content_batch(
 
                     output_messages.append(msg_output)
 
-    # Combine all messages with separators
     final_output = f"Retrieved {len(message_ids)} messages:\n\n"
     final_output += "\n---\n\n".join(output_messages)
 
@@ -742,13 +368,6 @@ async def get_gmail_attachment_content(
     """
     logger.info(f"[get_gmail_attachment_content] Invoked. Message ID: '{message_id}', Email: '{user_google_email}'")
 
-    # Download attachment directly without refetching message metadata.
-    #
-    # Important: Gmail attachment IDs are ephemeral and change between API calls for the
-    # same message. If we refetch the message here to get metadata, the new attachment IDs
-    # won't match the attachment_id parameter provided by the caller, causing the function
-    # to fail. The attachment download endpoint returns size information, and filename/mime
-    # type should be obtained from the original message content call that provided this ID.
     try:
         attachment = await asyncio.to_thread(
             service.users().messages().attachments().get(userId="me", messageId=message_id, id=attachment_id).execute
@@ -761,12 +380,10 @@ async def get_gmail_attachment_content(
             f"Error details: {str(e)}"
         )
 
-    # Format response with attachment data
     size_bytes = attachment.get("size", 0)
     size_kb = size_bytes / 1024 if size_bytes else 0
     base64_data = attachment.get("data", "")
 
-    # Check if we're in stateless mode (can't save files)
     from auth.config import is_stateless_mode
 
     if is_stateless_mode():
@@ -784,18 +401,14 @@ async def get_gmail_attachment_content(
         )
         return "\n".join(result_lines)
 
-    # Save attachment and generate URL
     try:
         from core.attachment_storage import get_attachment_storage, get_attachment_url
 
         storage = get_attachment_storage()
 
-        # Try to get filename and mime type from message (optional - attachment IDs are ephemeral)
         filename = None
         mime_type = None
         try:
-            # Quick metadata fetch to try to get attachment info
-            # Note: This might fail if attachment IDs changed, but worth trying
             message_metadata = await asyncio.to_thread(
                 service.users().messages().get(userId="me", id=message_id, format="metadata").execute
             )
@@ -807,13 +420,10 @@ async def get_gmail_attachment_content(
                     mime_type = att.get("mimeType")
                     break
         except Exception:
-            # If we can't get metadata, use defaults
             logger.debug(f"Could not fetch attachment metadata for {attachment_id}, using defaults")
 
-        # Save attachment
         file_id = storage.save_attachment(base64_data=base64_data, filename=filename, mime_type=mime_type)
 
-        # Generate URL
         attachment_url = get_attachment_url(file_id)
 
         result_lines = [
@@ -834,7 +444,6 @@ async def get_gmail_attachment_content(
             f"[get_gmail_attachment_content] Failed to save attachment: {e}",
             exc_info=True,
         )
-        # Fallback to showing base64 preview
         result_lines = [
             "Attachment downloaded successfully!",
             f"Message ID: {message_id}",
@@ -918,7 +527,6 @@ async def send_gmail_message(
     """
     logger.info(f"[send_gmail_message] Invoked. Email: '{user_google_email}', Subject: '{subject}'")
 
-    # Prepare the email message
     raw_message, thread_id_final = _prepare_gmail_message(
         subject=subject,
         body=body,
@@ -932,13 +540,11 @@ async def send_gmail_message(
         from_email=user_google_email,
     )
 
-    send_body = {"raw": raw_message}
+    send_body: dict[str, Any] = {"raw": raw_message}
 
-    # Associate with thread if provided
     if thread_id_final:
         send_body["threadId"] = thread_id_final
 
-    # Send the message
     sent_message = await asyncio.to_thread(service.users().messages().send(userId="me", body=send_body).execute)
     message_id = sent_message.get("id")
     return f"Email sent! Message ID: {message_id}"
@@ -1027,7 +633,6 @@ async def draft_gmail_message(
     """
     logger.info(f"[draft_gmail_message] Invoked. Email: '{user_google_email}', Subject: '{subject}'")
 
-    # Prepare the email message
     raw_message, thread_id_final = _prepare_gmail_message(
         subject=subject,
         body=body,
@@ -1041,87 +646,14 @@ async def draft_gmail_message(
         from_email=user_google_email,
     )
 
-    # Create a draft instead of sending
-    draft_body = {"message": {"raw": raw_message}}
+    draft_body: dict[str, Any] = {"message": {"raw": raw_message}}
 
-    # Associate with thread if provided
     if thread_id_final:
         draft_body["message"]["threadId"] = thread_id_final
 
-    # Create the draft
     created_draft = await asyncio.to_thread(service.users().drafts().create(userId="me", body=draft_body).execute)
     draft_id = created_draft.get("id")
     return f"Draft created! Draft ID: {draft_id}"
-
-
-def _format_thread_content(thread_data: dict, thread_id: str) -> str:
-    """
-    Helper function to format thread content from Gmail API response.
-
-    Args:
-        thread_data (dict): Thread data from Gmail API
-        thread_id (str): Thread ID for display
-
-    Returns:
-        str: Formatted thread content
-    """
-    messages = thread_data.get("messages", [])
-    if not messages:
-        return f"No messages found in thread '{thread_id}'."
-
-    # Extract thread subject from the first message
-    first_message = messages[0]
-    first_headers = {h["name"]: h["value"] for h in first_message.get("payload", {}).get("headers", [])}
-    thread_subject = first_headers.get("Subject", "(no subject)")
-
-    # Build the thread content
-    content_lines = [
-        f"Thread ID: {thread_id}",
-        f"Subject: {thread_subject}",
-        f"Messages: {len(messages)}",
-        "",
-    ]
-
-    # Process each message in the thread
-    for i, message in enumerate(messages, 1):
-        # Extract headers
-        headers = {h["name"]: h["value"] for h in message.get("payload", {}).get("headers", [])}
-
-        sender = headers.get("From", "(unknown sender)")
-        date = headers.get("Date", "(unknown date)")
-        subject = headers.get("Subject", "(no subject)")
-
-        # Extract both text and HTML bodies
-        payload = message.get("payload", {})
-        bodies = _extract_message_bodies(payload)
-        text_body = bodies.get("text", "")
-        html_body = bodies.get("html", "")
-
-        # Format body content with HTML fallback
-        body_data = _format_body_content(text_body, html_body)
-
-        # Add message to content
-        content_lines.extend(
-            [
-                f"=== Message {i} ===",
-                f"From: {sender}",
-                f"Date: {date}",
-            ]
-        )
-
-        # Only show subject if it's different from thread subject
-        if subject != thread_subject:
-            content_lines.append(f"Subject: {subject}")
-
-        content_lines.extend(
-            [
-                "",
-                body_data,
-                "",
-            ]
-        )
-
-    return "\n".join(content_lines)
 
 
 @server.tool()
@@ -1140,7 +672,6 @@ async def get_gmail_thread_content(service, thread_id: str, user_google_email: s
     """
     logger.info(f"[get_gmail_thread_content] Invoked. Thread ID: '{thread_id}', Email: '{user_google_email}'")
 
-    # Fetch the complete thread with all messages
     thread_response = await asyncio.to_thread(
         service.users().threads().get(userId="me", id=thread_id, format="full").execute
     )
@@ -1175,17 +706,15 @@ async def get_gmail_threads_content_batch(
         raise ValueError("No thread IDs provided")
 
     output_threads = []
+    results: dict[str, dict] = {}
 
     def _batch_callback(request_id, response, exception):
-        """Callback for batch requests"""
         results[request_id] = {"data": response, "error": exception}
 
-    # Process in smaller chunks to prevent SSL connection exhaustion
     for chunk_start in range(0, len(thread_ids), GMAIL_BATCH_SIZE):
         chunk_ids = thread_ids[chunk_start : chunk_start + GMAIL_BATCH_SIZE]
-        results: dict[str, dict] = {}
+        results.clear()
 
-        # Try to use batch API
         try:
             batch = service.new_batch_http_request(callback=_batch_callback)
 
@@ -1193,17 +722,14 @@ async def get_gmail_threads_content_batch(
                 req = service.users().threads().get(userId="me", id=tid, format="full")
                 batch.add(req, request_id=tid)
 
-            # Execute batch request
             await asyncio.to_thread(batch.execute)
 
         except Exception as batch_error:
-            # Fallback to sequential processing instead of parallel to prevent SSL exhaustion
             logger.warning(
                 f"[get_gmail_threads_content_batch] Batch API failed, falling back to sequential processing: {batch_error}"
             )
 
             async def fetch_thread_with_retry(tid: str, max_retries: int = 3):
-                """Fetch a single thread with exponential backoff retry for SSL errors"""
                 for attempt in range(max_retries):
                     try:
                         thread = await asyncio.to_thread(
@@ -1212,7 +738,6 @@ async def get_gmail_threads_content_batch(
                         return tid, thread, None
                     except ssl.SSLError as ssl_error:
                         if attempt < max_retries - 1:
-                            # Exponential backoff: 1s, 2s, 4s
                             delay = 2**attempt
                             logger.warning(
                                 f"[get_gmail_threads_content_batch] SSL error for thread {tid} on attempt {attempt + 1}: {ssl_error}. Retrying in {delay}s..."
@@ -1226,14 +751,11 @@ async def get_gmail_threads_content_batch(
                     except Exception as e:
                         return tid, None, e
 
-            # Process threads sequentially with small delays to prevent connection exhaustion
             for tid in chunk_ids:
                 tid_result, thread_data, error = await fetch_thread_with_retry(tid)
                 results[tid_result] = {"data": thread_data, "error": error}
-                # Brief delay between requests to allow connection cleanup
                 await asyncio.sleep(GMAIL_REQUEST_DELAY)
 
-        # Process results for this chunk
         for tid in chunk_ids:
             entry = results.get(tid, {"data": None, "error": "No result"})
 
@@ -1247,7 +769,6 @@ async def get_gmail_threads_content_batch(
 
                 output_threads.append(_format_thread_content(thread, tid))
 
-    # Combine all threads with separators
     header = f"Retrieved {len(thread_ids)} threads:"
     return header + "\n\n" + "\n---\n\n".join(output_threads)
 
@@ -1362,6 +883,8 @@ async def manage_gmail_label(
 
         await asyncio.to_thread(service.users().labels().delete(userId="me", id=label_id).execute)
         return f"Label '{label_name}' (ID: {label_id}) deleted successfully!"
+
+    return "Unknown action"
 
 
 @server.tool()
@@ -1536,7 +1059,7 @@ async def modify_gmail_message_labels(
     if not add_label_ids and not remove_label_ids:
         raise ValidationError("At least one of add_label_ids or remove_label_ids must be provided.")
 
-    body = {}
+    body: dict[str, Any] = {}
     if add_label_ids:
         body["addLabelIds"] = add_label_ids
     if remove_label_ids:
@@ -1582,7 +1105,7 @@ async def batch_modify_gmail_message_labels(
     if not add_label_ids and not remove_label_ids:
         raise ValidationError("At least one of add_label_ids or remove_label_ids must be provided.")
 
-    body = {"ids": message_ids}
+    body: dict[str, Any] = {"ids": message_ids}
     if add_label_ids:
         body["addLabelIds"] = add_label_ids
     if remove_label_ids:
