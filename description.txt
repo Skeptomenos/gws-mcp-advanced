@@ -1,0 +1,1 @@
+Advanced High-performance Model Context Protocol (MCP) server for Google Workspace integration. A fork of taylorwilsdon/google_workspace_mcp merged with drive-synapsis advanced sync features.
