@@ -142,13 +142,20 @@ Added `resolve_file_id_or_alias()` support to all gdocs tools that accept `docum
 
 **Verification**: ✅ All 123 tests pass, ruff clean, main.py --help works
 
-### Task 4.3: Expand Test Coverage
-Current gaps identified:
-- [ ] `tests/unit/tools/test_drive_tools.py` - Drive tool unit tests
-- [ ] `tests/unit/tools/test_docs_tools.py` - Docs tool unit tests
-- [ ] `tests/unit/tools/test_calendar_tools.py` - Calendar tool unit tests
-- [ ] `tests/unit/tools/test_sheets_tools.py` - Sheets tool unit tests
-- [ ] `tests/unit/auth/test_service_decorator.py` - Decorator unit tests
+### Task 4.3: Expand Test Coverage ✅ COMPLETE
+Added comprehensive unit tests for tool helper functions:
+
+- [x] `tests/unit/tools/test_sheets_tools.py` - 69 tests (A1 parsing, colors, errors, conditionals)
+- [x] `tests/unit/tools/test_drive_tools.py` - 35 tests (validation, permissions, URL building)
+- [x] `tests/unit/tools/test_docs_tools.py` - 46 tests (request builders, structure parsing)
+- [x] `tests/unit/tools/test_calendar_tools.py` - 55 tests (time formatting, attendees, reminders)
+- [x] Created `gcalendar/calendar_helpers.py` - Extracted helpers to enable testing
+
+Note: `tests/unit/auth/test_service_decorator.py` skipped due to circular import issue in auth module.
+
+**Test count**: 123 → 328 tests (205 new tests added)
+
+**Verification**: ✅ All 328 tests pass, ruff clean
 
 ---
 
