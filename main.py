@@ -169,8 +169,7 @@ def main():
 
     # Import tool modules to register them with the MCP server via decorators
     def import_drive_tools():
-        import_module("gdrive.drive_tools")
-        import_module("gdrive.sync_tools")
+        import_module("gdrive")
 
     tool_imports = {
         "gmail": lambda: import_module("gmail"),
