@@ -173,7 +173,7 @@ def main():
         import_module("gdrive.sync_tools")
 
     tool_imports = {
-        "gmail": lambda: import_module("gmail.gmail_tools"),
+        "gmail": lambda: import_module("gmail"),
         "drive": import_drive_tools,
         "calendar": lambda: import_module("gcalendar.calendar_tools"),
         "docs": lambda: import_module("gdocs.docs_tools"),

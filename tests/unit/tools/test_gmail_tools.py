@@ -124,7 +124,7 @@ class TestGmailToolIntegration:
 
     def test_tool_is_registered_as_mcp_tool(self):
         """Verify tools are registered with the MCP server."""
-        from gmail.gmail_tools import search_gmail_messages
+        from gmail import search_gmail_messages
 
         assert hasattr(search_gmail_messages, "name")
         assert search_gmail_messages.name == "search_gmail_messages"
