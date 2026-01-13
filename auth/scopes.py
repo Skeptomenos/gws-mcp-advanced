@@ -112,7 +112,7 @@ TOOL_SCOPES_MAP = {
 }
 
 
-def set_enabled_tools(enabled_tools):
+def set_enabled_tools(enabled_tools: list[str] | None) -> None:
     """
     Set the globally enabled tools list.
 
@@ -124,18 +124,23 @@ def set_enabled_tools(enabled_tools):
     logger.info(f"Enabled tools set for scope management: {enabled_tools}")
 
 
-def get_current_scopes():
+def get_scopes_for_tools(enabled_tools: list[str] | None = None) -> list[str]:
     """
-    Returns scopes for currently enabled tools.
-    Uses globally set enabled tools or all tools if not set.
+    Returns OAuth scopes for the specified or enabled tools.
+
+    Args:
+        enabled_tools: List of tool names to get scopes for.
+                      If None, uses globally set tools via set_enabled_tools().
+                      If no global tools set, returns scopes for all tools.
 
     Returns:
-        List of unique scopes for the enabled tools plus base scopes.
+        List of unique OAuth scopes including base scopes.
     """
-    enabled_tools = _ENABLED_TOOLS
+    # Use provided tools, or fall back to global, or fall back to all
     if enabled_tools is None:
-        # Default behavior - return all scopes
-        enabled_tools = TOOL_SCOPES_MAP.keys()
+        enabled_tools = _ENABLED_TOOLS
+    if enabled_tools is None:
+        enabled_tools = list(TOOL_SCOPES_MAP.keys())
 
     # Start with base scopes (always required)
     scopes = BASE_SCOPES.copy()
@@ -146,34 +151,16 @@ def get_current_scopes():
             scopes.extend(TOOL_SCOPES_MAP[tool])
 
     logger.debug(f"Generated scopes for tools {list(enabled_tools)}: {len(set(scopes))} unique scopes")
-    # Return unique scopes
     return list(set(scopes))
 
 
-def get_scopes_for_tools(enabled_tools=None):
+def get_current_scopes() -> list[str]:
     """
-    Returns scopes for enabled tools only.
+    Returns scopes for currently enabled tools.
 
-    Args:
-        enabled_tools: List of enabled tool names. If None, returns all scopes.
-
-    Returns:
-        List of unique scopes for the enabled tools plus base scopes.
+    Deprecated: Use get_scopes_for_tools() instead.
     """
-    if enabled_tools is None:
-        # Default behavior - return all scopes
-        enabled_tools = TOOL_SCOPES_MAP.keys()
-
-    # Start with base scopes (always required)
-    scopes = BASE_SCOPES.copy()
-
-    # Add scopes for each enabled tool
-    for tool in enabled_tools:
-        if tool in TOOL_SCOPES_MAP:
-            scopes.extend(TOOL_SCOPES_MAP[tool])
-
-    # Return unique scopes
-    return list(set(scopes))
+    return get_scopes_for_tools()
 
 
 # Combined scopes for all supported Google Workspace operations (backwards compatibility)

@@ -32,7 +32,7 @@ from core.errors import (
 )
 from core.managers import search_manager, sync_manager
 from core.server import server
-from core.utils import handle_http_errors
+from core.utils import handle_http_errors, validate_path_within_base
 
 logger = logging.getLogger(__name__)
 
@@ -186,11 +186,21 @@ async def update_google_doc(
                 return "No changes detected."
             return f"DRY RUN (No changes made):\n\n```diff\n{diff_text}\n```"
 
-        # Rewrite local file links to Google Doc links
         def link_replacer(match):
+            """Replace local file links with Google Docs URLs.
+
+            Args:
+                match: Regex match object containing the link to replace.
+
+            Returns:
+                Replacement string with Google Docs URL, or original if not linked.
+            """
             rel_path = match.group(1)
             base_dir = os.path.dirname(os.path.abspath(local_path))
-            abs_target = os.path.normpath(os.path.join(base_dir, rel_path))
+            try:
+                abs_target = validate_path_within_base(base_dir, rel_path)
+            except Exception:
+                return match.group(0)
 
             link_info = sync_manager.get_link(abs_target)
             if link_info:

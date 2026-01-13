@@ -71,15 +71,6 @@ dev = [
     "ruff>=0.12.4",
 ]
 
-[dependency-groups]
-dev = [
-    "pytest>=8.3.0",
-    "pytest-asyncio>=0.23.0",
-    "pytest-cov>=4.0.0",
-    "requests>=2.32.3",
-    "ruff>=0.12.4",
-]
-
 [tool.setuptools]
 py-modules = ["fastmcp_server", "main"]
 
@@ -89,6 +80,11 @@ exclude = ["tests*", "docs*", "build", "dist", "old*", "specs*"]
 
 [tool.setuptools.package-data]
 core = ["tool_tiers.yaml"]
+"*" = ["py.typed"]
+
+[tool.bandit]
+exclude_dirs = ["tests", "venv", ".venv"]
+skips = ["B101"]  # Skip assert warnings (used in tests)
 
 [tool.ruff]
 line-length = 120

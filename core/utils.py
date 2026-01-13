@@ -3,6 +3,7 @@ import functools
 import io
 import logging
 import os
+import re
 import ssl
 import xml.etree.ElementTree as ET
 import zipfile
@@ -10,10 +11,63 @@ import zipfile
 from googleapiclient.errors import HttpError
 
 from auth.google_auth import GoogleAuthenticationError
+from core.errors import APIError, ValidationError
 
 from .api_enablement import get_api_enablement_message
 
 logger = logging.getLogger(__name__)
+
+
+def validate_path_within_base(base_dir: str, target_path: str) -> str:
+    """Validate that a target path is within the base directory (security check)."""
+    abs_base = os.path.abspath(base_dir)
+    abs_target = os.path.abspath(os.path.normpath(os.path.join(base_dir, target_path)))
+
+    if not abs_target.startswith(abs_base + os.sep) and abs_target != abs_base:
+        raise ValidationError(f"Path '{target_path}' resolves outside base directory")
+
+    return abs_target
+
+
+def validate_file_id(file_id: str, param_name: str = "file_id") -> str:
+    """Validate a Google Drive file ID or alias."""
+    if not file_id:
+        raise ValidationError(f"{param_name} is required")
+
+    file_id = file_id.strip()
+    if not file_id:
+        raise ValidationError(f"{param_name} cannot be empty")
+
+    if len(file_id) == 1 and file_id.upper() in "ABCDEFGHIJKLMNOPQRSTUVWXYZ":
+        return file_id
+
+    if not re.match(r"^[\w\-_]+$", file_id):
+        raise ValidationError(f"{param_name} contains invalid characters")
+
+    return file_id
+
+
+def validate_email(email: str, param_name: str = "email") -> str:
+    """Validate an email address."""
+    if not email:
+        raise ValidationError(f"{param_name} is required")
+
+    email = email.strip().lower()
+    if not re.match(r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$", email):
+        raise ValidationError(f"{param_name} is not a valid email address")
+
+    return email
+
+
+def validate_positive_int(value: int, param_name: str, max_value: int | None = None) -> int:
+    """Validate a positive integer."""
+    if not isinstance(value, int) or value < 1:
+        raise ValidationError(f"{param_name} must be a positive integer")
+
+    if max_value is not None and value > max_value:
+        raise ValidationError(f"{param_name} cannot exceed {max_value}")
+
+    return value
 
 
 class TransientNetworkError(Exception):
@@ -270,7 +324,7 @@ def handle_http_errors(tool_name: str, is_read_only: bool = False, service_type:
                         message = f"API error in {tool_name}: {error}"
 
                     logger.error(f"API error in {tool_name}: {error}", exc_info=True)
-                    raise Exception(message) from error
+                    raise APIError(message) from error
                 except TransientNetworkError:
                     # Re-raise without wrapping to preserve the specific error type
                     raise
@@ -280,7 +334,7 @@ def handle_http_errors(tool_name: str, is_read_only: bool = False, service_type:
                 except Exception as e:
                     message = f"An unexpected error occurred in {tool_name}: {e}"
                     logger.exception(message)
-                    raise Exception(message) from e
+                    raise APIError(message) from e
 
         return wrapper
 

@@ -96,7 +96,7 @@ class MinimalOAuthServer:
 
                 logger.info(f"OAuth callback: Received code (state: {state}). Attempting to exchange for tokens.")
 
-                verified_user_id, credentials = handle_auth_callback(
+                verified_user_id, credentials = await handle_auth_callback(
                     scopes=get_current_scopes(),
                     authorization_response=str(request.url),
                     redirect_uri=server_instance.redirect_uri,

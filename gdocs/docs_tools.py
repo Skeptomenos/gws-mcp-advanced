@@ -16,6 +16,7 @@ from googleapiclient.http import MediaIoBaseDownload, MediaIoBaseUpload
 from auth.service_decorator import require_google_service, require_multiple_services
 from core.comments import create_comment_tools
 from core.server import server
+from core.types import GoogleDriveService
 from core.utils import extract_office_xml_text, handle_http_errors
 
 # Import helper functions for document operations
@@ -53,7 +54,7 @@ logger = logging.getLogger(__name__)
 @handle_http_errors("search_docs", is_read_only=True, service_type="docs")
 @require_google_service("drive", "drive_read")
 async def search_docs(
-    service: Any,
+    service: GoogleDriveService,
     user_google_email: str,
     query: str,
     page_size: int = 10,

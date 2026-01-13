@@ -6,15 +6,20 @@
 Provides 50+ async tools for Gmail, Drive, Calendar, Docs, Sheets, Chat, Forms, Slides, Tasks, and Search.
 This is an advanced fork of `google_workspace_mcp` with integrated `drive-synapsis` features.
 
+## Verification Protocol (Definition of Done)
+
+Before marking a task as complete, you MUST run these commands in order to match the CI pipeline:
+
+1. **Linting**: `uv run ruff check .` (Must return no errors)
+2. **Formatting**: `uv run ruff format .` (Must not modify files)
+3. **Testing**: `uv run pytest` (Must pass with exit code 0)
+
 ## Build, Lint, & Test Commands
 
 ### Installation
 ```bash
 # Install with dev dependencies using uv (recommended)
 uv pip install -e ".[dev]"
-
-# Or with pip
-pip install -e ".[dev]"
 ```
 
 ### Running the Server
@@ -41,17 +46,30 @@ uv run ruff check --fix .
 
 ### Testing
 ```bash
-# Run all tests
+# Run all tests (Fastest)
 uv run pytest
+
+# Run tests with coverage (Matches CI)
+uv run pytest tests/ --cov=.
 
 # Run single test file
 uv run pytest tests/test_oauth_state_persistence.py
 
-# Run single test function (Recommended for speed)
+# Run single test function (Recommended for debugging)
 uv run pytest tests/test_oauth_state_persistence.py::TestOAuthStatePersistence::test_store_oauth_state_persists_to_disk
 
-# Run with verbose output and print statements
+# Run with verbose output
 uv run pytest -vs
+```
+
+### Type Checking
+*Note: Pyright is run in CI but is currently permissive (continue-on-error).*
+```bash
+# Install pyright (not in dev-dependencies)
+pip install pyright
+
+# Run type verification
+pyright --verifytypes gws-mcp-advanced
 ```
 
 ## Code Style Guidelines

@@ -18,8 +18,8 @@ from typing import Any
 # OAuth Type: Desktop Application
 # =============================================================================
 
-GOOGLE_OAUTH_CLIENT_ID_EMBEDDED = "YOUR_CLIENT_ID_HERE"
-GOOGLE_OAUTH_CLIENT_SECRET_EMBEDDED = "YOUR_CLIENT_SECRET_HERE"
+GOOGLE_OAUTH_CLIENT_ID_EMBEDDED = ""
+GOOGLE_OAUTH_CLIENT_SECRET_EMBEDDED = ""
 
 # Application metadata
 GOOGLE_WORKSPACE_MCP_APP_NAME = "GWS MCP Advanced"
@@ -32,16 +32,25 @@ def get_google_oauth_config() -> dict[str, Any]:
 
     Returns:
         OAuth client configuration in Google's expected format.
+
+    Raises:
+        ValueError: If OAuth credentials are not configured.
     """
-    # Allow environment variable override for development/testing
     client_id = os.getenv("GOOGLE_OAUTH_CLIENT_ID", GOOGLE_OAUTH_CLIENT_ID_EMBEDDED)
     client_secret = os.getenv("GOOGLE_OAUTH_CLIENT_SECRET", GOOGLE_OAUTH_CLIENT_SECRET_EMBEDDED)
+
+    if not client_id or not client_secret:
+        raise ValueError(
+            "Google OAuth credentials not configured. "
+            "Set GOOGLE_OAUTH_CLIENT_ID and GOOGLE_OAUTH_CLIENT_SECRET environment variables, "
+            "or provide embedded credentials in auth/google_oauth_config.py"
+        )
 
     return {
         "installed": {
             "client_id": client_id,
             "client_secret": client_secret,
-            "project_id": "annular-aria-484116-r2",
+            "project_id": os.getenv("GOOGLE_PROJECT_ID", "annular-aria-484116-r2"),
             "auth_uri": "https://accounts.google.com/o/oauth2/auth",
             "token_uri": "https://oauth2.googleapis.com/token",
             "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",

@@ -16,6 +16,7 @@ from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 
 from auth.service_decorator import require_google_service
+from core.errors import APIError, ValidationError
 from core.server import server
 from core.utils import handle_http_errors
 
@@ -775,11 +776,13 @@ async def modify_event(
         else:
             # Preserve existing event's useDefault value if not explicitly specified
             try:
-                existing_event = service.events().get(calendarId=calendar_id, eventId=event_id).execute()
+                existing_event = await asyncio.to_thread(
+                    lambda: service.events().get(calendarId=calendar_id, eventId=event_id).execute()
+                )
                 reminder_data["useDefault"] = existing_event.get("reminders", {}).get("useDefault", True)
             except Exception as e:
                 logger.warning(f"[modify_event] Could not fetch existing event for reminders: {e}")
-                reminder_data["useDefault"] = True  # Fallback to True if unable to fetch
+                reminder_data["useDefault"] = True
 
         # If custom reminders are provided, automatically disable default reminders
         if reminders is not None:
@@ -816,7 +819,7 @@ async def modify_event(
     if not event_body:
         message = "No fields provided to modify the event."
         logger.warning(f"[modify_event] {message}")
-        raise Exception(message)
+        raise ValidationError(message)
 
     # Log the event ID for debugging
     logger.info(f"[modify_event] Attempting to update event with ID: '{event_id}' in calendar '{calendar_id}'")
@@ -867,7 +870,7 @@ async def modify_event(
         if get_error.resp.status == 404:
             logger.error(f"[modify_event] Event not found during pre-update verification: {get_error}")
             message = f"Event not found during verification. The event with ID '{event_id}' could not be found in calendar '{calendar_id}'. This may be due to incorrect ID format or the event no longer exists."
-            raise Exception(message) from get_error
+            raise APIError(message) from get_error
         else:
             logger.warning(
                 f"[modify_event] Error during pre-update verification, but proceeding with update: {get_error}"
@@ -933,7 +936,7 @@ async def delete_event(service, user_google_email: str, event_id: str, calendar_
         if get_error.resp.status == 404:
             logger.error(f"[delete_event] Event not found during pre-delete verification: {get_error}")
             message = f"Event not found during verification. The event with ID '{event_id}' could not be found in calendar '{calendar_id}'. This may be due to incorrect ID format or the event no longer exists."
-            raise Exception(message) from get_error
+            raise APIError(message) from get_error
         else:
             logger.warning(
                 f"[delete_event] Error during pre-delete verification, but proceeding with deletion: {get_error}"

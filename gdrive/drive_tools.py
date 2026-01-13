@@ -10,19 +10,20 @@ import io
 import logging
 from pathlib import Path
 from tempfile import NamedTemporaryFile
-from typing import Any, Literal
+from typing import Literal
 from urllib.parse import urlparse
 from urllib.request import url2pathname
 
 import httpx
-from pydantic import BaseModel, Field
 from googleapiclient.errors import HttpError
 from googleapiclient.http import MediaIoBaseDownload, MediaIoBaseUpload
+from pydantic import BaseModel, Field
 
 from auth.oauth_config import is_stateless_mode
 from auth.service_decorator import require_google_service
 from core.attachment_storage import get_attachment_storage, get_attachment_url
 from core.config import get_transport_mode
+from core.errors import ValidationError
 from core.managers import search_manager
 from core.server import server
 from core.utils import extract_office_xml_text, handle_http_errors
@@ -471,7 +472,7 @@ async def create_drive_file(
     )
 
     if not content and not fileUrl:
-        raise Exception("You must provide either 'content' or 'fileUrl'.")
+        raise ValidationError("You must provide either 'content' or 'fileUrl'.")
 
     file_data = None
     resolved_folder_id = await resolve_folder_id(service, folder_id)
@@ -513,14 +514,14 @@ async def create_drive_file(
                     if running_streamable
                     else ""
                 )
-                raise Exception(f"Local file does not exist: {file_path}.{extra}")
+                raise ValidationError(f"Local file does not exist: {file_path}.{extra}")
             if not path_obj.is_file():
                 extra = (
                     " In streamable-http/Docker deployments, mount the file into the container or provide an HTTP(S) URL."
                     if running_streamable
                     else ""
                 )
-                raise Exception(f"Path is not a file: {file_path}.{extra}")
+                raise ValidationError(f"Path is not a file: {file_path}.{extra}")
 
             logger.info(f"[create_drive_file] Reading local file: {file_path}")
 
@@ -554,7 +555,7 @@ async def create_drive_file(
                 async with httpx.AsyncClient(follow_redirects=True) as client:
                     resp = await client.get(fileUrl)
                     if resp.status_code != 200:
-                        raise Exception(f"Failed to fetch file from URL: {fileUrl} (status {resp.status_code})")
+                        raise ValidationError(f"Failed to fetch file from URL: {fileUrl} (status {resp.status_code})")
                     file_data = await resp.aread()
                     # Try to get MIME type from Content-Type header
                     content_type = resp.headers.get("Content-Type")
@@ -588,7 +589,9 @@ async def create_drive_file(
                     async with httpx.AsyncClient(follow_redirects=True) as client:
                         async with client.stream("GET", fileUrl) as resp:
                             if resp.status_code != 200:
-                                raise Exception(f"Failed to fetch file from URL: {fileUrl} (status {resp.status_code})")
+                                raise ValidationError(
+                                    f"Failed to fetch file from URL: {fileUrl} (status {resp.status_code})"
+                                )
 
                             # Stream download in chunks
                             async for chunk in resp.aiter_bytes(chunk_size=DOWNLOAD_CHUNK_SIZE_BYTES):
@@ -630,8 +633,8 @@ async def create_drive_file(
                     )
         else:
             if not parsed_url.scheme:
-                raise Exception("fileUrl is missing a URL scheme. Use file://, http://, or https://.")
-            raise Exception(
+                raise ValidationError("fileUrl is missing a URL scheme. Use file://, http://, or https://.")
+            raise ValidationError(
                 f"Unsupported URL scheme '{parsed_url.scheme}'. Only file://, http://, and https:// are supported."
             )
     elif content:

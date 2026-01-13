@@ -192,8 +192,15 @@ def _coerce_int(value: object, default: int = 0) -> int:
     Returns:
         The integer value of `value`, or `default` if conversion fails.
     """
+    if value is None:
+        return default
+    if isinstance(value, (int, float, str)):
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            return default
     try:
-        return int(value)  # type: ignore[arg-type]
+        return int(str(value))
     except (TypeError, ValueError):
         return default
 

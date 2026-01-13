@@ -44,6 +44,12 @@ from auth.scopes import (
     TASKS_SCOPE,
 )
 from core.context import set_fastmcp_session_id
+from core.errors import (
+    AuthenticationError,
+    CredentialsExpiredError,
+    ServiceConfigurationError,
+    ValidationError,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -289,7 +295,7 @@ def _extract_oauth21_user_email(authenticated_user: str | None, func_name: str) 
         Exception: If no authenticated user found in OAuth 2.1 mode
     """
     if not authenticated_user:
-        raise Exception(f"OAuth 2.1 mode requires an authenticated user for {func_name}, but none was found.")
+        raise AuthenticationError(f"OAuth 2.1 mode requires an authenticated user for {func_name}, but none was found.")
     return authenticated_user
 
 
@@ -313,7 +319,7 @@ def _extract_oauth20_user_email(args: tuple, kwargs: dict, wrapper_sig: inspect.
 
     user_google_email = bound_args.arguments.get("user_google_email")
     if not user_google_email:
-        raise Exception("'user_google_email' parameter is required but was not found.")
+        raise ValidationError("'user_google_email' parameter is required but was not found.")
     return user_google_email
 
 
@@ -520,7 +526,7 @@ def require_google_service(
 
             # Get service configuration from the decorator's arguments
             if service_type not in SERVICE_CONFIGS:
-                raise Exception(f"Unknown service type: {service_type}")
+                raise ServiceConfigurationError(f"Unknown service type: {service_type}")
 
             config = SERVICE_CONFIGS[service_type]
             service_name = config["service"]
@@ -582,8 +588,8 @@ def require_google_service(
                 # Prepend the fetched service object to the original arguments
                 return await func(service, *args, **kwargs)
             except RefreshError as e:
-                error_message = _handle_token_refresh_error(e, actual_user_email, service_name)
-                raise Exception(error_message) from e
+                error_message = _handle_token_refresh_error(e, user_google_email, service_name)
+                raise CredentialsExpiredError(error_message) from e
 
         # Set the wrapper's signature to the one without 'service'
         wrapper.__signature__ = wrapper_sig
@@ -653,7 +659,7 @@ def require_multiple_services(service_configs: list[dict[str, Any]]):
                 version = config.get("version")
 
                 if service_type not in SERVICE_CONFIGS:
-                    raise Exception(f"Unknown service type: {service_type}")
+                    raise ServiceConfigurationError(f"Unknown service type: {service_type}")
 
                 service_config = SERVICE_CONFIGS[service_type]
                 service_name = service_config["service"]
@@ -708,7 +714,7 @@ def require_multiple_services(service_configs: list[dict[str, Any]]):
                 return await func(*args, **kwargs)
             except RefreshError as e:
                 error_message = _handle_token_refresh_error(e, user_google_email, "Multiple Services")
-                raise Exception(error_message) from e
+                raise CredentialsExpiredError(error_message) from e
 
         # Set the wrapper's signature
         wrapper.__signature__ = wrapper_sig

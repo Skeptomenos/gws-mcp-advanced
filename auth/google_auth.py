@@ -20,12 +20,12 @@ from auth.google_oauth_config import (
     GOOGLE_WORKSPACE_MCP_APP_NAME,
     get_credentials_directory,
     get_google_oauth_config,
-    is_using_embedded_credentials,
 )
 from auth.oauth21_session_store import get_oauth21_session_store
 from auth.oauth_config import is_stateless_mode
 from auth.scopes import SCOPES, get_current_scopes  # noqa
 from core.context import get_fastmcp_session_id
+from core.errors import AuthenticationError
 
 # Try to import FastMCP dependencies (may not be available in all environments)
 try:
@@ -369,23 +369,23 @@ async def start_auth_flow(
     except FileNotFoundError as e:
         error_text = f"OAuth client credentials not found: {e}. Please either:\n1. Set environment variables: GOOGLE_OAUTH_CLIENT_ID and GOOGLE_OAUTH_CLIENT_SECRET\n2. Ensure '{CONFIG_CLIENT_SECRETS_PATH}' file exists"
         logger.error(error_text, exc_info=True)
-        raise Exception(error_text) from e
+        raise AuthenticationError(error_text) from e
     except Exception as e:
         error_text = f"Could not initiate authentication for {user_display_name} due to an unexpected error: {str(e)}"
         logger.error(
             f"Failed to start the OAuth flow for {user_display_name}: {e}",
             exc_info=True,
         )
-        raise Exception(error_text) from e
+        raise AuthenticationError(error_text) from e
 
 
-def handle_auth_callback(
+async def handle_auth_callback(
     scopes: list[str],
     authorization_response: str,
     redirect_uri: str,
     credentials_base_dir: str = DEFAULT_CREDENTIALS_DIR,
     session_id: str | None = None,
-    client_secrets_path: str | None = None,  # Deprecated: kept for backward compatibility
+    client_secrets_path: str | None = None,
 ) -> tuple[str, Credentials]:
     """
     Handles the callback from Google, exchanges the code for credentials,
@@ -440,8 +440,7 @@ def handle_auth_callback(
         credentials = flow.credentials
         logger.info("Successfully exchanged authorization code for tokens.")
 
-        # Get user info to determine user_id (using email here)
-        user_info = get_user_info(credentials)
+        user_info = await get_user_info(credentials)
         if not user_info or "email" not in user_info:
             logger.error("Could not retrieve user email from Google.")
             raise ValueError("Failed to get user email for identification.")
@@ -554,11 +553,9 @@ def get_credentials(
             logger.info(f"[get_credentials] Single-user mode: No credentials found in {credentials_base_dir}")
             return None
 
-        # In single-user mode, if user_google_email wasn't provided, try to get it from user info
-        # This is needed for proper credential saving after refresh
         if not user_google_email and credentials.valid:
             try:
-                user_info = get_user_info(credentials)
+                user_info = asyncio.run(get_user_info(credentials))
                 if user_info and "email" in user_info:
                     user_google_email = user_info["email"]
                     logger.debug(
@@ -680,21 +677,18 @@ def get_credentials(
         return None
 
 
-def get_user_info(credentials: Credentials) -> dict[str, Any] | None:
+async def get_user_info(credentials: Credentials) -> dict[str, Any] | None:
     """Fetches basic user profile information (requires userinfo.email scope)."""
     if not credentials or not credentials.valid:
         logger.error("Cannot get user info: Invalid or missing credentials.")
         return None
     try:
-        # Using googleapiclient discovery to get user info
-        # Requires 'google-api-python-client' library
         service = build("oauth2", "v2", credentials=credentials)
-        user_info = service.userinfo().get().execute()
+        user_info = await asyncio.to_thread(service.userinfo().get().execute)
         logger.info(f"Successfully fetched user info: {user_info.get('email')}")
         return user_info
     except HttpError as e:
         logger.error(f"HttpError fetching user info: {e.status_code} {e.reason}")
-        # Handle specific errors, e.g., 401 Unauthorized might mean token issue
         return None
     except Exception as e:
         logger.error(f"Unexpected error fetching user info: {e}")

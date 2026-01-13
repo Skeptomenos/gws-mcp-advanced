@@ -23,6 +23,8 @@ from core.utils import check_credentials_directory_permissions
 dotenv_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env")
 load_dotenv(dotenv_path=dotenv_path)
 
+MIN_SECRET_LENGTH_FOR_REDACTION = 8
+
 # Suppress googleapiclient discovery cache warning
 logging.getLogger("googleapiclient.discovery_cache").setLevel(logging.ERROR)
 
@@ -145,7 +147,9 @@ def main():
     # Redact client secret for security
     client_secret = os.getenv("GOOGLE_OAUTH_CLIENT_SECRET", "Not Set")
     redacted_secret = (
-        f"{client_secret[:4]}...{client_secret[-4:]}" if len(client_secret) > 8 else "Invalid or too short"
+        f"{client_secret[:4]}...{client_secret[-4:]}"
+        if len(client_secret) > MIN_SECRET_LENGTH_FOR_REDACTION
+        else "Invalid or too short"
     )
 
     config_vars = {

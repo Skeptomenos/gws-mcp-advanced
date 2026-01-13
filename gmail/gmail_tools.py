@@ -22,6 +22,7 @@ from auth.scopes import (
     GMAIL_SEND_SCOPE,
 )
 from auth.service_decorator import require_google_service
+from core.errors import ValidationError
 from core.server import server
 from core.utils import handle_http_errors
 
@@ -62,7 +63,8 @@ def _html_to_text(html: str) -> str:
         parser = _HTMLTextExtractor()
         parser.feed(html)
         return parser.get_text()
-    except Exception:
+    except Exception as e:
+        logger.warning(f"Failed to parse HTML, returning raw content: {e}")
         return html
 
 
@@ -547,7 +549,7 @@ async def get_gmail_messages_content_batch(
     )
 
     if not message_ids:
-        raise Exception("No message IDs provided")
+        raise ValidationError("No message IDs provided")
 
     output_messages = []
 
@@ -557,7 +559,14 @@ async def get_gmail_messages_content_batch(
         results: dict[str, dict] = {}
 
         def _batch_callback(request_id, response, exception, results=results):
-            """Callback for batch requests"""
+            """Handle Gmail batch API request callback.
+
+            Args:
+                request_id: Unique identifier for the request in the batch.
+                response: The API response if successful, None if exception.
+                exception: The exception if request failed, None if successful.
+                results: Mutable dict to collect results (closure variable).
+            """
             results[request_id] = {"data": response, "error": exception}
 
         # Try to use batch API
@@ -590,7 +599,15 @@ async def get_gmail_messages_content_batch(
             )
 
             async def fetch_message_with_retry(mid: str, max_retries: int = 3):
-                """Fetch a single message with exponential backoff retry for SSL errors"""
+                """Fetch a single Gmail message with exponential backoff retry.
+
+                Args:
+                    mid: The Gmail message ID to fetch.
+                    max_retries: Maximum number of retry attempts. Defaults to 3.
+
+                Returns:
+                    Tuple of (message_id, message_data, error) where error is None on success.
+                """
                 for attempt in range(max_retries):
                     try:
                         if format == "metadata":
@@ -1310,10 +1327,10 @@ async def manage_gmail_label(
     logger.info(f"[manage_gmail_label] Invoked. Email: '{user_google_email}', Action: '{action}'")
 
     if action == "create" and not name:
-        raise Exception("Label name is required for create action.")
+        raise ValidationError("Label name is required for create action.")
 
     if action in ["update", "delete"] and not label_id:
-        raise Exception("Label ID is required for update and delete actions.")
+        raise ValidationError("Label ID is required for update and delete actions.")
 
     if action == "create":
         label_object = {
@@ -1517,7 +1534,7 @@ async def modify_gmail_message_labels(
     logger.info(f"[modify_gmail_message_labels] Invoked. Email: '{user_google_email}', Message ID: '{message_id}'")
 
     if not add_label_ids and not remove_label_ids:
-        raise Exception("At least one of add_label_ids or remove_label_ids must be provided.")
+        raise ValidationError("At least one of add_label_ids or remove_label_ids must be provided.")
 
     body = {}
     if add_label_ids:
@@ -1563,7 +1580,7 @@ async def batch_modify_gmail_message_labels(
     )
 
     if not add_label_ids and not remove_label_ids:
-        raise Exception("At least one of add_label_ids or remove_label_ids must be provided.")
+        raise ValidationError("At least one of add_label_ids or remove_label_ids must be provided.")
 
     body = {"ids": message_ids}
     if add_label_ids:

@@ -13,6 +13,7 @@ from googleapiclient.errors import HttpError
 from mcp import Resource
 
 from auth.service_decorator import require_google_service
+from core.errors import APIError
 from core.server import server
 from core.utils import handle_http_errors
 
@@ -118,11 +119,11 @@ async def list_task_lists(
     except HttpError as error:
         message = f"API error: {error}. You might need to re-authenticate. LLM: Try 'start_google_auth' with the user's email ({user_google_email}) and service_name='Google Tasks'."
         logger.error(message, exc_info=True)
-        raise Exception(message) from error
+        raise APIError(message) from error
     except Exception as e:
         message = f"Unexpected error: {e}."
         logger.exception(message)
-        raise Exception(message) from e
+        raise APIError(message) from e
 
 
 @server.tool()
@@ -156,11 +157,11 @@ async def get_task_list(service: Resource, user_google_email: str, task_list_id:
     except HttpError as error:
         message = f"API error: {error}. You might need to re-authenticate. LLM: Try 'start_google_auth' with the user's email ({user_google_email}) and service_name='Google Tasks'."
         logger.error(message, exc_info=True)
-        raise Exception(message) from error
+        raise APIError(message) from error
     except Exception as e:
         message = f"Unexpected error: {e}."
         logger.exception(message)
-        raise Exception(message) from e
+        raise APIError(message) from e
 
 
 @server.tool()
@@ -196,11 +197,11 @@ async def create_task_list(service: Resource, user_google_email: str, title: str
     except HttpError as error:
         message = f"API error: {error}. You might need to re-authenticate. LLM: Try 'start_google_auth' with the user's email ({user_google_email}) and service_name='Google Tasks'."
         logger.error(message, exc_info=True)
-        raise Exception(message) from error
+        raise APIError(message) from error
     except Exception as e:
         message = f"Unexpected error: {e}."
         logger.exception(message)
-        raise Exception(message) from e
+        raise APIError(message) from e
 
 
 @server.tool()
@@ -238,11 +239,11 @@ async def update_task_list(service: Resource, user_google_email: str, task_list_
     except HttpError as error:
         message = f"API error: {error}. You might need to re-authenticate. LLM: Try 'start_google_auth' with the user's email ({user_google_email}) and service_name='Google Tasks'."
         logger.error(message, exc_info=True)
-        raise Exception(message) from error
+        raise APIError(message) from error
     except Exception as e:
         message = f"Unexpected error: {e}."
         logger.exception(message)
-        raise Exception(message) from e
+        raise APIError(message) from e
 
 
 @server.tool()
@@ -272,11 +273,11 @@ async def delete_task_list(service: Resource, user_google_email: str, task_list_
     except HttpError as error:
         message = f"API error: {error}. You might need to re-authenticate. LLM: Try 'start_google_auth' with the user's email ({user_google_email}) and service_name='Google Tasks'."
         logger.error(message, exc_info=True)
-        raise Exception(message) from error
+        raise APIError(message) from error
     except Exception as e:
         message = f"Unexpected error: {e}."
         logger.exception(message)
-        raise Exception(message) from e
+        raise APIError(message) from e
 
 
 @server.tool()
@@ -393,11 +394,11 @@ async def list_tasks(
     except HttpError as error:
         message = f"API error: {error}. You might need to re-authenticate. LLM: Try 'start_google_auth' with the user's email ({user_google_email}) and service_name='Google Tasks'."
         logger.error(message, exc_info=True)
-        raise Exception(message) from error
+        raise APIError(message) from error
     except Exception as e:
         message = f"Unexpected error: {e}."
         logger.exception(message)
-        raise Exception(message) from e
+        raise APIError(message) from e
 
 
 def get_structured_tasks(tasks: list[dict[str, str]]) -> list[StructuredTask]:
@@ -554,11 +555,11 @@ async def get_task(service: Resource, user_google_email: str, task_list_id: str,
     except HttpError as error:
         message = f"API error: {error}. You might need to re-authenticate. LLM: Try 'start_google_auth' with the user's email ({user_google_email}) and service_name='Google Tasks'."
         logger.error(message, exc_info=True)
-        raise Exception(message) from error
+        raise APIError(message) from error
     except Exception as e:
         message = f"Unexpected error: {e}."
         logger.exception(message)
-        raise Exception(message) from e
+        raise APIError(message) from e
 
 
 @server.tool()
@@ -625,11 +626,11 @@ async def create_task(
     except HttpError as error:
         message = f"API error: {error}. You might need to re-authenticate. LLM: Try 'start_google_auth' with the user's email ({user_google_email}) and service_name='Google Tasks'."
         logger.error(message, exc_info=True)
-        raise Exception(message) from error
+        raise APIError(message) from error
     except Exception as e:
         message = f"Unexpected error: {e}."
         logger.exception(message)
-        raise Exception(message) from e
+        raise APIError(message) from e
 
 
 @server.tool()
@@ -705,11 +706,11 @@ async def update_task(
     except HttpError as error:
         message = f"API error: {error}. You might need to re-authenticate. LLM: Try 'start_google_auth' with the user's email ({user_google_email}) and service_name='Google Tasks'."
         logger.error(message, exc_info=True)
-        raise Exception(message) from error
+        raise APIError(message) from error
     except Exception as e:
         message = f"Unexpected error: {e}."
         logger.exception(message)
-        raise Exception(message) from e
+        raise APIError(message) from e
 
 
 @server.tool()
@@ -742,11 +743,11 @@ async def delete_task(service: Resource, user_google_email: str, task_list_id: s
     except HttpError as error:
         message = f"API error: {error}. You might need to re-authenticate. LLM: Try 'start_google_auth' with the user's email ({user_google_email}) and service_name='Google Tasks'."
         logger.error(message, exc_info=True)
-        raise Exception(message) from error
+        raise APIError(message) from error
     except Exception as e:
         message = f"Unexpected error: {e}."
         logger.exception(message)
-        raise Exception(message) from e
+        raise APIError(message) from e
 
 
 @server.tool()
@@ -816,11 +817,11 @@ async def move_task(
     except HttpError as error:
         message = f"API error: {error}. You might need to re-authenticate. LLM: Try 'start_google_auth' with the user's email ({user_google_email}) and service_name='Google Tasks'."
         logger.error(message, exc_info=True)
-        raise Exception(message) from error
+        raise APIError(message) from error
     except Exception as e:
         message = f"Unexpected error: {e}."
         logger.exception(message)
-        raise Exception(message) from e
+        raise APIError(message) from e
 
 
 @server.tool()
@@ -850,8 +851,8 @@ async def clear_completed_tasks(service: Resource, user_google_email: str, task_
     except HttpError as error:
         message = f"API error: {error}. You might need to re-authenticate. LLM: Try 'start_google_auth' with the user's email ({user_google_email}) and service_name='Google Tasks'."
         logger.error(message, exc_info=True)
-        raise Exception(message) from error
+        raise APIError(message) from error
     except Exception as e:
         message = f"Unexpected error: {e}."
         logger.exception(message)
-        raise Exception(message) from e
+        raise APIError(message) from e

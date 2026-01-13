@@ -74,8 +74,8 @@ class MCPSessionMiddleware(BaseHTTPMiddleware):
                     user_email = claims.get("email")
                     if user_email:
                         logger.debug(f"Extracted user email from JWT: {user_email}")
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.debug(f"Failed to decode JWT from Authorization header: {e}")
 
             # Build session context
             if session_id or auth_context or user_email or mcp_session_id:

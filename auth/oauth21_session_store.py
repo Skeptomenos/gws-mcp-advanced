@@ -10,15 +10,21 @@ import contextvars
 import json
 import logging
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from threading import RLock
-from typing import Any, Optional
+from typing import Any, Optional, Protocol
 
 from fastmcp.server.auth import AccessToken
 from google.oauth2.credentials import Credentials
 
 logger = logging.getLogger(__name__)
+
+
+class _SecretValueProtocol(Protocol):
+    """Protocol for objects with get_secret_value method (e.g., Pydantic SecretStr)."""
+
+    def get_secret_value(self) -> str: ...
 
 
 def _get_oauth_states_file_path() -> str:
@@ -86,15 +92,14 @@ class SessionContext:
     user_id: str | None = None
     auth_context: Any | None = None
     request: Any | None = None
-    metadata: dict[str, Any] = None
+    metadata: dict[str, Any] = field(default_factory=dict)
     issuer: str | None = None
 
-    def __post_init__(self):
-        if self.metadata is None:
-            self.metadata = {}
+    def __repr__(self) -> str:
+        return f"SessionContext(session_id={self.session_id!r}, user_id={self.user_id!r}, issuer={self.issuer!r})"
 
 
-def set_session_context(context: SessionContext | None):
+def set_session_context(context: SessionContext | None) -> None:
     """
     Set the current session context.
 
@@ -118,7 +123,7 @@ def get_session_context() -> SessionContext | None:
     return _current_session_context.get()
 
 
-def clear_session_context():
+def clear_session_context() -> None:
     """Clear the current session context."""
     set_session_context(None)
 
@@ -697,14 +702,14 @@ def get_oauth21_session_store() -> OAuth21SessionStore:
 _auth_provider = None
 
 
-def set_auth_provider(provider):
+def set_auth_provider(provider: Any) -> None:
     """Set the global auth provider instance."""
     global _auth_provider
     _auth_provider = provider
     logger.debug("OAuth 2.1 session store configured")
 
 
-def get_auth_provider():
+def get_auth_provider() -> Any | None:
     """Get the global auth provider instance."""
     return _auth_provider
 
@@ -720,9 +725,11 @@ def _resolve_client_credentials() -> tuple[str | None, str | None]:
         if secret_obj is not None:
             if hasattr(secret_obj, "get_secret_value"):
                 try:
-                    client_secret = secret_obj.get_secret_value()  # type: ignore[call-arg]
-                except Exception as exc:  # pragma: no cover - defensive
+                    secret_callable: _SecretValueProtocol = secret_obj
+                    client_secret = secret_callable.get_secret_value()
+                except (TypeError, AttributeError) as exc:
                     logger.debug(f"Failed to resolve client secret from provider: {exc}")
+                    client_secret = str(secret_obj)
             elif isinstance(secret_obj, str):
                 client_secret = secret_obj
 

@@ -8,6 +8,7 @@ import asyncio
 import re
 from typing import Any
 
+from core.errors import APIError, ValidationError
 from core.managers import search_manager
 
 VALID_SHARE_ROLES = {"reader", "commenter", "writer"}
@@ -253,11 +254,11 @@ async def resolve_drive_item(
         shortcut_details = metadata.get("shortcutDetails") or {}
         target_id = shortcut_details.get("targetId")
         if not target_id:
-            raise Exception(f"Shortcut '{current_id}' is missing target details.")
+            raise APIError(f"Shortcut '{current_id}' is missing target details.")
 
         depth += 1
         if depth > max_depth:
-            raise Exception(f"Shortcut resolution exceeded {max_depth} hops starting from '{file_id}'.")
+            raise APIError(f"Shortcut resolution exceeded {max_depth} hops starting from '{file_id}'.")
         current_id = target_id
 
 
@@ -277,5 +278,7 @@ async def resolve_folder_id(
     )
     mime_type = metadata.get("mimeType")
     if mime_type != FOLDER_MIME_TYPE:
-        raise Exception(f"Resolved ID '{resolved_id}' (from '{folder_id}') is not a folder; mimeType={mime_type}.")
+        raise ValidationError(
+            f"Resolved ID '{resolved_id}' (from '{folder_id}') is not a folder; mimeType={mime_type}."
+        )
     return resolved_id

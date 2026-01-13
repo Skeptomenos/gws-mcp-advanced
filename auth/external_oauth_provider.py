@@ -58,8 +58,7 @@ class ExternalOAuthProvider(GoogleProvider):
                     client_secret=self._client_secret,
                 )
 
-                # Validate token by calling userinfo API
-                user_info = get_user_info(credentials)
+                user_info = await get_user_info(credentials)
 
                 if user_info and user_info.get("email"):
                     # Token is valid - create AccessToken object

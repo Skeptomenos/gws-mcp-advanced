@@ -93,3 +93,96 @@ def handle_http_error(error: Exception, file_id: str | None = None) -> GDriveErr
 def format_error(operation: str, error: GDriveError) -> str:
     """Format an error for display to the user."""
     return f"{operation} failed: {error.message}"
+
+
+# =============================================================================
+# Base Exception Hierarchy
+# =============================================================================
+
+
+class WorkspaceMCPError(Exception):
+    """Base exception for all Google Workspace MCP errors."""
+
+    pass
+
+
+# =============================================================================
+# Authentication Errors
+# =============================================================================
+
+
+class AuthenticationError(WorkspaceMCPError):
+    """Raised when authentication fails or credentials are invalid."""
+
+    pass
+
+
+class CredentialsNotFoundError(AuthenticationError):
+    """Raised when no credentials are found for a user."""
+
+    pass
+
+
+class CredentialsExpiredError(AuthenticationError):
+    """Raised when credentials have expired and cannot be refreshed."""
+
+    pass
+
+
+class InsufficientScopesError(AuthenticationError):
+    """Raised when credentials lack required OAuth scopes."""
+
+    pass
+
+
+# =============================================================================
+# Configuration Errors
+# =============================================================================
+
+
+class ServiceConfigurationError(WorkspaceMCPError):
+    """Raised when a service is misconfigured."""
+
+    pass
+
+
+# =============================================================================
+# Validation Errors
+# =============================================================================
+
+
+class ValidationError(WorkspaceMCPError):
+    """Raised when input validation fails."""
+
+    pass
+
+
+# =============================================================================
+# API Errors
+# =============================================================================
+
+
+class APIError(WorkspaceMCPError):
+    """Raised for general Google API errors."""
+
+    def __init__(self, message: str, status_code: int | None = None):
+        super().__init__(message)
+        self.status_code = status_code
+
+
+class ResourceNotFoundError(APIError):
+    """Raised when a requested resource doesn't exist (404)."""
+
+    pass
+
+
+class PermissionDeniedError(APIError):
+    """Raised when the user lacks permission for an operation (403)."""
+
+    pass
+
+
+class RateLimitError(APIError):
+    """Raised when API rate limits are exceeded (429)."""
+
+    pass

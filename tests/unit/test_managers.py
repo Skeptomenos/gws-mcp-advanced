@@ -1,9 +1,9 @@
 """Unit tests for SearchManager and SyncManager."""
 
-import json
 import os
 import tempfile
-from core.managers import SearchManager, SyncManager, SyncLink
+
+from core.managers import SearchManager, SyncManager
 
 
 class TestSearchManager:
@@ -67,7 +67,6 @@ class TestSyncManager:
     def test_link_file(self):
         """Test creating a link between a local file and Drive ID."""
         local_path = "test.md"
-        abs_path = os.path.abspath(local_path)
 
         msg = self.manager.link_file(local_path, "drive_id_123", version=10)
         assert "Linked" in msg

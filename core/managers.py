@@ -38,6 +38,9 @@ class CachedFile:
     snippet: str = ""
     score: int = 0
 
+    def __repr__(self) -> str:
+        return f"CachedFile(alias={self.alias!r}, name={self.name!r}, id={self.id!r})"
+
 
 @dataclass
 class SyncLink:
@@ -50,6 +53,9 @@ class SyncLink:
 
     file_id: str
     last_synced_version: int = 0
+
+    def __repr__(self) -> str:
+        return f"SyncLink(file_id={self.file_id!r}, version={self.last_synced_version})"
 
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for JSON serialization."""
@@ -70,74 +76,57 @@ class SearchManager:
     """Manages search result caching and alias resolution.
 
     Assigns single-letter aliases (A-Z) to search results for quick reference
-    in subsequent commands.
+    in subsequent commands. Thread-safe for concurrent access.
     """
 
     def __init__(self) -> None:
-        self._cache: dict[str, CachedFile] = {}  # Maps 'A' -> CachedFile
-        # Keep search_cache for backward compatibility
-        self.search_cache: dict[str, str] = {}  # Maps 'A' -> file_id
+        self._cache: dict[str, CachedFile] = {}
+        self.search_cache: dict[str, str] = {}
+        self._lock = threading.RLock()
 
     def cache_results(self, files: list[dict]) -> list[dict]:
-        """Cache search results and assign aliases (A, B, C...).
+        """Cache search results and assign aliases (A, B, C...)."""
+        with self._lock:
+            self._cache.clear()
+            self.search_cache.clear()
+            letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+            ranked_results = []
 
-        Args:
-            files: List of file metadata dictionaries.
+            for i, file in enumerate(files):
+                if i < len(letters):
+                    alias = letters[i]
+                    cached = CachedFile(
+                        id=file["id"],
+                        name=file.get("name", "Untitled"),
+                        alias=alias,
+                        mime_type=file.get("mimeType", ""),
+                        snippet=file.get("snippet", ""),
+                        score=file.get("score", 0),
+                    )
+                    self._cache[alias] = cached
+                    self.search_cache[alias] = file["id"]
+                    file["alias"] = alias
+                    ranked_results.append(file)
 
-        Returns:
-            List of files with 'alias' key added (max 26).
-        """
-        self._cache.clear()
-        self.search_cache.clear()
-        letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-        ranked_results = []
-
-        for i, file in enumerate(files):
-            if i < len(letters):
-                alias = letters[i]
-
-                # Create typed cache entry
-                cached = CachedFile(
-                    id=file["id"],
-                    name=file.get("name", "Untitled"),
-                    alias=alias,
-                    mime_type=file.get("mimeType", ""),
-                    snippet=file.get("snippet", ""),
-                    score=file.get("score", 0),
-                )
-                self._cache[alias] = cached
-
-                # Maintain backward compatibility
-                self.search_cache[alias] = file["id"]
-
-                file["alias"] = alias
-                ranked_results.append(file)
-
-        return ranked_results
+            return ranked_results
 
     def resolve_alias(self, query: str) -> str:
-        """Resolve a single-letter alias to a file_id.
-
-        Args:
-            query: Either a single letter alias or file ID.
-
-        Returns:
-            The resolved file_id or the original query.
-        """
-        if len(query) == 1 and query.upper() in self.search_cache:
-            return self.search_cache[query.upper()]
-        return query
+        """Resolve a single-letter alias to a file_id."""
+        with self._lock:
+            if len(query) == 1 and query.upper() in self.search_cache:
+                return self.search_cache[query.upper()]
+            return query
 
     def get_cached_file(self, alias: str) -> CachedFile | None:
-        """Get the full cached file info by alias.
+        """Get the full cached file info by alias."""
+        with self._lock:
+            return self._cache.get(alias.upper())
 
-        Args:
-            alias: Single letter alias (A-Z).
-
-        Returns:
-            CachedFile or None if not found.
-        """
-        return self._cache.get(alias.upper())
+    def clear(self) -> None:
+        """Clear all cached results."""
+        with self._lock:
+            self._cache.clear()
+            self.search_cache.clear()
 
 
 # ============================================================================
