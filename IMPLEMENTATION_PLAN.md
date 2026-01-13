@@ -2,7 +2,7 @@
 
 > **Generated**: 2026-01-13  
 > **Based on**: specs/01_diagnostics_and_testing.md, specs/02_session_persistence_and_recovery.md, specs/03_architecture_and_consolidation.md, AUTH_IMPROVEMENT_PLAN.md  
-> **Status**: Phase 5c COMPLETE (v0.7.0) - Auth consolidation cleanup finished
+> **Status**: Phase 6 COMPLETE (v0.8.0) - Additional improvements finished
 
 ---
 
@@ -197,25 +197,28 @@ The gws-mcp-advanced project has resolved P0-P3 code quality issues. The remaini
 
 ---
 
-## Additional Improvements (Discovered During Analysis)
+## Phase 6: Additional Improvements ✅ COMPLETE (v0.8.0)
 
-### P2-3: Standardize Decorator Order
+**Goal**: Code quality improvements and test organization.
+**Status**: All 3 tasks completed. 121 tests passing.
+
+### P2-3: Standardize Decorator Order ✅
 - **Files**: `gtasks/tasks_tools.py`, `gchat/chat_tools.py`
 - **Effort**: 0.5 hours
 - **Dependencies**: None
-- **Description**: Ensure decorator order matches AGENTS.md: `@server.tool` -> `@handle_http_errors` -> `@require_google_service`
+- **Description**: Fixed decorator order to match AGENTS.md: `@server.tool` -> `@handle_http_errors` -> `@require_google_service`. Updated 12 functions in gtasks and 4 functions in gchat.
 
-### P3-3: Move OAuth State Persistence Test
+### P3-3: Move OAuth State Persistence Test ✅
 - **File**: `tests/test_oauth_state_persistence.py` -> `tests/unit/auth/test_oauth_state_persistence.py`
 - **Effort**: 0.25 hours
 - **Dependencies**: None
-- **Description**: Reorganize for consistency with test directory structure.
+- **Description**: Reorganized for consistency with test directory structure.
 
-### P3-4: Add Tool Unit Tests (Template)
-- **File**: `tests/unit/tools/test_gmail_tools.py` (NEW, template)
+### P3-4: Add Tool Unit Tests (Template) ✅
+- **File**: `tests/unit/tools/test_gmail_tools.py` (NEW)
 - **Effort**: 2 hours
 - **Dependencies**: None
-- **Description**: Create a template for testing MCP tools with mocked Google services.
+- **Description**: Created template for testing MCP tools with mocked Google services. Includes examples for testing helper functions and tool registration.
 
 ---
 
@@ -291,7 +294,7 @@ Week 4+: Full Consolidation
 | `auth/middleware/__init__.py` | 5b | P4 | ✅ Created |
 | `auth/middleware/auth_info.py` | 5b | P4 | ✅ Created |
 | `auth/middleware/session.py` | 5b | P4 | ✅ Created |
-| `tests/unit/tools/test_gmail_tools.py` | - | P3 |
+| `tests/unit/tools/test_gmail_tools.py` | 6 | P3 | ✅ Created |
 
 ## Files to Modify
 
@@ -301,8 +304,8 @@ Week 4+: Full Consolidation
 | `auth/google_auth.py` | 2 | P0 | Add single-user auto-recovery |
 | `auth/service_decorator.py` | 2 | P1 | Add clear re-auth instructions |
 | `core/errors.py` | 3 | P2 | Add auth-specific errors |
-| `gtasks/tasks_tools.py` | - | P2 | Fix decorator order |
-| `gchat/chat_tools.py` | - | P2 | Fix decorator order |
+| `gtasks/tasks_tools.py` | 6 | P2 | ✅ Fixed decorator order |
+| `gchat/chat_tools.py` | 6 | P2 | ✅ Fixed decorator order |
 
 ---
 

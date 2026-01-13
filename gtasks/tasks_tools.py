@@ -69,8 +69,8 @@ def _adjust_due_max_for_tasks_api(due_max: str) -> str:
 
 
 @server.tool()
+@handle_http_errors("list_task_lists", is_read_only=True, service_type="tasks")
 @require_google_service("tasks", "tasks_read")
-@handle_http_errors("list_task_lists", service_type="tasks")
 async def list_task_lists(
     service: Resource,
     user_google_email: str,
@@ -127,8 +127,8 @@ async def list_task_lists(
 
 
 @server.tool()
+@handle_http_errors("get_task_list", is_read_only=True, service_type="tasks")
 @require_google_service("tasks", "tasks_read")
-@handle_http_errors("get_task_list", service_type="tasks")
 async def get_task_list(service: Resource, user_google_email: str, task_list_id: str) -> str:
     """
     Get details of a specific task list.
@@ -165,8 +165,8 @@ async def get_task_list(service: Resource, user_google_email: str, task_list_id:
 
 
 @server.tool()
-@require_google_service("tasks", "tasks")
 @handle_http_errors("create_task_list", service_type="tasks")
+@require_google_service("tasks", "tasks")
 async def create_task_list(service: Resource, user_google_email: str, title: str) -> str:
     """
     Create a new task list.
@@ -205,8 +205,8 @@ async def create_task_list(service: Resource, user_google_email: str, title: str
 
 
 @server.tool()
-@require_google_service("tasks", "tasks")
 @handle_http_errors("update_task_list", service_type="tasks")
+@require_google_service("tasks", "tasks")
 async def update_task_list(service: Resource, user_google_email: str, task_list_id: str, title: str) -> str:
     """
     Update an existing task list.
@@ -247,8 +247,8 @@ async def update_task_list(service: Resource, user_google_email: str, task_list_
 
 
 @server.tool()
-@require_google_service("tasks", "tasks")
 @handle_http_errors("delete_task_list", service_type="tasks")
+@require_google_service("tasks", "tasks")
 async def delete_task_list(service: Resource, user_google_email: str, task_list_id: str) -> str:
     """
     Delete a task list. Note: This will also delete all tasks in the list.
@@ -281,8 +281,8 @@ async def delete_task_list(service: Resource, user_google_email: str, task_list_
 
 
 @server.tool()
+@handle_http_errors("list_tasks", is_read_only=True, service_type="tasks")
 @require_google_service("tasks", "tasks_read")
-@handle_http_errors("list_tasks", service_type="tasks")
 async def list_tasks(
     service: Resource,
     user_google_email: str,
@@ -509,8 +509,8 @@ This can also occur due to filtering that excludes parent tasks while including 
 
 
 @server.tool()
+@handle_http_errors("get_task", is_read_only=True, service_type="tasks")
 @require_google_service("tasks", "tasks_read")
-@handle_http_errors("get_task", service_type="tasks")
 async def get_task(service: Resource, user_google_email: str, task_list_id: str, task_id: str) -> str:
     """
     Get details of a specific task.
@@ -563,8 +563,8 @@ async def get_task(service: Resource, user_google_email: str, task_list_id: str,
 
 
 @server.tool()
-@require_google_service("tasks", "tasks")
 @handle_http_errors("create_task", service_type="tasks")
+@require_google_service("tasks", "tasks")
 async def create_task(
     service: Resource,
     user_google_email: str,
@@ -634,8 +634,8 @@ async def create_task(
 
 
 @server.tool()
-@require_google_service("tasks", "tasks")
 @handle_http_errors("update_task", service_type="tasks")
+@require_google_service("tasks", "tasks")
 async def update_task(
     service: Resource,
     user_google_email: str,
@@ -714,8 +714,8 @@ async def update_task(
 
 
 @server.tool()
-@require_google_service("tasks", "tasks")
 @handle_http_errors("delete_task", service_type="tasks")
+@require_google_service("tasks", "tasks")
 async def delete_task(service: Resource, user_google_email: str, task_list_id: str, task_id: str) -> str:
     """
     Delete a task from a task list.
@@ -751,8 +751,8 @@ async def delete_task(service: Resource, user_google_email: str, task_list_id: s
 
 
 @server.tool()
-@require_google_service("tasks", "tasks")
 @handle_http_errors("move_task", service_type="tasks")
+@require_google_service("tasks", "tasks")
 async def move_task(
     service: Resource,
     user_google_email: str,
@@ -825,8 +825,8 @@ async def move_task(
 
 
 @server.tool()
-@require_google_service("tasks", "tasks")
 @handle_http_errors("clear_completed_tasks", service_type="tasks")
+@require_google_service("tasks", "tasks")
 async def clear_completed_tasks(service: Resource, user_google_email: str, task_list_id: str) -> str:
     """
     Clear all completed tasks from a task list. The tasks will be marked as hidden.
