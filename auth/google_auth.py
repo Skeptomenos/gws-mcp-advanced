@@ -545,6 +545,69 @@ def get_credentials(
         except Exception as e:
             logger.debug(f"[get_credentials] Error checking OAuth 2.1 store: {e}")
 
+    # Auto-recovery: If no credentials found via session but session_id exists,
+    # check if there's only one user with credentials and auto-bind
+    if session_id and not os.getenv("MCP_SINGLE_USER_MODE"):
+        try:
+            store = get_oauth21_session_store()
+            cred_store = get_credential_store()
+
+            if not store.get_user_by_mcp_session(session_id):
+                file_users = cred_store.list_users()
+                if len(file_users) == 1:
+                    single_user = file_users[0]
+                    logger.info(
+                        f"[get_credentials] Single user detected ({single_user}), auto-binding session {session_id}"
+                    )
+
+                    file_credentials = cred_store.get_credential(single_user)
+                    if file_credentials:
+                        try:
+                            store.store_session(
+                                user_email=single_user,
+                                access_token=file_credentials.token,
+                                refresh_token=file_credentials.refresh_token,
+                                token_uri=file_credentials.token_uri,
+                                client_id=file_credentials.client_id,
+                                client_secret=file_credentials.client_secret,
+                                scopes=file_credentials.scopes,
+                                expiry=file_credentials.expiry,
+                                mcp_session_id=session_id,
+                                issuer="https://accounts.google.com",
+                            )
+
+                            if not all(scope in file_credentials.scopes for scope in required_scopes):
+                                logger.warning(
+                                    f"[get_credentials] Auto-recovered credentials lack required scopes. "
+                                    f"Need: {required_scopes}, Have: {file_credentials.scopes}"
+                                )
+                            elif file_credentials.valid:
+                                return file_credentials
+                            elif file_credentials.expired and file_credentials.refresh_token:
+                                try:
+                                    file_credentials.refresh(Request())
+                                    logger.info("[get_credentials] Refreshed auto-recovered credentials")
+                                    cred_store.store_credential(single_user, file_credentials)
+                                    store.store_session(
+                                        user_email=single_user,
+                                        access_token=file_credentials.token,
+                                        refresh_token=file_credentials.refresh_token,
+                                        token_uri=file_credentials.token_uri,
+                                        client_id=file_credentials.client_id,
+                                        client_secret=file_credentials.client_secret,
+                                        scopes=file_credentials.scopes,
+                                        expiry=file_credentials.expiry,
+                                        mcp_session_id=session_id,
+                                        issuer="https://accounts.google.com",
+                                    )
+                                    return file_credentials
+                                except Exception as e:
+                                    logger.error(f"[get_credentials] Failed to refresh auto-recovered credentials: {e}")
+                        except ValueError as e:
+                            logger.warning(f"[get_credentials] Could not auto-bind session: {e}")
+        except Exception as e:
+            logger.debug(f"[get_credentials] Error in auto-recovery: {e}")
+
     # Check for single-user mode
     if os.getenv("MCP_SINGLE_USER_MODE") == "1":
         logger.info("[get_credentials] Single-user mode: bypassing session mapping, finding any credentials")

@@ -226,6 +226,9 @@ class OAuth21SessionStore:
         # Load persisted OAuth states on initialization
         self._load_oauth_states_from_disk()
 
+        # Load persisted session mappings on initialization
+        self._load_session_mappings_from_disk()
+
     def _cleanup_expired_oauth_states_locked(self):
         """Remove expired OAuth state entries. Caller must hold lock."""
         now = datetime.now(timezone.utc)
@@ -307,6 +310,79 @@ class OAuth21SessionStore:
             logger.error("Failed to persist OAuth states to disk: %s", e)
         except Exception as e:
             logger.error("Unexpected error persisting OAuth states: %s", e)
+
+    def _get_sessions_file_path(self) -> str:
+        """Get the file path for persisting session mappings."""
+        base_dir = os.path.dirname(self._states_file_path)
+        return os.path.join(base_dir, "session_mappings.json")
+
+    def _load_session_mappings_from_disk(self):
+        """Load persisted session mappings on initialization."""
+        sessions_file = self._get_sessions_file_path()
+        try:
+            if not os.path.exists(sessions_file):
+                logger.debug("No persisted session mappings file found at %s", sessions_file)
+                return
+
+            with open(sessions_file) as f:
+                data = json.load(f)
+
+            if not isinstance(data, dict):
+                logger.warning("Invalid session mappings file format, ignoring")
+                return
+
+            self._mcp_session_mapping = data.get("mcp_session_mapping", {})
+            self._session_auth_binding = data.get("session_auth_binding", {})
+
+            for user_email, session_info in data.get("sessions", {}).items():
+                if user_email not in self._sessions:
+                    self._sessions[user_email] = {
+                        "session_id": session_info.get("session_id"),
+                        "mcp_session_id": session_info.get("mcp_session_id"),
+                        "issuer": session_info.get("issuer"),
+                        "scopes": session_info.get("scopes", []),
+                    }
+
+            logger.info(
+                "Loaded session mappings: %d MCP sessions, %d auth bindings",
+                len(self._mcp_session_mapping),
+                len(self._session_auth_binding),
+            )
+
+        except json.JSONDecodeError as e:
+            logger.warning("Failed to parse session mappings file: %s", e)
+        except OSError as e:
+            logger.warning("Failed to read session mappings file: %s", e)
+        except Exception as e:
+            logger.error("Unexpected error loading session mappings: %s", e)
+
+    def _save_session_mappings_to_disk(self):
+        """Persist session mappings to disk. Caller must hold lock."""
+        sessions_file = self._get_sessions_file_path()
+        try:
+            data = {
+                "mcp_session_mapping": self._mcp_session_mapping,
+                "session_auth_binding": self._session_auth_binding,
+                "sessions": {
+                    email: {
+                        "session_id": info.get("session_id"),
+                        "mcp_session_id": info.get("mcp_session_id"),
+                        "issuer": info.get("issuer"),
+                        "scopes": info.get("scopes", []),
+                    }
+                    for email, info in self._sessions.items()
+                },
+            }
+
+            with open(sessions_file, "w") as f:
+                json.dump(data, f, indent=2)
+
+            logger.debug("Persisted session mappings to %s", sessions_file)
+
+        except OSError as e:
+            logger.error("Failed to persist session mappings to disk: %s", e)
+        except Exception as e:
+            logger.error("Unexpected error persisting session mappings: %s", e)
 
     def store_oauth_state(
         self,
@@ -462,6 +538,9 @@ class OAuth21SessionStore:
             # Also create binding for the OAuth session ID
             if session_id and session_id not in self._session_auth_binding:
                 self._session_auth_binding[session_id] = user_email
+
+            # Persist session mappings to disk
+            self._save_session_mappings_to_disk()
 
     def get_credentials(self, user_email: str) -> Credentials | None:
         """

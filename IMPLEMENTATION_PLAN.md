@@ -2,7 +2,7 @@
 
 > **Generated**: 2026-01-13  
 > **Based on**: specs/01_diagnostics_and_testing.md, specs/02_session_persistence_and_recovery.md, specs/03_architecture_and_consolidation.md, AUTH_IMPROVEMENT_PLAN.md  
-> **Status**: Phase 1 COMPLETE (v0.1.0) - Phase 2 ready for implementation
+> **Status**: Phase 2 COMPLETE (v0.2.0) - Phase 3 ready for implementation
 
 ---
 
@@ -62,11 +62,12 @@ The gws-mcp-advanced project has resolved P0-P3 code quality issues. The remaini
 
 ---
 
-## Phase 2: Quick Wins (Fix Immediate Pain)
+## Phase 2: Quick Wins (Fix Immediate Pain) ✅ COMPLETE (v0.2.0)
 
 **Goal**: Fix the critical RC-1 issue and improve user experience.
+**Status**: All 4 tasks completed. 85 tests passing. Session mappings now persist across restarts.
 
-### P0-1: Persist Session Mappings to Disk [CRITICAL]
+### P0-1: Persist Session Mappings to Disk [CRITICAL] ✅
 - **File**: `auth/oauth21_session_store.py`
 - **Spec**: specs/02_session_persistence_and_recovery.md, lines 5-86
 - **Effort**: 2 hours
@@ -78,26 +79,28 @@ The gws-mcp-advanced project has resolved P0-P3 code quality issues. The remaini
   - Call load in `__init__`, save after `store_session()`
   - Persist: `_mcp_session_mapping`, `_session_auth_binding`, session metadata (not tokens)
 
-### P0-2: Add Single-User Auto-Recovery
+### P0-2: Add Single-User Auto-Recovery ✅
 - **File**: `auth/google_auth.py`
 - **Spec**: specs/02_session_persistence_and_recovery.md, lines 88-143
 - **Effort**: 1.5 hours
 - **Dependencies**: P0-1
 - **Description**: In `get_credentials()`, if no credentials found and only one user exists in credential store, auto-bind the session to that user.
 
-### P1-5: Improve Token Refresh Synchronization
+### P1-5: Improve Token Refresh Synchronization ✅ (pre-existing)
 - **File**: `auth/google_auth.py`
 - **Spec**: specs/02_session_persistence_and_recovery.md, lines 145-177
 - **Effort**: 1 hour
 - **Dependencies**: P0-1
 - **Description**: After successful token refresh, update both `LocalDirectoryCredentialStore` and `OAuth21SessionStore`.
+- **Note**: Already implemented in existing codebase.
 
-### P1-6: Add Clear Re-auth Instructions
+### P1-6: Add Clear Re-auth Instructions ✅ (pre-existing)
 - **File**: `auth/service_decorator.py`
 - **Spec**: specs/02_session_persistence_and_recovery.md, lines 179-212
 - **Effort**: 0.5 hours
 - **Dependencies**: None
 - **Description**: Create `_handle_token_refresh_error()` function with user-friendly markdown instructions.
+- **Note**: Already implemented in existing codebase.
 
 ---
 

@@ -53,8 +53,8 @@ class TestCredentialPersistence:
         assert retrieved.token == sample_credentials.token
         assert retrieved.refresh_token == sample_credentials.refresh_token
 
-    def test_session_mapping_lost_on_restart(self, tmp_path, monkeypatch):
-        """Demonstrate that session mappings are lost on restart (current behavior)."""
+    def test_session_mapping_survives_restart(self, tmp_path, monkeypatch):
+        """Verify that session mappings persist across store recreation (server restart)."""
         monkeypatch.setenv("GOOGLE_MCP_CREDENTIALS_DIR", str(tmp_path))
 
         user_email = "test@example.com"
@@ -72,7 +72,7 @@ class TestCredentialPersistence:
 
         store2 = OAuth21SessionStore()
 
-        assert store2.get_user_by_mcp_session(session_id) is None
+        assert store2.get_user_by_mcp_session(session_id) == user_email
 
 
 class TestSessionRecovery:
