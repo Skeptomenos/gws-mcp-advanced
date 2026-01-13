@@ -34,6 +34,11 @@ python main.py --transport streamable-http
 python main.py --single-user
 ```
 
+> [!TIP]
+> **Picking up code changes**: MCP servers are long-running processes. To apply code changes within an active session, you must restart the server.
+> 1. Kill the running process (Ctrl+C in terminal or reload plugin in UI).
+> 2. The next tool call will automatically spawn a new process with the updated code.
+
 ### Linting & Formatting
 ```bash
 # Run ruff linter & formatter
