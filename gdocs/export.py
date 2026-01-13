@@ -14,6 +14,7 @@ from googleapiclient.http import MediaIoBaseDownload, MediaIoBaseUpload
 from auth.service_decorator import require_google_service
 from core.server import server
 from core.utils import handle_http_errors
+from gdrive.drive_helpers import resolve_file_id_or_alias
 
 logger = logging.getLogger(__name__)
 
@@ -43,6 +44,9 @@ async def export_doc_to_pdf(
     logger.info(
         f"[export_doc_to_pdf] Email={user_google_email}, Doc={document_id}, pdf_filename={pdf_filename}, folder_id={folder_id}"
     )
+
+    # Resolve alias (A-Z) to actual file ID if applicable
+    document_id = resolve_file_id_or_alias(document_id)
 
     try:
         file_metadata = await asyncio.to_thread(

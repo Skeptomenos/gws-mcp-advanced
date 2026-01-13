@@ -22,6 +22,7 @@ from gdocs.managers import (
     HeaderFooterManager,
     ValidationManager,
 )
+from gdrive.drive_helpers import resolve_file_id_or_alias
 
 logger = logging.getLogger(__name__)
 
@@ -96,6 +97,9 @@ async def modify_doc_text(
         f"[modify_doc_text] Doc={document_id}, start={start_index}, end={end_index}, text={text is not None}, "
         f"formatting={any([bold, italic, underline, font_size, font_family, text_color, background_color])}"
     )
+
+    # Resolve alias (A-Z) to actual file ID if applicable
+    document_id = resolve_file_id_or_alias(document_id)
 
     validator = ValidationManager()
 
@@ -264,6 +268,9 @@ async def find_and_replace_doc(
     """
     logger.info(f"[find_and_replace_doc] Doc={document_id}, find='{find_text}', replace='{replace_text}'")
 
+    # Resolve alias (A-Z) to actual file ID if applicable
+    document_id = resolve_file_id_or_alias(document_id)
+
     requests = [create_find_replace_request(find_text, replace_text, match_case)]
 
     result = await asyncio.to_thread(
@@ -305,6 +312,9 @@ async def update_doc_headers_footers(
         str: Confirmation message with update details
     """
     logger.info(f"[update_doc_headers_footers] Doc={document_id}, type={section_type}")
+
+    # Resolve alias (A-Z) to actual file ID if applicable
+    document_id = resolve_file_id_or_alias(document_id)
 
     validator = ValidationManager()
 
@@ -363,6 +373,9 @@ async def batch_update_doc(
         str: Confirmation message with batch operation results
     """
     logger.debug(f"[batch_update_doc] Doc={document_id}, operations={len(operations)}")
+
+    # Resolve alias (A-Z) to actual file ID if applicable
+    document_id = resolve_file_id_or_alias(document_id)
 
     validator = ValidationManager()
 

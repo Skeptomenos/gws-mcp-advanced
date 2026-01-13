@@ -11,6 +11,7 @@ import logging
 from auth.service_decorator import require_google_service
 from core.server import server
 from core.utils import handle_http_errors
+from gdrive.drive_helpers import resolve_file_id_or_alias
 
 logger = logging.getLogger(__name__)
 
@@ -152,6 +153,8 @@ def create_comment_tools(app_name: str, file_id_param: str):
 
 async def _read_comments_impl(service, app_name: str, file_id: str) -> str:
     """Implementation for reading comments from any Google Workspace file."""
+    # Resolve alias (A-Z) to actual file ID if applicable
+    file_id = resolve_file_id_or_alias(file_id)
     logger.info(f"[read_{app_name}_comments] Reading comments for {app_name} {file_id}")
 
     response = await asyncio.to_thread(
@@ -204,6 +207,8 @@ async def _read_comments_impl(service, app_name: str, file_id: str) -> str:
 
 async def _create_comment_impl(service, app_name: str, file_id: str, comment_content: str) -> str:
     """Implementation for creating a comment on any Google Workspace file."""
+    # Resolve alias (A-Z) to actual file ID if applicable
+    file_id = resolve_file_id_or_alias(file_id)
     logger.info(f"[create_{app_name}_comment] Creating comment in {app_name} {file_id}")
 
     body = {"content": comment_content}
@@ -227,6 +232,8 @@ async def _create_comment_impl(service, app_name: str, file_id: str, comment_con
 
 async def _reply_to_comment_impl(service, app_name: str, file_id: str, comment_id: str, reply_content: str) -> str:
     """Implementation for replying to a comment on any Google Workspace file."""
+    # Resolve alias (A-Z) to actual file ID if applicable
+    file_id = resolve_file_id_or_alias(file_id)
     logger.info(f"[reply_to_{app_name}_comment] Replying to comment {comment_id} in {app_name} {file_id}")
 
     body = {"content": reply_content}
@@ -251,6 +258,8 @@ async def _reply_to_comment_impl(service, app_name: str, file_id: str, comment_i
 
 async def _resolve_comment_impl(service, app_name: str, file_id: str, comment_id: str) -> str:
     """Implementation for resolving a comment on any Google Workspace file."""
+    # Resolve alias (A-Z) to actual file ID if applicable
+    file_id = resolve_file_id_or_alias(file_id)
     logger.info(f"[resolve_{app_name}_comment] Resolving comment {comment_id} in {app_name} {file_id}")
 
     body = {"content": "This comment has been resolved.", "action": "resolve"}

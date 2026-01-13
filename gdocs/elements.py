@@ -18,6 +18,7 @@ from gdocs.docs_helpers import (
     create_insert_table_request,
     create_insert_text_request,
 )
+from gdrive.drive_helpers import resolve_file_id_or_alias
 
 logger = logging.getLogger(__name__)
 
@@ -53,6 +54,9 @@ async def insert_doc_elements(
         str: Confirmation message with insertion details
     """
     logger.info(f"[insert_doc_elements] Doc={document_id}, type={element_type}, index={index}")
+
+    # Resolve alias (A-Z) to actual file ID if applicable
+    document_id = resolve_file_id_or_alias(document_id)
 
     if index == 0:
         logger.debug("Adjusting index from 0 to 1 to avoid first section break")
@@ -134,6 +138,9 @@ async def insert_doc_image(
         str: Confirmation message with insertion details
     """
     logger.info(f"[insert_doc_image] Doc={document_id}, source={image_source}, index={index}")
+
+    # Resolve alias (A-Z) to actual file ID if applicable
+    document_id = resolve_file_id_or_alias(document_id)
 
     if index == 0:
         logger.debug("Adjusting index from 0 to 1 to avoid first section break")

@@ -14,6 +14,7 @@ from core.server import server
 from core.utils import handle_http_errors
 from gdocs.docs_structure import find_tables
 from gdocs.managers import TableOperationManager, ValidationManager
+from gdrive.drive_helpers import resolve_file_id_or_alias
 
 logger = logging.getLogger(__name__)
 
@@ -71,6 +72,9 @@ async def create_table_with_data(
         str: Confirmation with table details and link
     """
     logger.debug(f"[create_table_with_data] Doc={document_id}, index={index}")
+
+    # Resolve alias (A-Z) to actual file ID if applicable
+    document_id = resolve_file_id_or_alias(document_id)
 
     validator = ValidationManager()
 
@@ -155,6 +159,9 @@ async def debug_table_structure(
         str: Detailed JSON structure showing table layout, cell positions, and current content
     """
     logger.debug(f"[debug_table_structure] Doc={document_id}, table_index={table_index}")
+
+    # Resolve alias (A-Z) to actual file ID if applicable
+    document_id = resolve_file_id_or_alias(document_id)
 
     doc = await asyncio.to_thread(service.documents().get(documentId=document_id).execute)
 

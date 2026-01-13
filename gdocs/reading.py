@@ -22,6 +22,7 @@ from gdocs.docs_structure import (
     parse_document_structure,
 )
 from gdocs.docs_tables import extract_table_as_data
+from gdrive.drive_helpers import resolve_file_id_or_alias
 
 logger = logging.getLogger(__name__)
 
@@ -93,6 +94,9 @@ async def get_doc_content(
         str: The document content with metadata header.
     """
     logger.info(f"[get_doc_content] Invoked. Document/File ID: '{document_id}' for user '{user_google_email}'")
+
+    # Resolve alias (A-Z) to actual file ID if applicable
+    document_id = resolve_file_id_or_alias(document_id)
 
     # Step 2: Get file metadata from Drive
     file_metadata = await asyncio.to_thread(
@@ -312,6 +316,9 @@ async def inspect_doc_structure(
         str: JSON string containing document structure and safe insertion indices
     """
     logger.debug(f"[inspect_doc_structure] Doc={document_id}, detailed={detailed}")
+
+    # Resolve alias (A-Z) to actual file ID if applicable
+    document_id = resolve_file_id_or_alias(document_id)
 
     # Get the document
     doc = await asyncio.to_thread(service.documents().get(documentId=document_id).execute)

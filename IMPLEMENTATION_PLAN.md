@@ -123,11 +123,15 @@ Split `docs_tools.py` into domain-specific modules:
 **Risk**: LOW  
 **Dependencies**: Phases 1-3 complete
 
-### Task 4.1: Add Search Alias Support to Docs
-Currently `gdocs/` doesn't use `resolve_file_id_or_alias()` from `gdrive/drive_helpers.py`.
+### Task 4.1: Add Search Alias Support to Docs ✅ COMPLETE
+Added `resolve_file_id_or_alias()` support to all gdocs tools that accept `document_id`.
 
-- [ ] Import `resolve_file_id_or_alias` in docs tools that accept `document_id`
-- [ ] Apply to: `get_doc_content`, `modify_doc_text`, `find_and_replace_doc`, `batch_update_doc`, `create_table_with_data`, `debug_table_structure`, `export_doc_to_pdf`, `inspect_doc_structure`
+- [x] Import `resolve_file_id_or_alias` in docs tools that accept `document_id`
+- [x] Apply to: `get_doc_content`, `modify_doc_text`, `find_and_replace_doc`, `batch_update_doc`, `create_table_with_data`, `debug_table_structure`, `export_doc_to_pdf`, `inspect_doc_structure`
+- [x] Also applied to: `insert_doc_elements`, `insert_doc_image`, `update_doc_headers_footers`
+- [x] Also applied to core/comments.py (affects all comment tools for docs, sheets, slides)
+
+**Verification**: ✅ All 123 tests pass, ruff clean
 
 ### Task 4.2: Complete download_doc_tabs Implementation
 `gdrive/sync_tools.py` has a placeholder for tab-level document sync.
