@@ -10,8 +10,7 @@ import zipfile
 
 from googleapiclient.errors import HttpError
 
-from auth.google_auth import GoogleAuthenticationError
-from core.errors import APIError, ValidationError
+from core.errors import APIError, GoogleAuthenticationError, ValidationError
 
 from .api_enablement import get_api_enablement_message
 

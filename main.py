@@ -175,7 +175,7 @@ def main():
         "gmail": lambda: import_module("gmail"),
         "drive": import_drive_tools,
         "calendar": lambda: import_module("gcalendar.calendar_tools"),
-        "docs": lambda: import_module("gdocs.docs_tools"),
+        "docs": lambda: import_module("gdocs"),
         "sheets": lambda: import_module("gsheets.sheets_tools"),
         "chat": lambda: import_module("gchat.chat_tools"),
         "forms": lambda: import_module("gforms.forms_tools"),

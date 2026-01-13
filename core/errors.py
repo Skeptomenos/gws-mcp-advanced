@@ -133,6 +133,14 @@ class CredentialsExpiredError(AuthenticationError):
     pass
 
 
+class GoogleAuthenticationError(AuthenticationError):
+    """Exception raised when Google authentication is required or fails."""
+
+    def __init__(self, message: str, auth_url: str | None = None):
+        super().__init__(message)
+        self.auth_url = auth_url
+
+
 class InsufficientScopesError(AuthenticationError):
     """Raised when credentials lack required OAuth scopes."""
 

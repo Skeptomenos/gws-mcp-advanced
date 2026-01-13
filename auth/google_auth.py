@@ -25,7 +25,7 @@ from auth.credential_store import get_credential_store
 from auth.oauth21_session_store import get_oauth21_session_store
 from auth.scopes import SCOPES, get_current_scopes  # noqa
 from core.context import get_fastmcp_session_id
-from core.errors import AuthenticationError
+from core.errors import AuthenticationError, GoogleAuthenticationError
 
 # Try to import FastMCP dependencies (may not be available in all environments)
 try:
@@ -759,14 +759,6 @@ async def get_user_info(credentials: Credentials) -> dict[str, Any] | None:
 
 
 # --- Centralized Google Service Authentication ---
-
-
-class GoogleAuthenticationError(Exception):
-    """Exception raised when Google authentication is required or fails."""
-
-    def __init__(self, message: str, auth_url: str | None = None):
-        super().__init__(message)
-        self.auth_url = auth_url
 
 
 async def get_authenticated_google_service(
