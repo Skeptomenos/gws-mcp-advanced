@@ -2,7 +2,7 @@
 
 > **Generated**: 2026-01-13  
 > **Based on**: specs/01_diagnostics_and_testing.md, specs/02_session_persistence_and_recovery.md, specs/03_architecture_and_consolidation.md, AUTH_IMPROVEMENT_PLAN.md  
-> **Status**: Phase 4 COMPLETE (v0.4.0) - Phase 5a ready for implementation
+> **Status**: Phase 5a COMPLETE (v0.5.0) - Phase 5b ready for implementation
 
 ---
 
@@ -146,8 +146,9 @@ The gws-mcp-advanced project has resolved P0-P3 code quality issues. The remaini
 
 ---
 
-## Phase 5a: Auth Consolidation - Credentials & Types
+## Phase 5a: Auth Consolidation - Credentials & Types COMPLETE (v0.5.0)
 **Goal**: Move data structures and storage logic first.
+**Status**: All tasks completed. 115 tests passing.
 
 ### P4-1a: Move Credentials & Types
 - **Files**: `auth/credentials/*.py`, `auth/config.py`
@@ -155,11 +156,11 @@ The gws-mcp-advanced project has resolved P0-P3 code quality issues. The remaini
 - **Effort**: 2 hours
 - **Dependencies**: Phase 4 complete
 - **Description**: 
-  - Create `auth/config.py` (merge)
-  - Create `auth/credentials/types.py` (merge types)
-  - Create `auth/credentials/session.py` (extract from session store)
-  - Create `auth/credentials/store.py` (shim/move credential store)
-  - Create shims in old locations
+  - Create `auth/config.py` (merge oauth_config.py + google_oauth_config.py)
+  - Create `auth/credentials/types.py` (merge oauth_types.py)
+  - Create `auth/credentials/store.py` (move credential_store.py)
+  - Create shims in old locations for backward compatibility
+- **Note**: Session extraction deferred to Phase 5b (requires provider refactoring first)
 
 ## Phase 5b: Auth Consolidation - Logic & Middleware
 **Goal**: Move business logic and request handling.
@@ -275,6 +276,10 @@ Week 4+: Full Consolidation
 | `tests/unit/core/test_container.py` | 3 | P2 | ✅ Created |
 | `auth/interfaces.py` | 4 | P3 | ✅ Created |
 | `auth/ARCHITECTURE.md` | 4 | P3 | ✅ Created |
+| `auth/config.py` | 5a | P4 | ✅ Created |
+| `auth/credential_types/__init__.py` | 5a | P4 | ✅ Created |
+| `auth/credential_types/types.py` | 5a | P4 | ✅ Created |
+| `auth/credential_types/store.py` | 5a | P4 | ✅ Created |
 | `tests/unit/tools/test_gmail_tools.py` | - | P3 |
 
 ## Files to Modify
