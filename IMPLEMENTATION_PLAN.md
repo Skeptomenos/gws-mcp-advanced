@@ -2,7 +2,7 @@
 
 > **Generated**: 2026-01-13  
 > **Based on**: specs/01_diagnostics_and_testing.md, specs/02_session_persistence_and_recovery.md, specs/03_architecture_and_consolidation.md, AUTH_IMPROVEMENT_PLAN.md  
-> **Status**: Phase 2 COMPLETE (v0.2.0) - Phase 3 ready for implementation
+> **Status**: Phase 3 COMPLETE (v0.3.0) - Phase 4 ready for implementation
 
 ---
 
@@ -104,23 +104,24 @@ The gws-mcp-advanced project has resolved P0-P3 code quality issues. The remaini
 
 ---
 
-## Phase 3: Incremental P4 (DI + Error Hierarchy)
+## Phase 3: Incremental P4 (DI + Error Hierarchy) ✅ COMPLETE (v0.3.0)
 
 **Goal**: Add testability infrastructure without breaking changes.
+**Status**: All tasks completed. 115 tests passing.
 
-### P2-1: Create DI Container
+### P2-1: Create DI Container ✅
 - **File**: `core/container.py` (NEW)
 - **Spec**: specs/03_architecture_and_consolidation.md, lines 7-85
 - **Effort**: 1.5 hours
 - **Dependencies**: None
-- **Description**: Create `CredentialStoreProtocol`, `SessionStoreProtocol`, `Container` dataclass, and global getter/setter functions.
+- **Description**: Created `CredentialStoreProtocol`, `SessionStoreProtocol`, `Container` dataclass, and global getter/setter/reset functions.
 
-### P2-2: Extend Error Hierarchy
+### P2-2: Extend Error Hierarchy ✅
 - **File**: `core/errors.py`
 - **Spec**: specs/03_architecture_and_consolidation.md, lines 87-140
 - **Effort**: 1 hour
 - **Dependencies**: None
-- **Description**: Add `CredentialsNotFoundError`, `SessionBindingError`, `TokenRefreshError`, `ScopeMismatchError`.
+- **Description**: Added `SessionBindingError`, `TokenRefreshError`, `ScopeMismatchError` with enhanced constructors. Enhanced `CredentialsNotFoundError` with `user_email` parameter.
 
 ---
 
@@ -265,11 +266,12 @@ Week 4+: Full Consolidation
 
 | File | Phase | Priority |
 |------|-------|----------|
-| `auth/diagnostics.py` | 1 | P1 |
-| `tests/unit/auth/test_credential_store.py` | 1 | P1 |
-| `tests/unit/auth/test_session_store.py` | 1 | P1 |
-| `tests/integration/test_auth_flow.py` | 1 | P1 |
-| `core/container.py` | 3 | P2 |
+| `auth/diagnostics.py` | 1 | P1 | ✅ Created |
+| `tests/unit/auth/test_credential_store.py` | 1 | P1 | ✅ Created |
+| `tests/unit/auth/test_session_store.py` | 1 | P1 | ✅ Created |
+| `tests/integration/test_auth_flow.py` | 1 | P1 | ✅ Created |
+| `core/container.py` | 3 | P2 | ✅ Created |
+| `tests/unit/core/test_container.py` | 3 | P2 | ✅ Created |
 | `auth/interfaces.py` | 4 | P3 |
 | `auth/ARCHITECTURE.md` | 4 | P3 |
 | `tests/unit/tools/test_gmail_tools.py` | - | P3 |

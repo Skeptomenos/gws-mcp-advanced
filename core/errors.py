@@ -120,7 +120,11 @@ class AuthenticationError(WorkspaceMCPError):
 class CredentialsNotFoundError(AuthenticationError):
     """Raised when no credentials are found for a user."""
 
-    pass
+    def __init__(self, user_email: str):
+        super().__init__(
+            f"No credentials found for user: {user_email}. Please authenticate first using start_google_auth."
+        )
+        self.user_email = user_email
 
 
 class CredentialsExpiredError(AuthenticationError):
@@ -133,6 +137,40 @@ class InsufficientScopesError(AuthenticationError):
     """Raised when credentials lack required OAuth scopes."""
 
     pass
+
+
+class SessionBindingError(AuthenticationError):
+    """Raised when session binding fails."""
+
+    def __init__(self, session_id: str, reason: str):
+        super().__init__(f"Session binding failed for {session_id}: {reason}")
+        self.session_id = session_id
+        self.reason = reason
+
+
+class TokenRefreshError(AuthenticationError):
+    """Raised when token refresh fails."""
+
+    def __init__(self, user_email: str, reason: str):
+        super().__init__(
+            f"Failed to refresh token for {user_email}: {reason}. Please re-authenticate using start_google_auth."
+        )
+        self.user_email = user_email
+        self.reason = reason
+
+
+class ScopeMismatchError(AuthenticationError):
+    """Raised when credentials lack required scopes."""
+
+    def __init__(self, required: list[str], available: list[str]):
+        missing = set(required) - set(available)
+        super().__init__(
+            f"Missing required OAuth scopes: {', '.join(missing)}. "
+            "Please re-authenticate with the required permissions."
+        )
+        self.required_scopes = required
+        self.available_scopes = available
+        self.missing_scopes = list(missing)
 
 
 # =============================================================================
