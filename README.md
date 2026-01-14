@@ -256,6 +256,12 @@ uv run ruff format .
 
 ## Recent Updates
 
+### v0.9.1 - Codebase Refactor
+- **Modular Architecture**: Split monolithic tool files into domain-specific modules
+- **Improved Maintainability**: Clearer separation of concerns for Gmail, Drive, and Docs
+- **Public API Preservation**: Backward-compatible package structure
+- **Circular Dependency Fixes**: Resolved import cycles in core/auth modules
+
 ### v0.9.0 - Session Persistence & Auth Improvements
 - **Session persistence**: Credentials now survive server restarts
 - **Atomic file writes**: Prevents credential corruption on crash
