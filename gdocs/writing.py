@@ -22,6 +22,7 @@ from gdocs.managers import (
     HeaderFooterManager,
     ValidationManager,
 )
+from gdocs.markdown_parser import MarkdownToDocsConverter
 from gdrive.drive_helpers import resolve_file_id_or_alias
 
 logger = logging.getLogger(__name__)
@@ -35,22 +36,65 @@ async def create_doc(
     user_google_email: str,
     title: str,
     content: str = "",
+    parse_markdown: bool = True,
 ) -> str:
     """
     Creates a new Google Doc and optionally inserts initial content.
 
+    When `parse_markdown=True` (default), the content is parsed as Markdown and
+    converted to native Google Docs formatting (headings, bold, italic, lists,
+    links, code blocks, blockquotes). Set `parse_markdown=False` to insert
+    content as plain text without any formatting.
+
+    Args:
+        user_google_email: User's Google email address.
+        title: The title of the new document.
+        content: Optional initial content. Interpreted as Markdown by default.
+        parse_markdown: If True (default), parse content as Markdown and apply
+                        formatting. If False, insert content as plain text.
+
     Returns:
         str: Confirmation message with document ID and link.
+
+    Examples:
+        # Create doc with Markdown content (default behavior)
+        create_doc(title="My Doc", content="# Heading\\n\\n**Bold** text")
+
+        # Create doc with plain text (no Markdown parsing)
+        create_doc(title="Plain Doc", content="# This is literal text", parse_markdown=False)
     """
-    logger.info(f"[create_doc] Invoked. Email: '{user_google_email}', Title='{title}'")
+    logger.info(
+        f"[create_doc] Invoked. Email: '{user_google_email}', Title='{title}', "
+        f"parse_markdown={parse_markdown}, content_len={len(content)}"
+    )
 
     doc = await asyncio.to_thread(service.documents().create(body={"title": title}).execute)
     doc_id = doc.get("documentId")
+
     if content:
-        requests = [{"insertText": {"location": {"index": 1}, "text": content}}]
-        await asyncio.to_thread(service.documents().batchUpdate(documentId=doc_id, body={"requests": requests}).execute)
+        if parse_markdown:
+            converter = MarkdownToDocsConverter()
+            requests = converter.convert(content, start_index=1)
+            logger.debug(f"[create_doc] Markdown converter generated {len(requests)} request(s)")
+
+            # CRITICAL: Send ALL requests in a SINGLE batchUpdate call.
+            # The createParagraphBullets request uses leading TAB characters to determine
+            # nesting levels. If we split into multiple calls, the TABs are inserted first,
+            # then the bullet request runs with stale indices after TABs have shifted positions.
+            # See: specs/FIX_LIST_NESTING.md for details on the TAB-based nesting approach.
+            if requests:
+                await asyncio.to_thread(
+                    service.documents().batchUpdate(documentId=doc_id, body={"requests": requests}).execute
+                )
+        else:
+            requests = [{"insertText": {"location": {"index": 1}, "text": content}}]
+            await asyncio.to_thread(
+                service.documents().batchUpdate(documentId=doc_id, body={"requests": requests}).execute
+            )
+
     link = f"https://docs.google.com/document/d/{doc_id}/edit"
-    msg = f"Created Google Doc '{title}' (ID: {doc_id}) for {user_google_email}. Link: {link}"
+    mode_info = "with Markdown formatting" if (content and parse_markdown) else "with plain text" if content else ""
+    msg = f"Created Google Doc '{title}' (ID: {doc_id}) {mode_info}. Link: {link}".strip()
     logger.info(f"Successfully created Google Doc '{title}' (ID: {doc_id}) for {user_google_email}. Link: {link}")
     return msg
 
@@ -63,15 +107,15 @@ async def modify_doc_text(
     user_google_email: str,
     document_id: str,
     start_index: int,
-    end_index: int = None,
-    text: str = None,
-    bold: bool = None,
-    italic: bool = None,
-    underline: bool = None,
-    font_size: int = None,
-    font_family: str = None,
-    text_color: str = None,
-    background_color: str = None,
+    end_index: int | None = None,
+    text: str | None = None,
+    bold: bool | None = None,
+    italic: bool | None = None,
+    underline: bool | None = None,
+    font_size: int | None = None,
+    font_family: str | None = None,
+    text_color: str | None = None,
+    background_color: str | None = None,
 ) -> str:
     """
     Modifies text in a Google Doc - can insert/replace text and/or apply formatting in a single operation.
@@ -197,22 +241,22 @@ async def modify_doc_text(
 
         if format_start == 0:
             format_start = 1
-        if format_end is not None and format_end <= format_start:
+        if format_end is None or format_end <= format_start:
             format_end = format_start + 1
 
-        requests.append(
-            create_format_text_request(
-                format_start,
-                format_end,
-                bold,
-                italic,
-                underline,
-                font_size,
-                font_family,
-                text_color,
-                background_color,
-            )
+        format_request = create_format_text_request(
+            format_start,
+            format_end,
+            bold,
+            italic,
+            underline,
+            font_size,
+            font_family,
+            text_color,
+            background_color,
         )
+        if format_request:
+            requests.append(format_request)
 
         format_details = []
         if bold is not None:
@@ -359,14 +403,16 @@ async def batch_update_doc(
         user_google_email: User's Google email address
         document_id: ID of the document to update
         operations: List of operation dictionaries. Each operation should contain:
-                   - type: Operation type ('insert_text', 'delete_text', 'replace_text', 'format_text', 'insert_table', 'insert_page_break')
+                   - type: Operation type ('insert_text', 'delete_text', 'replace_text',
+                     'format_text', 'insert_table', 'insert_page_break', 'insert_markdown')
                    - Additional parameters specific to each operation type
 
     Example operations:
         [
             {"type": "insert_text", "index": 1, "text": "Hello World"},
             {"type": "format_text", "start_index": 1, "end_index": 12, "bold": true},
-            {"type": "insert_table", "index": 20, "rows": 2, "columns": 3}
+            {"type": "insert_table", "index": 20, "rows": 2, "columns": 3},
+            {"type": "insert_markdown", "markdown_text": "# Heading\\n\\n**Bold** text", "index": 1}
         ]
 
     Returns:
@@ -397,3 +443,70 @@ async def batch_update_doc(
         return f"{message} on document {document_id}. API replies: {replies_count}. Link: {link}"
     else:
         return f"Error: {message}"
+
+
+@server.tool()
+@handle_http_errors("insert_markdown", service_type="docs")
+@require_google_service("docs", "docs_write")
+async def insert_markdown(
+    service: Any,
+    user_google_email: str,
+    document_id: str,
+    markdown_text: str,
+    index: int = 1,
+) -> str:
+    """
+    Insert Markdown-formatted content into a Google Doc.
+
+    Converts Markdown syntax (headings, bold, italic, lists, links, code blocks,
+    blockquotes) into native Google Docs formatting via batchUpdate requests.
+
+    Args:
+        user_google_email: User's Google email address.
+        document_id: ID of the document to update (supports A-Z aliases from search).
+        markdown_text: Markdown string to convert and insert.
+        index: Document index to start insertion at (1-based, default: 1).
+               Index 1 is the start of the document body.
+
+    Returns:
+        str: Confirmation message with document link and request count.
+
+    Example:
+        insert_markdown(
+            document_id="abc123",
+            markdown_text="# Welcome\n\nThis is **bold** and *italic* text.\n\n- Item 1\n- Item 2"
+        )
+    """
+    logger.info(f"[insert_markdown] Doc={document_id}, markdown_len={len(markdown_text)}, start_index={index}")
+
+    # Resolve alias (A-Z) to actual file ID if applicable
+    document_id = resolve_file_id_or_alias(document_id)
+
+    validator = ValidationManager()
+
+    is_valid, error_msg = validator.validate_document_id(document_id)
+    if not is_valid:
+        return f"Error: {error_msg}"
+
+    if not markdown_text.strip():
+        return "Error: markdown_text cannot be empty."
+
+    if index < 1:
+        return "Error: index must be at least 1 (document body starts at index 1)."
+
+    # Convert Markdown to Google Docs API requests
+    converter = MarkdownToDocsConverter()
+    requests = converter.convert(markdown_text, start_index=index)
+
+    if not requests:
+        return "Error: Markdown conversion produced no requests. Check markdown_text content."
+
+    # Execute batchUpdate with converted requests
+    await asyncio.to_thread(
+        service.documents().batchUpdate(documentId=document_id, body={"requests": requests}).execute
+    )
+
+    link = f"https://docs.google.com/document/d/{document_id}/edit"
+    return (
+        f"Inserted Markdown content into document {document_id}. Generated {len(requests)} API request(s). Link: {link}"
+    )
