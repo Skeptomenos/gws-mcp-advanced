@@ -9,6 +9,16 @@ from starlette.applications import Starlette
 from starlette.middleware import Middleware
 from starlette.requests import Request
 
+from auth.config import (
+    USER_GOOGLE_EMAIL,
+    get_transport_mode,
+)
+from auth.config import (
+    get_oauth_redirect_uri as get_oauth_redirect_uri_for_current_mode,
+)
+from auth.config import (
+    set_transport_mode as _set_transport_mode,
+)
 from auth.google_auth import check_client_secrets, handle_auth_callback, start_auth_flow
 from auth.middleware.auth_info import AuthInfoMiddleware
 from auth.middleware.session import MCPSessionMiddleware
@@ -19,16 +29,6 @@ from auth.oauth_responses import (
     create_success_response,
 )
 from auth.scopes import SCOPES, get_current_scopes  # noqa
-from core.config import (
-    USER_GOOGLE_EMAIL,
-    get_transport_mode,
-)
-from core.config import (
-    get_oauth_redirect_uri as get_oauth_redirect_uri_for_current_mode,
-)
-from core.config import (
-    set_transport_mode as _set_transport_mode,
-)
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -43,7 +43,7 @@ session_middleware = Middleware(MCPSessionMiddleware)
 class SecureFastMCP(FastMCP):
     def streamable_http_app(self) -> "Starlette":
         """Override to add secure middleware stack for OAuth 2.1."""
-        app = super().streamable_http_app()
+        app = super().streamable_http_app()  # type: ignore[misc]
 
         # Add middleware in order (first added = outermost layer)
         # Session Management - extracts session info for MCP context
@@ -364,7 +364,7 @@ async def health_check(request: Request):
     )
 
 
-@server.custom_route("/attachments/{file_id}", methods=["GET"])
+@server.custom_route("/attachments/{file_id}", methods=["GET"])  # type: ignore[arg-type]
 async def serve_attachment(file_id: str):
     """Serve a stored attachment file."""
     from core.attachment_storage import get_attachment_storage
@@ -447,7 +447,7 @@ async def legacy_oauth2_callback(request: Request) -> HTMLResponse:
 
 
 @server.tool()
-async def start_google_auth(service_name: str, user_google_email: str = USER_GOOGLE_EMAIL) -> str:
+async def start_google_auth(service_name: str, user_google_email: str | None = USER_GOOGLE_EMAIL) -> str:
     """
     Manually initiate Google OAuth authentication flow.
 

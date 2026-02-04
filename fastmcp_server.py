@@ -111,7 +111,10 @@ configure_safe_logging()
 if not is_stateless_mode():
     try:
         logger.info("Checking credentials directory permissions...")
-        check_credentials_directory_permissions()
+        # Lazy import to avoid circular dependency
+        from auth.google_auth import get_default_credentials_dir
+
+        check_credentials_directory_permissions(get_default_credentials_dir())
         logger.info("Credentials directory permissions verified")
     except (PermissionError, OSError) as e:
         logger.error(f"Credentials directory permission check failed: {e}")

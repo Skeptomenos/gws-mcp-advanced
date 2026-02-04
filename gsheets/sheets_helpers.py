@@ -8,6 +8,7 @@ conditional formatting helpers.
 import asyncio
 import json
 import re
+from typing import Any
 
 from core.utils import UserInputError
 
@@ -394,7 +395,7 @@ def _grid_range_to_a1(grid_range: dict, sheet_titles: dict[int, str]) -> str:
     Convert a GridRange to an A1-like string using known sheet titles.
     Falls back to the sheet ID if the title is unknown.
     """
-    sheet_id = grid_range.get("sheetId")
+    sheet_id = grid_range.get("sheetId", 0)
     sheet_title = sheet_titles.get(sheet_id, f"Sheet {sheet_id}")
 
     start_row = grid_range.get("startRowIndex")
@@ -658,7 +659,7 @@ def _build_boolean_rule(
     if cond_type_normalized not in CONDITION_TYPES:
         raise UserInputError(f"condition_type must be one of {sorted(CONDITION_TYPES)}.")
 
-    condition = {"type": cond_type_normalized}
+    condition: dict[str, str | list[dict[str, str]]] = {"type": cond_type_normalized}
     if condition_values:
         condition["values"] = [{"userEnteredValue": str(value)} for value in condition_values]
 
@@ -684,13 +685,13 @@ def _build_boolean_rule(
 
 
 def _build_gradient_rule(
-    ranges: list[dict],
-    gradient_points: list[dict],
-) -> dict:
+    ranges: list[dict[str, Any]],
+    gradient_points: list[dict[str, Any]],
+) -> dict[str, Any]:
     """
     Build a Sheets gradient conditional formatting rule payload.
     """
-    rule_body: dict = {"ranges": ranges, "gradientRule": {}}
+    rule_body: dict[str, Any] = {"ranges": ranges, "gradientRule": {}}
     if len(gradient_points) == 2:
         rule_body["gradientRule"]["minpoint"] = gradient_points[0]
         rule_body["gradientRule"]["maxpoint"] = gradient_points[1]

@@ -25,7 +25,7 @@ def build_table_population_requests(
     Returns:
         List of request dictionaries for batch update
     """
-    requests = []
+    requests: list[dict[str, object]] = []
     cells = table_info.get("cells", [])
 
     if not cells:

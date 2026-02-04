@@ -45,15 +45,17 @@ class TestParseRemindersJson:
         )
         assert result == [{"method": "popup", "minutes": 15}, {"method": "email", "minutes": 60}]
 
-    def test_valid_list_input(self):
-        """List input should be processed directly."""
-        result = _parse_reminders_json([{"method": "popup", "minutes": 30}], "test_func")
+    def test_valid_json_array_input(self):
+        """JSON array input should be processed correctly."""
+        result = _parse_reminders_json('[{"method": "popup", "minutes": 30}]', "test_func")
         assert result == [{"method": "popup", "minutes": 30}]
 
     def test_truncates_to_five_reminders(self):
         """More than 5 reminders should be truncated."""
+        import json
+
         reminders = [{"method": "popup", "minutes": i * 10} for i in range(1, 8)]
-        result = _parse_reminders_json(reminders, "test_func")
+        result = _parse_reminders_json(json.dumps(reminders), "test_func")
         assert len(result) == 5
 
     def test_invalid_json_returns_empty_list(self):
@@ -68,52 +70,54 @@ class TestParseRemindersJson:
 
     def test_invalid_method_skipped(self):
         """Reminders with invalid method should be skipped."""
-        result = _parse_reminders_json([{"method": "sms", "minutes": 15}], "test_func")
+        result = _parse_reminders_json('[{"method": "sms", "minutes": 15}]', "test_func")
         assert result == []
 
     def test_missing_method_skipped(self):
         """Reminders missing method should be skipped."""
-        result = _parse_reminders_json([{"minutes": 15}], "test_func")
+        result = _parse_reminders_json('[{"minutes": 15}]', "test_func")
         assert result == []
 
     def test_missing_minutes_skipped(self):
         """Reminders missing minutes should be skipped."""
-        result = _parse_reminders_json([{"method": "popup"}], "test_func")
+        result = _parse_reminders_json('[{"method": "popup"}]', "test_func")
         assert result == []
 
     def test_invalid_minutes_negative_skipped(self):
         """Reminders with negative minutes should be skipped."""
-        result = _parse_reminders_json([{"method": "popup", "minutes": -5}], "test_func")
+        result = _parse_reminders_json('[{"method": "popup", "minutes": -5}]', "test_func")
         assert result == []
 
     def test_invalid_minutes_too_large_skipped(self):
         """Reminders with minutes > 40320 should be skipped."""
-        result = _parse_reminders_json([{"method": "popup", "minutes": 50000}], "test_func")
+        result = _parse_reminders_json('[{"method": "popup", "minutes": 50000}]', "test_func")
         assert result == []
 
     def test_method_normalized_to_lowercase(self):
         """Method should be normalized to lowercase."""
-        result = _parse_reminders_json([{"method": "POPUP", "minutes": 15}], "test_func")
+        result = _parse_reminders_json('[{"method": "POPUP", "minutes": 15}]', "test_func")
         assert result == [{"method": "popup", "minutes": 15}]
 
     def test_mixed_valid_invalid_reminders(self):
         """Valid reminders should be kept, invalid ones skipped."""
+        import json
+
         reminders = [
-            {"method": "popup", "minutes": 15},  # valid
-            {"method": "sms", "minutes": 30},  # invalid method
-            {"method": "email", "minutes": 60},  # valid
+            {"method": "popup", "minutes": 15},
+            {"method": "sms", "minutes": 30},
+            {"method": "email", "minutes": 60},
         ]
-        result = _parse_reminders_json(reminders, "test_func")
+        result = _parse_reminders_json(json.dumps(reminders), "test_func")
         assert result == [{"method": "popup", "minutes": 15}, {"method": "email", "minutes": 60}]
 
     def test_non_dict_reminder_skipped(self):
         """Non-dict items in reminders list should be skipped."""
-        result = _parse_reminders_json(["not a dict", {"method": "popup", "minutes": 15}], "test_func")
+        result = _parse_reminders_json('["not a dict", {"method": "popup", "minutes": 15}]', "test_func")
         assert result == [{"method": "popup", "minutes": 15}]
 
-    def test_invalid_type_returns_empty_list(self):
-        """Invalid input type (not str or list) should return empty list."""
-        result = _parse_reminders_json(12345, "test_func")
+    def test_invalid_json_string_returns_empty_list(self):
+        """Invalid JSON string should return empty list."""
+        result = _parse_reminders_json("not valid json at all", "test_func")
         assert result == []
 
 
@@ -346,35 +350,40 @@ class TestNormalizeAttendees:
         """None input should return None."""
         assert _normalize_attendees(None) is None
 
-    def test_empty_list_returns_none(self):
-        """Empty list should return None."""
-        assert _normalize_attendees([]) is None
+    def test_empty_array_json_returns_none(self):
+        """Empty array JSON should return None."""
+        assert _normalize_attendees("[]") is None
 
     def test_email_strings_normalized(self):
         """Email strings should be converted to dicts."""
-        result = _normalize_attendees(["user@example.com", "other@example.com"])
+        result = _normalize_attendees('["user@example.com", "other@example.com"]')
         assert result == [{"email": "user@example.com"}, {"email": "other@example.com"}]
 
     def test_dict_with_email_preserved(self):
         """Dict with email key should be preserved."""
-        attendees = [{"email": "user@example.com", "responseStatus": "accepted"}]
-        result = _normalize_attendees(attendees)
+        result = _normalize_attendees('[{"email": "user@example.com", "responseStatus": "accepted"}]')
         assert result == [{"email": "user@example.com", "responseStatus": "accepted"}]
 
     def test_mixed_strings_and_dicts(self):
         """Mixed strings and dicts should be normalized."""
+        import json
+
         attendees = ["user@example.com", {"email": "other@example.com", "optional": True}]
-        result = _normalize_attendees(attendees)
+        result = _normalize_attendees(json.dumps(attendees))
         assert result == [{"email": "user@example.com"}, {"email": "other@example.com", "optional": True}]
 
     def test_invalid_dict_without_email_skipped(self):
         """Dict without email key should be skipped."""
+        import json
+
         attendees = [{"name": "John"}, {"email": "valid@example.com"}]
-        result = _normalize_attendees(attendees)
+        result = _normalize_attendees(json.dumps(attendees))
         assert result == [{"email": "valid@example.com"}]
 
     def test_all_invalid_returns_none(self):
         """All invalid attendees should return None."""
+        import json
+
         attendees = [{"name": "John"}, 12345]
-        result = _normalize_attendees(attendees)
+        result = _normalize_attendees(json.dumps(attendees))
         assert result is None

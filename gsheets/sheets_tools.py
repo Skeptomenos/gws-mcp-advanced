@@ -8,11 +8,12 @@ import asyncio
 import copy
 import json
 import logging
+from typing import Any
 
 from auth.service_decorator import require_google_service
-from core.comments import create_comment_tools
 from core.server import server
 from core.utils import UserInputError, handle_http_errors
+from gdocs.comments import create_comment_tools
 from gsheets.sheets_helpers import (
     CONDITION_TYPES,
     _a1_range_for_values,
@@ -225,7 +226,7 @@ async def modify_sheet_values(
     user_google_email: str,
     spreadsheet_id: str,
     range_name: str,
-    values: str | list[list[str]] | None = None,
+    values: str | None = None,
     value_input_option: str = "USER_ENTERED",
     clear_values: bool = False,
 ) -> str:
@@ -248,8 +249,9 @@ async def modify_sheet_values(
         f"[modify_sheet_values] Invoked. Operation: {operation}, Email: '{user_google_email}', Spreadsheet: {spreadsheet_id}, Range: {range_name}"
     )
 
-    # Parse values if it's a JSON string (MCP passes parameters as JSON strings)
-    if values is not None and isinstance(values, str):
+    # Parse values from JSON string (MCP passes parameters as JSON strings)
+    parsed_values: list[list[str]] | None = None
+    if values is not None:
         try:
             parsed_values = json.loads(values)
             if not isinstance(parsed_values, list):
@@ -258,14 +260,13 @@ async def modify_sheet_values(
             for i, row in enumerate(parsed_values):
                 if not isinstance(row, list):
                     raise ValueError(f"Row {i} must be a list, got {type(row).__name__}")
-            values = parsed_values
-            logger.info(f"[modify_sheet_values] Parsed JSON string to Python list with {len(values)} rows")
+            logger.info(f"[modify_sheet_values] Parsed JSON string to Python list with {len(parsed_values)} rows")
         except json.JSONDecodeError as e:
             raise UserInputError(f"Invalid JSON format for values: {e}") from e
         except ValueError as e:
             raise UserInputError(f"Invalid values structure: {e}") from e
 
-    if not clear_values and not values:
+    if not clear_values and not parsed_values:
         raise UserInputError("Either 'values' must be provided or 'clear_values' must be True.")
 
     if clear_values:
@@ -279,7 +280,7 @@ async def modify_sheet_values(
         )
         logger.info(f"Successfully cleared range '{cleared_range}' for {user_google_email}.")
     else:
-        body = {"values": values}
+        body = {"values": parsed_values}
 
         result = await asyncio.to_thread(
             service.spreadsheets()
@@ -460,11 +461,11 @@ async def add_conditional_formatting(
     spreadsheet_id: str,
     range_name: str,
     condition_type: str,
-    condition_values: str | list[str | int | float] | None = None,
+    condition_values: str | None = None,
     background_color: str | None = None,
     text_color: str | None = None,
     rule_index: int | None = None,
-    gradient_points: str | list[dict] | None = None,
+    gradient_points: str | None = None,
 ) -> str:
     """
     Adds a conditional formatting rule to a range.
@@ -545,7 +546,7 @@ async def add_conditional_formatting(
     new_rules_state = copy.deepcopy(current_rules)
     new_rules_state.insert(insert_at, new_rule)
 
-    add_rule_request = {"rule": new_rule}
+    add_rule_request: dict[str, dict[str, object] | int] = {"rule": new_rule}
     if rule_index is not None:
         add_rule_request["index"] = rule_index
 
@@ -577,11 +578,11 @@ async def update_conditional_formatting(
     rule_index: int,
     range_name: str | None = None,
     condition_type: str | None = None,
-    condition_values: str | list[str | int | float] | None = None,
+    condition_values: str | None = None,
     background_color: str | None = None,
     text_color: str | None = None,
     sheet_name: str | None = None,
-    gradient_points: str | list[dict] | None = None,
+    gradient_points: str | None = None,
 ) -> str:
     """
     Updates an existing conditional formatting rule by index on a sheet.
@@ -642,8 +643,8 @@ async def update_conditional_formatting(
         )
 
     existing_rule = rules[rule_index]
-    ranges_to_use = existing_rule.get("ranges", [])
-    if range_name:
+    ranges_to_use: list[dict[str, Any]] = existing_rule.get("ranges", []) or []
+    if range_name and grid_range is not None:
         ranges_to_use = [grid_range]
     if not ranges_to_use:
         ranges_to_use = [{"sheetId": sheet_id}]
@@ -847,7 +848,7 @@ async def create_spreadsheet(
     """
     logger.info(f"[create_spreadsheet] Invoked. Email: '{user_google_email}', Title: {title}")
 
-    spreadsheet_body = {"properties": {"title": title}}
+    spreadsheet_body: dict[str, dict[str, str] | list[dict[str, dict[str, str]]]] = {"properties": {"title": title}}
 
     if sheet_names:
         spreadsheet_body["sheets"] = [{"properties": {"title": sheet_name}} for sheet_name in sheet_names]

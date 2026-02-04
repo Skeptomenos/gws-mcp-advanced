@@ -62,8 +62,8 @@ class MinimalOAuthServer:
         self.base_uri = base_uri
         self.redirect_uri = f"{base_uri}:{port}/oauth2callback"
         self.app = FastAPI()
-        self.server = None
-        self.server_thread = None
+        self.server: uvicorn.Server | None = None
+        self.server_thread: threading.Thread | None = None
         self.is_running = False
         self._auth_completed = False
 
@@ -90,9 +90,9 @@ class MinimalOAuthServer:
                 return create_error_response(error_message)
 
             try:
-                error_message = check_client_secrets()
-                if error_message:
-                    return create_server_error_response(error_message)
+                secrets_error = check_client_secrets()
+                if secrets_error:
+                    return create_server_error_response(secrets_error)
 
                 logger.info(f"OAuth callback: Received code (state: {state}). Attempting to exchange for tokens.")
 

@@ -198,8 +198,8 @@ async def get_doc_content(
     else:
         logger.info(f"[get_doc_content] Processing as Drive file (e.g., .docx, other). MimeType: {mime_type}")
 
-        export_mime_type_map = {
-            # Example: "application/vnd.google-apps.spreadsheet"z: "text/csv",
+        export_mime_type_map: dict[str, str] = {
+            # Example: "application/vnd.google-apps.spreadsheet": "text/csv",
             # Native GSuite types that are not Docs would go here if this function
             # was intended to export them. For .docx, direct download is used.
         }

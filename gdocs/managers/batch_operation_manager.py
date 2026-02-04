@@ -18,6 +18,7 @@ from gdocs.docs_helpers import (
     create_insert_text_request,
     validate_operation,
 )
+from gdocs.markdown_parser import MarkdownToDocsConverter
 
 logger = logging.getLogger(__name__)
 
@@ -118,6 +119,8 @@ class BatchOperationManager:
                 raise ValueError(f"Operation {i + 1}: {error_msg}")
 
             op_type = op.get("type")
+            if not op_type:
+                raise ValueError(f"Operation {i + 1} missing 'type' field")
 
             try:
                 # Build request based on operation type
@@ -154,6 +157,9 @@ class BatchOperationManager:
         Returns:
             Tuple of (request, description)
         """
+        request: dict[str, Any] | list[dict[str, Any]] | None = None
+        description = ""
+
         if op_type == "insert_text":
             request = create_insert_text_request(op["index"], op["text"])
             description = f"insert text at {op['index']}"
@@ -215,6 +221,24 @@ class BatchOperationManager:
             request = create_find_replace_request(op["find_text"], op["replace_text"], op.get("match_case", False))
             description = f"find/replace '{op['find_text']}' → '{op['replace_text']}'"
 
+        elif op_type == "insert_markdown":
+            markdown_text = op["markdown_text"]
+            start_index = op.get("index", 1)
+            converter = MarkdownToDocsConverter()
+            markdown_requests = converter.convert(markdown_text, start_index=start_index)
+            if not markdown_requests:
+                raise ValueError("Markdown conversion produced no requests. Check markdown_text content.")
+            request = markdown_requests
+            preview = markdown_text[:30].replace("\n", " ")
+            description = f"insert markdown at {start_index} ({len(markdown_requests)} requests, '{preview}{'...' if len(markdown_text) > 30 else ''}')"
+
+        elif op_type == "raw_request":
+            # Direct pass-through for debugging/advanced usage
+            if "request" not in op:
+                raise ValueError("raw_request operation must contain 'request' field")
+            request = op["request"]
+            description = f"raw request: {list(request.keys())[0]}"
+
         else:
             supported_types = [
                 "insert_text",
@@ -224,8 +248,13 @@ class BatchOperationManager:
                 "insert_table",
                 "insert_page_break",
                 "find_replace",
+                "insert_markdown",
+                "raw_request",
             ]
             raise ValueError(f"Unsupported operation type '{op_type}'. Supported: {', '.join(supported_types)}")
+
+        if request is None:
+            raise ValueError(f"Failed to build request for operation type '{op_type}'")
 
         return request, description
 
@@ -312,6 +341,11 @@ class BatchOperationManager:
                     "required": ["find_text", "replace_text"],
                     "optional": ["match_case"],
                     "description": "Find and replace text throughout document",
+                },
+                "insert_markdown": {
+                    "required": ["markdown_text"],
+                    "optional": ["index"],
+                    "description": "Insert Markdown content converted to native Google Docs formatting",
                 },
             },
             "example_operations": [

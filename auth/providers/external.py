@@ -7,6 +7,7 @@ access tokens (ya29.*) are issued by external systems and need validation.
 
 import logging
 import time
+from typing import cast
 
 from fastmcp.server.auth import AccessToken
 from fastmcp.server.auth.providers.google import GoogleProvider
@@ -81,7 +82,7 @@ class ExternalOAuthProvider(GoogleProvider):
                         email=user_info["email"],
                         sub=user_info.get("id"),
                     )
-                    return access_token
+                    return cast(AccessToken, access_token)
                 else:
                     logger.error("Could not get user info from access token")
                     return None

@@ -37,7 +37,20 @@ class CredentialStoreProtocol(Protocol):
 class SessionStoreProtocol(Protocol):
     """Protocol for session storage implementations."""
 
-    def store_session(self, user_email: str, **kwargs: Any) -> None:
+    def store_session(
+        self,
+        user_email: str,
+        access_token: str,
+        refresh_token: str | None = None,
+        token_uri: str = "https://oauth2.googleapis.com/token",
+        client_id: str | None = None,
+        client_secret: str | None = None,
+        scopes: list[str] | None = None,
+        expiry: Any | None = None,
+        session_id: str | None = None,
+        mcp_session_id: str | None = None,
+        issuer: str | None = None,
+    ) -> None:
         """Store a session for a user."""
         ...
 

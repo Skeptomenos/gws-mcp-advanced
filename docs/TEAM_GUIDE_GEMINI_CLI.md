@@ -51,11 +51,28 @@ AI-assisted building: "I need to clearly describe *what* I want. Gemini figures 
 
 ```bash
 # Install Gemini CLI
-npm install -g @anthropic-ai/gemini-cli
+npm install -g @google/gemini-cli
 
 # Or if you prefer npx (no install)
 npx @google/gemini-cli
 ```
+
+### Configuring AGENTS.md (Recommended)
+
+By default, Gemini CLI looks for a `GEMINI.md` file for context. However, our team follows the industry standard of using `AGENTS.md`. You should configure your CLI to look for `AGENTS.md` automatically.
+
+1. Create or open your global settings file at `~/.gemini/settings.json`.
+2. Add the following configuration:
+
+```json
+{
+  "context": {
+    "fileName": ["AGENTS.md", "GEMINI.md"]
+  }
+}
+```
+
+This ensures that whenever you start a `gemini` session in a folder, it will automatically load the project-specific `AGENTS.md` instructions we've created.
 
 ### Your First Conversation
 

@@ -199,7 +199,7 @@ def get_attachment_url(file_id: str) -> str:
     """
     import os
 
-    from core.config import WORKSPACE_MCP_BASE_URI, WORKSPACE_MCP_PORT
+    from auth.config import WORKSPACE_MCP_BASE_URI, WORKSPACE_MCP_PORT
 
     # Use external URL if set (for reverse proxy scenarios)
     external_url = os.getenv("WORKSPACE_EXTERNAL_URL")

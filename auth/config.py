@@ -515,3 +515,17 @@ def is_using_embedded_credentials() -> bool:
         True if using embedded credentials.
     """
     return os.getenv("GOOGLE_OAUTH_CLIENT_ID") is None and os.getenv("GOOGLE_OAUTH_CLIENT_SECRET") is None
+
+
+# =============================================================================
+# Module-level constants for backward compatibility
+# These were originally in core/config.py and are re-exported here.
+# =============================================================================
+
+# Server configuration (read once at module load time)
+WORKSPACE_MCP_PORT = int(os.getenv("PORT", os.getenv("WORKSPACE_MCP_PORT", "9876")))
+WORKSPACE_MCP_BASE_URI = os.getenv("WORKSPACE_MCP_BASE_URI", "http://localhost")
+
+# User configuration
+# Disable USER_GOOGLE_EMAIL in OAuth 2.1 multi-user mode
+USER_GOOGLE_EMAIL = None if is_oauth21_enabled() else os.getenv("USER_GOOGLE_EMAIL", None)

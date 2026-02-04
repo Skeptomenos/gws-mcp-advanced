@@ -9,9 +9,8 @@ import json
 import os
 import threading
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
-
-from auth.config import get_sync_map_path
 
 # ============================================================================
 # Data Classes
@@ -133,8 +132,15 @@ class SearchManager:
 # Sync Manager
 # ============================================================================
 
-# Use default config directory for sync map
-MAP_FILE = get_sync_map_path()
+
+def _default_sync_map_path() -> Path:
+    """Return the default path for the sync map file.
+
+    This is a fallback used when no explicit path is provided via constructor
+    injection. The composition root (core/server.py or core/container.py)
+    should inject the actual path from auth.config.get_sync_map_path().
+    """
+    return Path.home() / ".config" / "gws-mcp-advanced" / "sync_map.json"
 
 
 class SyncManager:
@@ -142,21 +148,30 @@ class SyncManager:
 
     Persists links to gdrive_map.json for cross-session persistence.
     Thread-safe for concurrent access.
+
+    Args:
+        sync_map_path: Path to the sync map file. If None, uses default
+            (~/.config/gws-mcp-advanced/sync_map.json). Composition roots
+            should inject this via auth.config.get_sync_map_path().
     """
 
-    def __init__(self, map_file: str | None = None) -> None:
-        self._map_file = map_file or MAP_FILE
-        self._links: dict[str, SyncLink] = {}  # abs_path -> SyncLink
+    def __init__(self, sync_map_path: Path | str | None = None) -> None:
+        self._sync_map_path = Path(sync_map_path) if sync_map_path else None
+        self._links: dict[str, SyncLink] = {}
         self._lock = threading.RLock()
-        # Keep file_map for backward compatibility
         self.file_map: dict[str, dict] = {}
         self._load_map()
 
+    @property
+    def sync_map_path(self) -> Path:
+        if self._sync_map_path is not None:
+            return self._sync_map_path
+        return _default_sync_map_path()
+
     def _load_map(self) -> None:
-        """Load the file map from disk."""
         with self._lock:
-            if os.path.exists(self._map_file):
-                with open(self._map_file) as f:
+            if self.sync_map_path.exists():
+                with open(self.sync_map_path) as f:
                     data = json.load(f)
                     for path, info in data.items():
                         self._links[path] = SyncLink.from_dict(info)
@@ -166,14 +181,11 @@ class SyncManager:
                 self.file_map = {}
 
     def _save_map(self) -> None:
-        """Save the file map to disk."""
         with self._lock:
-            map_dir = os.path.dirname(self._map_file)
-            if map_dir and not os.path.exists(map_dir):
-                os.makedirs(map_dir, exist_ok=True)
-
+            map_path = self.sync_map_path
+            map_path.parent.mkdir(parents=True, exist_ok=True)
             self.file_map = {path: link.to_dict() for path, link in self._links.items()}
-            with open(self._map_file, "w") as f:
+            with open(map_path, "w") as f:
                 json.dump(self.file_map, f, indent=2)
 
     def link_file(self, local_path: str, file_id: str, version: int = 0) -> str:

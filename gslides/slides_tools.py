@@ -9,9 +9,9 @@ import logging
 from typing import Any
 
 from auth.service_decorator import require_google_service
-from core.comments import create_comment_tools
 from core.server import server
 from core.utils import handle_http_errors
+from gdocs.comments import create_comment_tools
 
 logger = logging.getLogger(__name__)
 

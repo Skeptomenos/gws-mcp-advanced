@@ -13,9 +13,7 @@ from typing import Any
 logger = logging.getLogger(__name__)
 
 
-def _parse_reminders_json(
-    reminders_input: str | list[dict[str, Any]] | None, function_name: str
-) -> list[dict[str, Any]]:
+def _parse_reminders_json(reminders_input: str | None, function_name: str) -> list[dict[str, Any]]:
     """
     Parse reminders from JSON string or list object and validate them.
 
@@ -29,21 +27,13 @@ def _parse_reminders_json(
     if not reminders_input:
         return []
 
-    if isinstance(reminders_input, str):
-        try:
-            reminders = json.loads(reminders_input)
-            if not isinstance(reminders, list):
-                logger.warning(f"[{function_name}] Reminders must be a JSON array, got {type(reminders).__name__}")
-                return []
-        except json.JSONDecodeError as e:
-            logger.warning(f"[{function_name}] Invalid JSON for reminders: {e}")
+    try:
+        reminders = json.loads(reminders_input)
+        if not isinstance(reminders, list):
+            logger.warning(f"[{function_name}] Reminders must be a JSON array, got {type(reminders).__name__}")
             return []
-    elif isinstance(reminders_input, list):
-        reminders = reminders_input
-    else:
-        logger.warning(
-            f"[{function_name}] Reminders must be a JSON string or list, got {type(reminders_input).__name__}"
-        )
+    except json.JSONDecodeError as e:
+        logger.warning(f"[{function_name}] Invalid JSON for reminders: {e}")
         return []
 
     if len(reminders) > 5:
@@ -254,14 +244,14 @@ def _correct_time_format_for_api(time_str: str | None, param_name: str) -> str |
 
 
 def _normalize_attendees(
-    attendees: list[str] | list[dict[str, Any]] | None,
+    attendees: str | None,
 ) -> list[dict[str, Any]] | None:
     """
     Normalize attendees input to list of attendee objects.
 
-    Accepts either:
-    - List of email strings: ["user@example.com", "other@example.com"]
-    - List of attendee objects: [{"email": "user@example.com", "responseStatus": "accepted"}]
+    Accepts a JSON string representing either:
+    - List of email strings: '["user@example.com", "other@example.com"]'
+    - List of attendee objects: '[{"email": "user@example.com", "responseStatus": "accepted"}]'
     - Mixed list of both formats
 
     Returns list of attendee dicts with at minimum 'email' key.
@@ -269,8 +259,16 @@ def _normalize_attendees(
     if attendees is None:
         return None
 
+    try:
+        parsed = json.loads(attendees)
+    except json.JSONDecodeError as e:
+        raise ValueError(f"attendees must be a valid JSON array: {e}") from e
+
+    if not isinstance(parsed, list):
+        raise ValueError(f"attendees must be a JSON array, got {type(parsed).__name__}")
+
     normalized = []
-    for att in attendees:
+    for att in parsed:
         if isinstance(att, str):
             normalized.append({"email": att})
         elif isinstance(att, dict) and "email" in att:

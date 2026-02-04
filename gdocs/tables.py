@@ -171,7 +171,7 @@ async def debug_table_structure(
 
     table_info = tables[table_index]
 
-    debug_info = {
+    debug_info: dict[str, Any] = {
         "table_index": table_index,
         "dimensions": f"{table_info['rows']}x{table_info['columns']}",
         "table_range": f"[{table_info['start_index']}-{table_info['end_index']}]",

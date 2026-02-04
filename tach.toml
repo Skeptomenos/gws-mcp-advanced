@@ -1,0 +1,347 @@
+exclude = []
+source_roots = [
+    ".",
+]
+
+[[modules]]
+path = "auth"
+depends_on = [
+    "core",
+]
+
+# Core depends on auth for composition roots (server.py, container.py)
+# and gdrive for comments.py. Per ADR-1, this is acceptable for
+# composition roots that wire dependencies together.
+[[modules]]
+path = "core"
+depends_on = [
+    "auth",
+    "gdrive",
+]
+
+[[modules]]
+path = "gcalendar"
+depends_on = [
+    "auth",
+    "core",
+]
+
+[[modules]]
+path = "gchat"
+depends_on = [
+    "auth",
+    "core",
+]
+
+[[modules]]
+path = "gdocs"
+depends_on = [
+    "auth",
+    "core",
+    "gdrive",
+]
+
+[[modules]]
+path = "gdrive"
+depends_on = [
+    "auth",
+    "core",
+]
+
+[[modules]]
+path = "gforms"
+depends_on = [
+    "auth",
+    "core",
+]
+
+[[modules]]
+path = "gmail"
+depends_on = [
+    "auth",
+    "core",
+]
+
+[[modules]]
+path = "gsearch"
+depends_on = [
+    "auth",
+    "core",
+]
+
+[[modules]]
+path = "gsheets"
+depends_on = [
+    "auth",
+    "core",
+    "gdocs",
+]
+
+[[modules]]
+path = "gslides"
+depends_on = [
+    "auth",
+    "core",
+    "gdocs",
+]
+
+[[modules]]
+path = "gtasks"
+depends_on = [
+    "auth",
+    "core",
+]
+
+[[interfaces]]
+expose = [
+    "drive_helpers.resolve_file_id_or_alias",
+    "batch_share_drive_file",
+    "check_drive_file_public_access",
+    "create_drive_file",
+    "download_doc_tabs",
+    "download_google_doc",
+    "get_drive_file_content",
+    "get_drive_file_download_url",
+    "get_drive_file_permissions",
+    "get_drive_shareable_link",
+    "link_local_file",
+    "list_drive_items",
+    "mirror_drive_folder",
+    "remove_drive_permission",
+    "resolve_file_id_or_alias",
+    "search_drive_files",
+    "share_drive_file",
+    "ShareRecipient",
+    "transfer_drive_ownership",
+    "update_drive_file",
+    "update_drive_permission",
+    "update_google_doc",
+    "upload_folder",
+]
+from = [
+    "gdrive",
+]
+
+[[interfaces]]
+expose = [
+    "search_gmail_messages",
+    "get_gmail_message_content",
+    "get_gmail_messages_content_batch",
+    "get_gmail_attachment_content",
+    "send_gmail_message",
+    "draft_gmail_message",
+    "get_gmail_thread_content",
+    "get_gmail_threads_content_batch",
+    "list_gmail_labels",
+    "manage_gmail_label",
+    "modify_gmail_message_labels",
+    "batch_modify_gmail_message_labels",
+    "list_gmail_filters",
+    "create_gmail_filter",
+    "delete_gmail_filter",
+]
+from = [
+    "gmail",
+]
+
+[[interfaces]]
+expose = []
+from = [
+    "gcalendar",
+]
+
+[[interfaces]]
+expose = [
+    "comments.create_comment_tools",
+    "search_docs",
+    "get_doc_content",
+    "list_docs_in_folder",
+    "inspect_doc_structure",
+    "create_doc",
+    "modify_doc_text",
+    "find_and_replace_doc",
+    "batch_update_doc",
+    "update_doc_headers_footers",
+    "insert_doc_elements",
+    "insert_doc_image",
+    "create_table_with_data",
+    "debug_table_structure",
+    "export_doc_to_pdf",
+    "read_document_comments",
+    "create_document_comment",
+    "reply_to_document_comment",
+    "resolve_document_comment",
+]
+from = [
+    "gdocs",
+]
+
+[[interfaces]]
+expose = [
+    "list_spreadsheets",
+    "get_spreadsheet_info",
+    "read_sheet_values",
+    "modify_sheet_values",
+    "create_spreadsheet",
+    "create_sheet",
+]
+from = [
+    "gsheets",
+]
+
+[[interfaces]]
+expose = [
+    "chat_tools",
+]
+from = [
+    "gchat",
+]
+
+[[interfaces]]
+expose = []
+from = [
+    "gforms",
+]
+
+[[interfaces]]
+expose = []
+from = [
+    "gslides",
+]
+
+[[interfaces]]
+expose = []
+from = [
+    "gtasks",
+]
+
+[[interfaces]]
+expose = []
+from = [
+    "gsearch",
+]
+
+[[interfaces]]
+expose = [
+    "config.get_oauth_base_url",
+    "config.get_oauth_config",
+    "config.get_oauth_redirect_uri",
+    "config.get_sync_map_path",
+    "config.get_transport_mode",
+    "config.is_oauth21_enabled",
+    "config.is_stateless_mode",
+    "config.set_transport_mode",
+    "credential_store.CredentialStore",
+    "credential_store.LocalDirectoryCredentialStore",
+    "google_auth.check_client_secrets",
+    "google_auth.get_default_credentials_dir",
+    "google_auth.handle_auth_callback",
+    "google_auth.start_auth_flow",
+    "middleware.auth_info.AuthInfoMiddleware",
+    "middleware.session.MCPSessionMiddleware",
+    "oauth_responses.create_error_response",
+    "oauth_responses.create_server_error_response",
+    "oauth_responses.create_success_response",
+    "oauth21_session_store.get_oauth21_session_store",
+    "oauth21_session_store.set_auth_provider",
+    "providers.external.ExternalOAuthProvider",
+    "scopes.get_current_scopes",
+    "scopes.GMAIL_COMPOSE_SCOPE",
+    "scopes.GMAIL_LABELS_SCOPE",
+    "scopes.GMAIL_MODIFY_SCOPE",
+    "scopes.GMAIL_SEND_SCOPE",
+    "scopes.SCOPES",
+    "service_decorator.require_google_service",
+    "service_decorator.require_multiple_services",
+    "get_google_oauth_config",
+    "get_credentials_directory",
+    "get_sync_map_path",
+    "is_using_embedded_credentials",
+    "GOOGLE_WORKSPACE_MCP_APP_NAME",
+    "GOOGLE_OAUTH_CLIENT_ID_EMBEDDED",
+    "GOOGLE_OAUTH_CLIENT_SECRET_EMBEDDED",
+    "GOOGLE_WORKSPACE_MCP_CREDENTIALS_DIR",
+    "config.USER_GOOGLE_EMAIL",
+    "config.WORKSPACE_MCP_BASE_URI",
+    "config.WORKSPACE_MCP_PORT",
+]
+from = [
+    "auth",
+]
+
+[[interfaces]]
+expose = [
+    "attachment_storage.get_attachment_storage",
+    "attachment_storage.get_attachment_url",
+    "context.get_fastmcp_session_id",
+    "context.set_fastmcp_session_id",
+    "errors.AliasNotFoundError",
+    "errors.APIError",
+    "errors.AuthenticationError",
+    "errors.CredentialsExpiredError",
+    "errors.CredentialsNotFoundError",
+    "errors.format_error",
+    "errors.GDriveError",
+    "errors.GoogleAuthenticationError",
+    "errors.handle_http_error",
+    "errors.InsufficientScopesError",
+    "errors.LinkNotFoundError",
+    "errors.LocalFileNotFoundError",
+    "errors.PermissionDeniedError",
+    "errors.RateLimitError",
+    "errors.ResourceNotFoundError",
+    "errors.ServiceConfigurationError",
+    "errors.SyncConflictError",
+    "errors.ValidationError",
+    "errors.WorkspaceMCPError",
+    "managers.search_manager",
+    "managers.SearchManager",
+    "managers.sync_manager",
+    "managers.SyncManager",
+    "server.get_auth_provider",
+    "server.server",
+    "types.GoogleDriveService",
+    "utils.extract_office_xml_text",
+    "utils.handle_http_errors",
+    "utils.TransientNetworkError",
+    "utils.UserInputError",
+    "utils.validate_path_within_base",
+    "AliasNotFoundError",
+    "APIError",
+    "AuthenticationError",
+    "CredentialsExpiredError",
+    "CredentialsNotFoundError",
+    "extract_office_xml_text",
+    "format_error",
+    "GDriveError",
+    "get_attachment_storage",
+    "get_attachment_url",
+    "get_auth_provider",
+    "get_fastmcp_session_id",
+    "GoogleAuthenticationError",
+    "GoogleDriveService",
+    "handle_http_error",
+    "handle_http_errors",
+    "InsufficientScopesError",
+    "LinkNotFoundError",
+    "LocalFileNotFoundError",
+    "PermissionDeniedError",
+    "RateLimitError",
+    "ResourceNotFoundError",
+    "search_manager",
+    "SearchManager",
+    "server",
+    "ServiceConfigurationError",
+    "set_fastmcp_session_id",
+    "sync_manager",
+    "SyncConflictError",
+    "SyncManager",
+    "TransientNetworkError",
+    "UserInputError",
+    "validate_path_within_base",
+    "ValidationError",
+    "WorkspaceMCPError",
+]
+from = [
+    "core",
+]

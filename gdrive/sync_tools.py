@@ -333,12 +333,12 @@ async def download_google_doc(
         if dir_path:
             os.makedirs(dir_path, exist_ok=True)
 
-        mode = "wb" if format in ("pdf", "docx") else "w"
-        with open(local_path, mode) as f:
-            if mode == "wb":
-                f.write(content if isinstance(content, bytes) else content.encode("utf-8"))
-            else:
-                f.write(content)
+        if format in ("pdf", "docx"):
+            with open(local_path, "wb") as fb:
+                fb.write(content if isinstance(content, bytes) else content.encode("utf-8"))
+        else:
+            with open(local_path, "w") as ft:
+                ft.write(content if isinstance(content, str) else content.decode("utf-8"))
 
         new_version = await get_file_version(service, file_id)
         sync_manager.update_version(local_path, new_version)
@@ -378,7 +378,7 @@ async def upload_folder(
             return f"Upload folder failed: {local_path} is not a directory."
 
         dir_name = os.path.basename(os.path.normpath(local_path))
-        folder_metadata = {
+        folder_metadata: dict[str, str | list[str]] = {
             "name": dir_name,
             "mimeType": "application/vnd.google-apps.folder",
         }
@@ -390,7 +390,7 @@ async def upload_folder(
         )
         root_id = root_folder.get("id")
 
-        queue = deque()
+        queue: deque[tuple[str, str | None]] = deque()
 
         for item in os.listdir(local_path):
             item_path = os.path.join(local_path, item)

@@ -69,16 +69,17 @@ Google Docs is a single stream. Every insertion shifts subsequent indices.
 ### 3.1 New Tool: `insert_markdown`
 A dedicated tool for inserting formatted content into *existing* docs.
 
+**Note:** To ensure compatibility with Vertex AI / Gemini function calling, complex parameters like `operations` must be passed as JSON strings rather than Python lists/dicts to avoid `anyOf` schema validation errors. See the "Parameter Type Constraints" section in [docs/MCP_PATTERNS.md](docs/MCP_PATTERNS.md) for the required implementation pattern.
+
 ```python
 async def insert_markdown(
     service,
+    user_google_email: str,
     document_id: str,
     markdown_text: str,
-    index: int = 1  # Default to start
+    index: int = 1
 ):
-    converter = MarkdownToDocsConverter()
-    requests = converter.convert(markdown_text, index)
-    service.documents().batchUpdate(body={"requests": requests}).execute()
+    ...
 ```
 
 ### 3.2 Update `create_doc`
@@ -213,28 +214,12 @@ Markdown is hierarchical.
 
 ---
 
-## 7. External References
+## 8. Development Constraints (Vertex AI / Gemini Compatibility)
 
-### 7.1 Related Open Source Projects
+### 8.1 Union Type Restrictions
+Vertex AI and Gemini function calling have a strict requirement: if a parameter schema uses `anyOf`, it must be the **only field** in that schema object. Python union types (e.g., `str | list | None`) generate `anyOf` schemas with additional fields (like `default` or `description`), which causes validation errors.
 
-| Project | URL | Relevance |
-|---------|-----|-----------|
-| **md2gdocs (original)** | https://gitlab.com/wryfi/md2gdocs | Uses Drive API HTML import (implicit list nesting via `<ul>`/`<ol>`) |
-| **gravitas-md2gdocs** | https://github.com/Significant-Gravitas/gravitas-md2gdocs | Direct Docs API approach; calculates `nesting_level` but doesn't send it |
-| **beancount** | https://github.com/beancount/beancount | Uses external tools (Pandoc) for doc conversion |
+**Rule:** Always use simple types (e.g., `str | None`) for tool parameters. If a tool needs to accept complex data (lists of dicts, mixed types), accept it as a **JSON string** and parse it using `json.loads()` inside the tool body.
 
-### 7.2 Research Findings (2026-02-03)
-
-**List Nesting Approaches:**
-
-1. **HTML Import (md2gdocs original):** Convert Markdown → HTML, upload via Drive API with `mimeType: text/html`. Google's import engine handles nested `<ul>`/`<ol>` automatically. *Pro:* Simple. *Con:* Less control, requires Drive API.
-
-2. **Direct API (gravitas-md2gdocs):** Parse indentation, track `nesting_level = indent // 2`, generate `createParagraphBullets` requests. **BUG:** Current implementation calculates nesting but doesn't pass it to API.
-
-3. **Key Insight:** The `createParagraphBullets` request does NOT directly accept `nestingLevel`. Nesting must be applied via `updateParagraphStyle` with the list's `listId` and `nestingLevel` properties AFTER bullets are created.
-
-### 7.3 Google Docs API Documentation
-
-- [CreateParagraphBulletsRequest](https://developers.google.com/docs/api/reference/rest/v1/documents/request#CreateParagraphBulletsRequest)
-- [List Resource](https://developers.google.com/docs/api/reference/rest/v1/documents#List)
-- [NestingLevel](https://developers.google.com/docs/api/reference/rest/v1/documents#NestingLevel)
+### 8.2 Async Implementation
+All tool logic must be `async`. Wrap blocking SDK calls in `asyncio.to_thread()`.

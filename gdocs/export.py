@@ -26,8 +26,8 @@ async def export_doc_to_pdf(
     service: Any,
     user_google_email: str,
     document_id: str,
-    pdf_filename: str = None,
-    folder_id: str = None,
+    pdf_filename: str | None = None,
+    folder_id: str | None = None,
 ) -> str:
     """
     Exports a Google Doc to PDF format and saves it to Google Drive.
@@ -95,7 +95,7 @@ async def export_doc_to_pdf(
         fh.seek(0)
         media = MediaIoBaseUpload(fh, mimetype="application/pdf", resumable=True)
 
-        upload_metadata = {"name": pdf_filename, "mimeType": "application/pdf"}
+        upload_metadata: dict[str, Any] = {"name": pdf_filename, "mimeType": "application/pdf"}
 
         if folder_id:
             upload_metadata["parents"] = [folder_id]

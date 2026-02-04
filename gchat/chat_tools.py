@@ -41,7 +41,7 @@ async def list_spaces(
     elif space_type == "dm":
         filter_param = "spaceType = DIRECT_MESSAGE"
 
-    request_params = {"pageSize": page_size}
+    request_params: dict[str, int | str] = {"pageSize": page_size}
     if filter_param:
         request_params["filter"] = filter_param
 
