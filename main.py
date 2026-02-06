@@ -268,7 +268,10 @@ def main():
     if not is_stateless_mode():
         try:
             safe_print("🔍 Checking credentials directory permissions...")
-            check_credentials_directory_permissions()
+            # Lazy import to avoid circular dependency (main.py -> auth.google_auth -> core -> core.server -> auth.google_auth)
+            from auth.google_auth import get_default_credentials_dir
+
+            check_credentials_directory_permissions(get_default_credentials_dir())
             safe_print("✅ Credentials directory permissions verified")
             safe_print("")
         except (PermissionError, OSError) as e:

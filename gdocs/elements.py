@@ -32,10 +32,10 @@ async def insert_doc_elements(
     document_id: str,
     element_type: str,
     index: int,
-    rows: int = None,
-    columns: int = None,
-    list_type: str = None,
-    text: str = None,
+    rows: int | None = None,
+    columns: int | None = None,
+    list_type: str | None = None,
+    text: str | None = None,
 ) -> str:
     """
     Inserts structural elements like tables, lists, or page breaks into a Google Doc.

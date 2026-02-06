@@ -7,6 +7,7 @@ import re
 import ssl
 import xml.etree.ElementTree as ET
 import zipfile
+from pathlib import Path
 
 from googleapiclient.errors import HttpError
 
@@ -81,21 +82,26 @@ class UserInputError(Exception):
     pass
 
 
-def check_credentials_directory_permissions(credentials_dir: str = None) -> None:
+def check_credentials_directory_permissions(credentials_dir: str | Path | None = None) -> None:
     """
     Check if the service has appropriate permissions to create and write to the .credentials directory.
 
     Args:
-        credentials_dir: Path to the credentials directory (default: uses get_default_credentials_dir())
+        credentials_dir: Path to the credentials directory.
+            If None, uses default: ~/.config/gws-mcp-advanced/credentials.
+            Composition roots (main.py, fastmcp_server.py) can inject the actual
+            path from auth.google_auth.get_default_credentials_dir() if needed.
 
     Raises:
         PermissionError: If the service lacks necessary permissions
         OSError: If there are other file system issues
     """
     if credentials_dir is None:
-        from auth.google_auth import get_default_credentials_dir
+        # Default path - no import from auth needed (decoupled per ADR-3)
+        credentials_dir = Path.home() / ".config" / "gws-mcp-advanced" / "credentials"
 
-        credentials_dir = get_default_credentials_dir()
+    # Normalize to string for os.path operations
+    credentials_dir = str(credentials_dir)
 
     try:
         # Check if directory exists

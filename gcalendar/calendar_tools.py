@@ -258,7 +258,7 @@ async def create_event(
     timezone: str | None = None,
     attachments: list[str] | None = None,
     add_google_meet: bool = False,
-    reminders: str | list[dict[str, Any]] | None = None,
+    reminders: str | None = None,
     use_default_reminders: bool = True,
     transparency: str | None = None,
     visibility: str | None = None,
@@ -314,7 +314,7 @@ async def create_event(
         # If custom reminders are provided, automatically disable default reminders
         effective_use_default = use_default_reminders and reminders is None
 
-        reminder_data = {"useDefault": effective_use_default}
+        reminder_data: dict[str, bool | list[dict[str, str | int]]] = {"useDefault": effective_use_default}
         if reminders is not None:
             validated_reminders = _parse_reminders_json(reminders, "create_event")
             if validated_reminders:
@@ -367,7 +367,7 @@ async def create_event(
                 if drive_service:
                     try:
                         file_metadata = await asyncio.to_thread(
-                            lambda fid=file_id: drive_service.files()
+                            lambda fid=file_id: drive_service.files()  # type: ignore[misc]
                             .get(
                                 fileId=fid,
                                 fields="mimeType,name",
@@ -444,10 +444,10 @@ async def modify_event(
     end_time: str | None = None,
     description: str | None = None,
     location: str | None = None,
-    attendees: list[str] | list[dict[str, Any]] | None = None,
+    attendees: str | None = None,
     timezone: str | None = None,
     add_google_meet: bool | None = None,
-    reminders: str | list[dict[str, Any]] | None = None,
+    reminders: str | None = None,
     use_default_reminders: bool | None = None,
     transparency: str | None = None,
     visibility: str | None = None,
@@ -506,7 +506,7 @@ async def modify_event(
 
     # Handle reminders
     if reminders is not None or use_default_reminders is not None:
-        reminder_data = {}
+        reminder_data: dict[str, bool | list[dict[str, str | int]]] = {}
         if use_default_reminders is not None:
             reminder_data["useDefault"] = use_default_reminders
         else:

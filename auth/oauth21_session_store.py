@@ -798,7 +798,7 @@ class OAuth21SessionStore:
             if allow_recent_auth and requested_user_email in self._sessions:
                 # Check transport mode to ensure this is only used in stdio
                 try:
-                    from core.config import get_transport_mode
+                    from auth.config import get_transport_mode
 
                     transport_mode = get_transport_mode()
                     if transport_mode != "stdio":
@@ -1177,9 +1177,12 @@ def store_token_session(token_response: dict, user_email: str, mcp_session_id: s
         scopes_list = scopes.split() if scopes else None
         expiry = datetime.now(timezone.utc) + timedelta(seconds=token_response.get("expires_in", 3600))
 
+        access_token_str = token_response.get("access_token")
+        if not access_token_str:
+            raise ValueError("Token response missing access_token")
         store.store_session(
             user_email=user_email,
-            access_token=token_response.get("access_token"),
+            access_token=access_token_str,
             refresh_token=token_response.get("refresh_token"),
             token_uri="https://oauth2.googleapis.com/token",
             client_id=client_id,

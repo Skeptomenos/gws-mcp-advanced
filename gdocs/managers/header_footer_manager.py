@@ -173,7 +173,7 @@ class HeaderFooterManager:
         end_index = first_para.get("endIndex", 0)
 
         # Build requests to replace content
-        requests = []
+        requests: list[dict[str, Any]] = []
 
         # Delete existing content if any (preserve paragraph structure)
         if end_index > start_index:

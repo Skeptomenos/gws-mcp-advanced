@@ -7,7 +7,7 @@ It integrates with the existing tool enablement workflow to support tiered tool 
 
 import logging
 from pathlib import Path
-from typing import Literal
+from typing import Literal, cast
 
 import yaml
 
@@ -19,7 +19,7 @@ TierLevel = Literal["core", "extended", "complete"]
 class ToolTierLoader:
     """Loads and manages tool tiers from configuration."""
 
-    def __init__(self, config_path: str | None = None):
+    def __init__(self, config_path: str | Path | None = None):
         """
         Initialize the tool tier loader.
 
@@ -27,10 +27,9 @@ class ToolTierLoader:
             config_path: Path to the tool_tiers.yaml file. If None, uses default location.
         """
         if config_path is None:
-            # Default to core/tool_tiers.yaml relative to this file
-            config_path = Path(__file__).parent / "tool_tiers.yaml"
-
-        self.config_path = Path(config_path)
+            self.config_path = Path(__file__).parent / "tool_tiers.yaml"
+        else:
+            self.config_path = Path(config_path)
         self._tiers_config: dict | None = None
 
     def _load_config(self) -> dict:
@@ -107,7 +106,10 @@ class ToolTierLoader:
         tools = []
         for i in range(max_tier_index + 1):
             current_tier = tier_order[i]
-            tools.extend(self.get_tools_for_tier(current_tier, services))
+            if current_tier in ("core", "extended", "complete"):
+                # Cast to Literal type for type checker
+                tier_literal = cast(Literal["core", "extended", "complete"], current_tier)
+                tools.extend(self.get_tools_for_tier(tier_literal, services))
 
         # Remove duplicates while preserving order
         seen = set()

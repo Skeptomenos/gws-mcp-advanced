@@ -31,7 +31,7 @@ from core.errors import AuthenticationError, GoogleAuthenticationError
 try:
     from fastmcp.server.dependencies import get_context as get_fastmcp_context
 except ImportError:
-    get_fastmcp_context = None
+    get_fastmcp_context = None  # type: ignore[assignment]
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -174,7 +174,7 @@ def load_client_secrets_from_env() -> dict[str, Any] | None:
 
         # Add redirect_uri if provided via environment variable
         if redirect_uri:
-            web_config["redirect_uris"] = [redirect_uri]
+            web_config["redirect_uris"] = [redirect_uri]  # type: ignore[assignment]
 
         # Return the full config structure expected by Google OAuth library
         config = {"web": web_config}
@@ -425,6 +425,8 @@ async def handle_auth_callback(
         state_values = parse_qs(parsed_response.query).get("state")
         state = state_values[0] if state_values else None
 
+        if not state:
+            raise ValueError("OAuth state parameter is missing or invalid")
         state_info = store.validate_and_consume_oauth_state(state, session_id=session_id)
         logger.debug(
             "Validated OAuth callback state %s for session %s",
@@ -627,7 +629,7 @@ def get_credentials(
             except Exception as e:
                 logger.debug(f"[get_credentials] Single-user mode: could not extract user email: {e}")
     else:
-        credentials: Credentials | None = None
+        credentials = None
 
         # Session ID should be provided by the caller
         if not session_id:
@@ -647,8 +649,8 @@ def get_credentials(
                 logger.debug(
                     f"[get_credentials] No session credentials, trying credential store for user_google_email '{user_google_email}'."
                 )
-                store = get_credential_store()
-                credentials = store.get_credential(user_google_email)
+                credential_store = get_credential_store()
+                credentials = credential_store.get_credential(user_google_email)
             else:
                 logger.debug(
                     f"[get_credentials] No session credentials, skipping file store in stateless mode for user_google_email '{user_google_email}'."
@@ -800,7 +802,7 @@ async def get_authenticated_google_service(
             logger.debug(f"[{tool_name}] Could not get FastMCP session from context: {e}")
 
         # Fallback to direct FastMCP context if context variable not set
-        if not session_id and get_fastmcp_context:
+        if not session_id and get_fastmcp_context is not None:
             try:
                 fastmcp_ctx = get_fastmcp_context()
                 if fastmcp_ctx and hasattr(fastmcp_ctx, "session_id"):
@@ -839,15 +841,15 @@ async def get_authenticated_google_service(
 
         from auth.oauth_callback_server import start_oauth_callback_server
 
-        success, error_msg, redirect_uri = start_oauth_callback_server()
-        if not success:
+        success, error_msg, oauth_redirect_uri = start_oauth_callback_server()
+        if not success or not oauth_redirect_uri:
             error_detail = f" ({error_msg})" if error_msg else ""
             raise GoogleAuthenticationError(f"Cannot initiate OAuth flow - callback server unavailable{error_detail}")
 
         auth_response = await start_auth_flow(
             user_google_email=user_google_email,
             service_name=f"Google {service_name.title()}",
-            redirect_uri=redirect_uri,
+            redirect_uri=oauth_redirect_uri,
         )
 
         # Extract the auth URL from the response and raise with it

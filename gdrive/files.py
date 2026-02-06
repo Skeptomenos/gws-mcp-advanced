@@ -16,10 +16,9 @@ from urllib.request import url2pathname
 import httpx
 from googleapiclient.http import MediaIoBaseDownload, MediaIoBaseUpload
 
-from auth.config import is_stateless_mode
+from auth.config import get_transport_mode, is_stateless_mode
 from auth.service_decorator import require_google_service
 from core.attachment_storage import get_attachment_storage, get_attachment_url
-from core.config import get_transport_mode
 from core.errors import ValidationError
 from core.server import server
 from core.utils import extract_office_xml_text, handle_http_errors

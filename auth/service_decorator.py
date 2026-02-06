@@ -3,7 +3,7 @@ import logging
 import re
 from collections.abc import Callable
 from functools import wraps
-from typing import Any
+from typing import Any, cast
 
 from fastmcp.server.dependencies import get_access_token, get_context
 from google.auth.exceptions import RefreshError
@@ -592,7 +592,7 @@ def require_google_service(
                 raise CredentialsExpiredError(error_message) from e
 
         # Set the wrapper's signature to the one without 'service'
-        wrapper.__signature__ = wrapper_sig
+        cast(Any, wrapper).__signature__ = wrapper_sig
 
         # Conditionally modify docstring to remove user_google_email parameter documentation
         if is_oauth21_enabled():
@@ -717,7 +717,7 @@ def require_multiple_services(service_configs: list[dict[str, Any]]):
                 raise CredentialsExpiredError(error_message) from e
 
         # Set the wrapper's signature
-        wrapper.__signature__ = wrapper_sig
+        cast(Any, wrapper).__signature__ = wrapper_sig
 
         # Conditionally modify docstring to remove user_google_email parameter documentation
         if is_oauth21_enabled():

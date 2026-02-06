@@ -37,13 +37,13 @@ def _normalize_color(color: str | None, param_name: str) -> dict[str, float] | N
 
 
 def build_text_style(
-    bold: bool = None,
-    italic: bool = None,
-    underline: bool = None,
-    font_size: int = None,
-    font_family: str = None,
-    text_color: str = None,
-    background_color: str = None,
+    bold: bool | None = None,
+    italic: bool | None = None,
+    underline: bool | None = None,
+    font_size: int | None = None,
+    font_family: str | None = None,
+    text_color: str | None = None,
+    background_color: str | None = None,
 ) -> tuple[dict[str, Any], list[str]]:
     """
     Build text style object for Google Docs API requests.
@@ -60,8 +60,8 @@ def build_text_style(
     Returns:
         Tuple of (text_style_dict, list_of_field_names)
     """
-    text_style = {}
-    fields = []
+    text_style: dict[str, Any] = {}
+    fields: list[str] = []
 
     if bold is not None:
         text_style["bold"] = bold
@@ -147,13 +147,13 @@ def create_delete_range_request(start_index: int, end_index: int) -> dict[str, A
 def create_format_text_request(
     start_index: int,
     end_index: int,
-    bold: bool = None,
-    italic: bool = None,
-    underline: bool = None,
-    font_size: int = None,
-    font_family: str = None,
-    text_color: str = None,
-    background_color: str = None,
+    bold: bool | None = None,
+    italic: bool | None = None,
+    underline: bool | None = None,
+    font_size: int | None = None,
+    font_family: str | None = None,
+    text_color: str | None = None,
+    background_color: str | None = None,
 ) -> dict[str, Any] | None:
     """
     Create an updateTextStyle request for Google Docs API.
@@ -234,7 +234,9 @@ def create_insert_page_break_request(index: int) -> dict[str, Any]:
     return {"insertPageBreak": {"location": {"index": index}}}
 
 
-def create_insert_image_request(index: int, image_uri: str, width: int = None, height: int = None) -> dict[str, Any]:
+def create_insert_image_request(
+    index: int, image_uri: str, width: int | None = None, height: int | None = None
+) -> dict[str, Any]:
     """
     Create an insertInlineImage request for Google Docs API.
 
@@ -307,6 +309,8 @@ def validate_operation(operation: dict[str, Any]) -> tuple[bool, str]:
         "insert_table": ["index", "rows", "columns"],
         "insert_page_break": ["index"],
         "find_replace": ["find_text", "replace_text"],
+        "insert_markdown": ["markdown_text"],  # index is optional (defaults to 1)
+        "raw_request": ["request"],  # For debugging
     }
 
     if op_type not in required_fields:

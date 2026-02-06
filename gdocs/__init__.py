@@ -5,6 +5,7 @@ This package provides MCP tools for interacting with Google Docs API.
 """
 
 from gdocs.comments import (
+    create_comment_tools,
     create_document_comment,
     read_document_comments,
     reply_to_document_comment,
@@ -18,6 +19,7 @@ from gdocs.writing import (
     batch_update_doc,
     create_doc,
     find_and_replace_doc,
+    insert_markdown,
     modify_doc_text,
     update_doc_headers_footers,
 )
@@ -29,6 +31,7 @@ __all__ = [
     "inspect_doc_structure",
     "create_doc",
     "modify_doc_text",
+    "insert_markdown",
     "find_and_replace_doc",
     "batch_update_doc",
     "update_doc_headers_footers",
@@ -41,4 +44,5 @@ __all__ = [
     "create_document_comment",
     "reply_to_document_comment",
     "resolve_document_comment",
+    "create_comment_tools",
 ]

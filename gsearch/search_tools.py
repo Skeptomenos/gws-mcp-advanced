@@ -249,7 +249,7 @@ async def search_custom_siterestrict(
     full_query = f"{q} ({site_query})"
 
     # Use the main search function with the modified query
-    return await search_custom(
+    return await search_custom(  # type: ignore[operator]
         service=service,
         user_google_email=user_google_email,
         q=full_query,

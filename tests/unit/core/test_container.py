@@ -42,13 +42,35 @@ class MockSessionStore:
         self._sessions: dict = {}
         self._mcp_mapping: dict = {}
 
-    def store_session(self, user_email: str, **kwargs) -> None:
-        self._sessions[user_email] = kwargs
-        if mcp_session_id := kwargs.get("mcp_session_id"):
+    def store_session(
+        self,
+        user_email: str,
+        access_token: str,
+        refresh_token: str | None = None,
+        token_uri: str = "https://oauth2.googleapis.com/token",
+        client_id: str | None = None,
+        client_secret: str | None = None,
+        scopes: list[str] | None = None,
+        expiry: object = None,
+        session_id: str | None = None,
+        mcp_session_id: str | None = None,
+        issuer: str | None = None,
+        **kwargs,
+    ) -> None:
+        self._sessions[user_email] = {
+            "access_token": access_token,
+            "refresh_token": refresh_token,
+            "mcp_session_id": mcp_session_id,
+            **kwargs,
+        }
+        if mcp_session_id:
             self._mcp_mapping[mcp_session_id] = user_email
 
     def get_credentials(self, user_email: str):
-        return self._sessions.get(user_email, {}).get("credentials")
+        session = self._sessions.get(user_email)
+        if session:
+            return {"access_token": session.get("access_token")}
+        return None
 
     def get_credentials_by_mcp_session(self, mcp_session_id: str):
         user_email = self._mcp_mapping.get(mcp_session_id)
@@ -174,25 +196,25 @@ class TestMockSessionStore:
 
     def test_store_and_retrieve_by_email(self):
         store = MockSessionStore()
-        store.store_session("user@example.com", credentials={"token": "xyz"})
+        store.store_session("user@example.com", access_token="xyz")
 
         result = store.get_credentials("user@example.com")
-        assert result == {"token": "xyz"}
+        assert result == {"access_token": "xyz"}
 
     def test_store_and_retrieve_by_mcp_session(self):
         store = MockSessionStore()
         store.store_session(
             "user@example.com",
+            access_token="xyz",
             mcp_session_id="mcp-123",
-            credentials={"token": "xyz"},
         )
 
         result = store.get_credentials_by_mcp_session("mcp-123")
-        assert result == {"token": "xyz"}
+        assert result == {"access_token": "xyz"}
 
     def test_get_user_by_mcp_session(self):
         store = MockSessionStore()
-        store.store_session("user@example.com", mcp_session_id="mcp-456")
+        store.store_session("user@example.com", access_token="test", mcp_session_id="mcp-456")
 
         result = store.get_user_by_mcp_session("mcp-456")
         assert result == "user@example.com"

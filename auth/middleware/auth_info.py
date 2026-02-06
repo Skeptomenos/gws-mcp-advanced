@@ -6,6 +6,7 @@ import logging
 import os
 import time
 from types import SimpleNamespace
+from typing import TYPE_CHECKING
 
 import jwt
 from fastmcp.server.dependencies import get_http_headers
@@ -13,7 +14,17 @@ from fastmcp.server.middleware import Middleware, MiddlewareContext
 
 from auth.oauth21_session_store import ensure_session_from_access_token
 
+if TYPE_CHECKING:
+    from fastmcp import Context
+
 logger = logging.getLogger(__name__)
+
+
+def _get_context(context: MiddlewareContext) -> "Context":
+    """Get the fastmcp_context, raising if None."""
+    if context.fastmcp_context is None:
+        raise RuntimeError("fastmcp_context is None")
+    return context.fastmcp_context
 
 
 class AuthInfoMiddleware(Middleware):
@@ -37,13 +48,15 @@ class AuthInfoMiddleware(Middleware):
 
     def _store_unverified_token(self, context: MiddlewareContext, token_str: str) -> None:
         """Store an unverified token in context."""
+        ctx = _get_context(context)
         access_token = self._create_unverified_token(token_str)
-        context.fastmcp_context.set_state("access_token", access_token)
-        context.fastmcp_context.set_state("auth_provider_type", self.auth_provider_type)
-        context.fastmcp_context.set_state("token_type", "google_oauth")
+        ctx.set_state("access_token", access_token)
+        ctx.set_state("auth_provider_type", self.auth_provider_type)
+        ctx.set_state("token_type", "google_oauth")
 
     def _process_verified_google_auth(self, context: MiddlewareContext, verified_auth, token_str: str) -> bool:
         """Process a verified Google OAuth token and store in context."""
+        ctx = _get_context(context)
         user_email = None
         if hasattr(verified_auth, "claims"):
             user_email = verified_auth.claims.get("email")
@@ -61,16 +74,16 @@ class AuthInfoMiddleware(Middleware):
             email=user_email,
         )
 
-        context.fastmcp_context.set_state("access_token", access_token)
-        mcp_session_id = getattr(context.fastmcp_context, "session_id", None)
+        ctx.set_state("access_token", access_token)
+        mcp_session_id = getattr(ctx, "session_id", None)
         ensure_session_from_access_token(verified_auth, user_email, mcp_session_id)
-        context.fastmcp_context.set_state("access_token_obj", verified_auth)
-        context.fastmcp_context.set_state("auth_provider_type", self.auth_provider_type)
-        context.fastmcp_context.set_state("token_type", "google_oauth")
-        context.fastmcp_context.set_state("user_email", user_email)
-        context.fastmcp_context.set_state("username", user_email)
-        context.fastmcp_context.set_state("authenticated_user_email", user_email)
-        context.fastmcp_context.set_state("authenticated_via", "bearer_token")
+        ctx.set_state("access_token_obj", verified_auth)
+        ctx.set_state("auth_provider_type", self.auth_provider_type)
+        ctx.set_state("token_type", "google_oauth")
+        ctx.set_state("user_email", user_email)
+        ctx.set_state("username", user_email)
+        ctx.set_state("authenticated_user_email", user_email)
+        ctx.set_state("authenticated_via", "bearer_token")
 
         logger.info(f"Authenticated via Google OAuth: {user_email}")
         return True
@@ -98,6 +111,7 @@ class AuthInfoMiddleware(Middleware):
 
     def _handle_jwt_token(self, context: MiddlewareContext, token_str: str) -> bool:
         """Handle JWT token authentication."""
+        ctx = _get_context(context)
         try:
             token_payload = jwt.decode(token_str, options={"verify_signature": False})
             logger.debug(f"JWT payload decoded: {list(token_payload.keys())}")
@@ -110,20 +124,20 @@ class AuthInfoMiddleware(Middleware):
                 expires_at=token_payload.get("exp", 0),
             )
 
-            context.fastmcp_context.set_state("access_token", access_token)
-            context.fastmcp_context.set_state("user_id", token_payload.get("sub"))
-            context.fastmcp_context.set_state("username", token_payload.get("username", token_payload.get("email")))
-            context.fastmcp_context.set_state("name", token_payload.get("name"))
-            context.fastmcp_context.set_state("auth_time", token_payload.get("auth_time"))
-            context.fastmcp_context.set_state("issuer", token_payload.get("iss"))
-            context.fastmcp_context.set_state("audience", token_payload.get("aud"))
-            context.fastmcp_context.set_state("jti", token_payload.get("jti"))
-            context.fastmcp_context.set_state("auth_provider_type", self.auth_provider_type)
+            ctx.set_state("access_token", access_token)
+            ctx.set_state("user_id", token_payload.get("sub"))
+            ctx.set_state("username", token_payload.get("username", token_payload.get("email")))
+            ctx.set_state("name", token_payload.get("name"))
+            ctx.set_state("auth_time", token_payload.get("auth_time"))
+            ctx.set_state("issuer", token_payload.get("iss"))
+            ctx.set_state("audience", token_payload.get("aud"))
+            ctx.set_state("jti", token_payload.get("jti"))
+            ctx.set_state("auth_provider_type", self.auth_provider_type)
 
             user_email = token_payload.get("email", token_payload.get("username"))
             if user_email:
-                context.fastmcp_context.set_state("authenticated_user_email", user_email)
-                context.fastmcp_context.set_state("authenticated_via", "jwt_token")
+                ctx.set_state("authenticated_user_email", user_email)
+                ctx.set_state("authenticated_via", "jwt_token")
                 return True
             return False
 
@@ -161,7 +175,7 @@ class AuthInfoMiddleware(Middleware):
 
     async def _try_stdio_session_auth(self, context: MiddlewareContext) -> bool:
         """Attempt authentication via stdio session (single-user mode)."""
-        from core.config import get_transport_mode
+        from auth.config import get_transport_mode
 
         if get_transport_mode() != "stdio":
             return False
@@ -174,6 +188,7 @@ class AuthInfoMiddleware(Middleware):
         elif hasattr(context, "arguments"):
             requested_user = context.arguments.get("user_google_email")
 
+        ctx = _get_context(context)
         if requested_user:
             try:
                 from auth.oauth21_session_store import get_oauth21_session_store
@@ -181,9 +196,9 @@ class AuthInfoMiddleware(Middleware):
                 store = get_oauth21_session_store()
                 if store.has_session(requested_user):
                     logger.debug(f"Using recent stdio session for {requested_user}")
-                    context.fastmcp_context.set_state("authenticated_user_email", requested_user)
-                    context.fastmcp_context.set_state("authenticated_via", "stdio_session")
-                    context.fastmcp_context.set_state("auth_provider_type", "oauth21_stdio")
+                    ctx.set_state("authenticated_user_email", requested_user)
+                    ctx.set_state("authenticated_via", "stdio_session")
+                    ctx.set_state("auth_provider_type", "oauth21_stdio")
                     return True
             except Exception as e:
                 logger.debug(f"Error checking stdio session: {e}")
@@ -195,11 +210,11 @@ class AuthInfoMiddleware(Middleware):
             single_user = store.get_single_user_email()
             if single_user:
                 logger.debug(f"Defaulting to single stdio OAuth session for {single_user}")
-                context.fastmcp_context.set_state("authenticated_user_email", single_user)
-                context.fastmcp_context.set_state("authenticated_via", "stdio_single_session")
-                context.fastmcp_context.set_state("auth_provider_type", "oauth21_stdio")
-                context.fastmcp_context.set_state("user_email", single_user)
-                context.fastmcp_context.set_state("username", single_user)
+                ctx.set_state("authenticated_user_email", single_user)
+                ctx.set_state("authenticated_via", "stdio_single_session")
+                ctx.set_state("auth_provider_type", "oauth21_stdio")
+                ctx.set_state("user_email", single_user)
+                ctx.set_state("username", single_user)
                 return True
         except Exception as e:
             logger.debug(f"Error determining stdio single-user session: {e}")
@@ -208,10 +223,11 @@ class AuthInfoMiddleware(Middleware):
 
     async def _try_mcp_session_binding(self, context: MiddlewareContext) -> bool:
         """Attempt authentication via MCP session binding."""
-        if not hasattr(context.fastmcp_context, "session_id"):
+        ctx = _get_context(context)
+        if not hasattr(ctx, "session_id"):
             return False
 
-        mcp_session_id = context.fastmcp_context.session_id
+        mcp_session_id = ctx.session_id
         if not mcp_session_id:
             return False
 
@@ -222,9 +238,9 @@ class AuthInfoMiddleware(Middleware):
             bound_user = store.get_user_by_mcp_session(mcp_session_id)
             if bound_user:
                 logger.debug(f"MCP session bound to {bound_user}")
-                context.fastmcp_context.set_state("authenticated_user_email", bound_user)
-                context.fastmcp_context.set_state("authenticated_via", "mcp_session_binding")
-                context.fastmcp_context.set_state("auth_provider_type", "oauth21_session")
+                ctx.set_state("authenticated_user_email", bound_user)
+                ctx.set_state("authenticated_via", "mcp_session_binding")
+                ctx.set_state("auth_provider_type", "oauth21_session")
                 return True
         except Exception as e:
             logger.debug(f"Error checking MCP session binding: {e}")
@@ -237,7 +253,8 @@ class AuthInfoMiddleware(Middleware):
             logger.warning("No fastmcp_context available")
             return
 
-        if context.fastmcp_context.get_state("authenticated_user_email"):
+        ctx = _get_context(context)
+        if ctx.get_state("authenticated_user_email"):
             logger.debug("Authentication state already set")
             return
 

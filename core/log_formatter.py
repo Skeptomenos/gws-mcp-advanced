@@ -159,7 +159,7 @@ def setup_enhanced_logging(log_level: int = logging.INFO, use_colors: bool = Tru
         root_logger.addHandler(console_handler)
 
 
-def configure_file_logging(logger_name: str = None) -> bool:
+def configure_file_logging(logger_name: str | None = None) -> bool:
     """
     Configure file logging based on stateless mode setting.
 

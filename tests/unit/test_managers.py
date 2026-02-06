@@ -55,10 +55,9 @@ class TestSyncManager:
     """Tests for SyncManager file linking and persistence."""
 
     def setup_method(self):
-        """Create a temporary map file for testing."""
         self.temp_dir = tempfile.TemporaryDirectory()
-        self.map_file = os.path.join(self.temp_dir.name, "sync_map.json")
-        self.manager = SyncManager(map_file=self.map_file)
+        self.sync_map_path = os.path.join(self.temp_dir.name, "sync_map.json")
+        self.manager = SyncManager(sync_map_path=self.sync_map_path)
 
     def teardown_method(self):
         """Clean up temporary directory."""
@@ -80,8 +79,7 @@ class TestSyncManager:
         local_path = "persistent.md"
         self.manager.link_file(local_path, "drive_id_999", version=5)
 
-        # Create a new manager instance pointing to the same file
-        new_manager = SyncManager(map_file=self.map_file)
+        new_manager = SyncManager(sync_map_path=self.sync_map_path)
         link = new_manager.get_link(local_path)
 
         assert link is not None
