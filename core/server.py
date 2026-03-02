@@ -55,11 +55,10 @@ class SecureFastMCP(FastMCP):
         explicit_name = kwargs.get("name")
 
         def ensure_legacy_attrs(registered_tool: Any, source_fn: Callable[..., Any] | None = None) -> Any:
-            tool_name = getattr(registered_tool, "name", None) or explicit_name
-
             if source_fn is None:
                 candidate_fn = getattr(registered_tool, "fn", None)
                 source_fn = candidate_fn if callable(candidate_fn) else None
+            tool_name = getattr(registered_tool, "name", None) or explicit_name or getattr(source_fn, "__name__", None)
 
             try:
                 if source_fn is not None and not hasattr(registered_tool, "fn"):
