@@ -1,0 +1,20 @@
+{
+  "name": "@skeptomenos/gws-mcp-advanced",
+  "version": "1.0.0",
+  "description": "npm launcher for the gws-mcp-advanced Python MCP server",
+  "license": "MIT",
+  "type": "commonjs",
+  "bin": {
+    "gws-mcp-advanced": "bin/gws-mcp-advanced.cjs"
+  },
+  "files": [
+    "bin/"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "check:dist-scope": "python scripts/check_distribution_scope.py",
+    "check:version-coupling": "python scripts/check_release_version_match.py"
+  }
+}

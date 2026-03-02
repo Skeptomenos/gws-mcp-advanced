@@ -1,0 +1,95 @@
+name: Release npm
+
+on:
+  workflow_run:
+    workflows: ["Release PyPI"]
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Expected version to publish (must match pyproject.toml / package.json)"
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    if: |
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'workflow_run' &&
+       github.event.workflow_run.conclusion == 'success')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+
+      - name: Install dependencies
+        run: uv pip install -e ".[dev]" --system
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          registry-url: "https://registry.npmjs.org"
+
+      - name: Validate Python/npm version coupling
+        run: uv run python scripts/check_release_version_match.py
+
+      - name: Validate distribution scope references
+        run: uv run python scripts/check_distribution_scope.py
+
+      - name: Validate workflow input version (optional)
+        if: github.event_name == 'workflow_dispatch' && github.event.inputs.version != ''
+        run: |
+          INPUT_VERSION="${{ github.event.inputs.version }}"
+          PACKAGE_VERSION="$(node -p "require('./package.json').version")"
+          if [ "$INPUT_VERSION" != "$PACKAGE_VERSION" ]; then
+            echo "Input version ($INPUT_VERSION) does not match package.json version ($PACKAGE_VERSION)"
+            exit 1
+          fi
+
+      - name: Block npm release until matching PyPI version exists
+        run: |
+          VERSION="$(node -p "require('./package.json').version")"
+          uv run python scripts/check_pypi_version_available.py --package gws-mcp-advanced --version "$VERSION"
+
+      - name: Launcher smoke tests
+        run: uv run pytest -q tests/unit/core/test_npm_launcher.py tests/unit/core/test_distribution_checks.py
+
+  publish:
+    needs: verify
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    environment:
+      name: npm
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          registry-url: "https://registry.npmjs.org"
+
+      - name: Validate package metadata
+        run: |
+          node --check bin/gws-mcp-advanced.cjs
+          npm pack --dry-run
+
+      - name: Publish to npm (trusted publishing + provenance)
+        run: npm publish --access public --provenance

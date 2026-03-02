@@ -1,0 +1,30 @@
+{
+  "pythonVersion": "3.10",
+  "typeCheckingMode": "standard",
+  "include": [
+    "auth",
+    "core",
+    "gcalendar",
+    "gchat",
+    "gdocs",
+    "gdrive",
+    "gforms",
+    "gmail",
+    "gsearch",
+    "gsheets",
+    "gslides",
+    "gtasks",
+    "main.py",
+    "fastmcp_server.py"
+  ],
+  "exclude": [
+    "**/__pycache__",
+    ".venv",
+    "build",
+    "dist",
+    "docs",
+    "tests",
+    "tmp",
+    "gws_mcp_advanced.egg-info"
+  ]
+}
