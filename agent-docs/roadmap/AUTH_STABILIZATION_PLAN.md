@@ -2,7 +2,7 @@
 
 ## Living Document Controls
 - Status: `IN_IMPLEMENTATION_PENDING_HOST_VALIDATION`
-- Last Updated (UTC): `2026-03-03T00:20:00Z`
+- Last Updated (UTC): `2026-03-03T00:30:00Z`
 - Canonical Path: `/Users/david.helmus/repos/ai-dev/_infra/gws-mcp-advanced/gws-mcp-advanced/agent-docs/roadmap/AUTH_STABILIZATION_PLAN.md`
 - Parent Plan: `/Users/david.helmus/repos/ai-dev/_infra/gws-mcp-advanced/gws-mcp-advanced/agent-docs/roadmap/PLAN.md`
 - Active Branch: `main`
@@ -78,7 +78,7 @@ Observed failure themes:
 - [x] WS-06.2 Run targeted auth test suite and capture evidence.
 - [x] WS-06.3 Update user docs (auth modes, enterprise rollout, troubleshooting).
 - [x] WS-06.4 Bump version and prepare release notes.
-- [ ] WS-06.5 Publish to PyPI and verify `uvx` install path.
+- [x] WS-06.5 Publish to PyPI and verify `uvx` install path.
 - [ ] WS-06.6 Post-release smoke validation in MCP hosts.
 
 ## Risk Register
@@ -100,6 +100,7 @@ Observed failure themes:
 | State semantics | Unit | `tests/unit/auth/test_session_store.py`, `tests/unit/auth/test_oauth_state_persistence.py` | Validate/consume behavior matches contract | Pass |
 | Credential refresh | Integration | `tests/integration/test_auth_flow.py` | Expired credentials refresh before re-auth | Pass |
 | Credential source diagnostics | Unit | `tests/unit/auth/test_auth_runtime_paths.py` | Credential source selection emits deterministic diagnostics (`[CRED_SOURCE] ...`) | Pass |
+| Release installability | Runtime smoke | `uvx --from google-workspace-mcp-advanced==1.0.1 google-workspace-mcp-advanced --help` | Published package can be resolved/launched via uvx | Pass |
 | Device flow | Unit/Integration (mocked HTTP) | `tests/unit/auth/test_google_auth_flow_modes.py` | Device lifecycle stable across retries | Pass (unit) |
 | Full quality gate | Repo-wide | `uv run ruff check . && uv run ruff format --check . && uv run pytest` | All green | Pass |
 
@@ -117,12 +118,12 @@ Observed failure themes:
 - 2026-03-02T21:34:45Z: GitHub/PyPI API verification is blocked in this environment due restricted outbound DNS/network; publish confirmation must be validated from CI UI or external shell.
 - 2026-03-03T00:20:00Z: Closed WS-01.5 and WS-04.1/WS-04.2/WS-04.3 by adding manual+automatic auth parity regressions, env-path credential-store integration coverage, refresh-before-reauth integration coverage, and credential-source diagnostics in `auth/google_auth.py`.
 - 2026-03-03T00:20:00Z: Ran targeted auth suite (`29 passed`) and full verification protocol (`uv run ruff check .`, `uv run ruff format --check .`, `uv run pytest`) with green results (`633 passed`, `3 skipped`).
+- 2026-03-03T00:20:00Z: Closed WS-06.5 by validating published installability/execution path with `uvx --from google-workspace-mcp-advanced==1.0.1 google-workspace-mcp-advanced --help`.
 
 ## Open Questions
 1. Do we require a dedicated `start_google_device_auth_status` tool, or is retry-on-next-call sufficient operationally?
 2. Should we add explicit telemetry counters for credential source choice (session/file/refresh/device-complete) before release?
 
 ## Next Execution Slice
-1. Verify `Release PyPI` workflow result for tag `v1.0.1` and confirm PyPI latest version.
-2. Execute manual MCP-hosted auth validation in OpenCode/Claude Code using `WORKSPACE_MCP_AUTH_FLOW=auto` (optional forced `callback` sanity run).
-3. Capture and attach post-release smoke evidence, then close WS-06.6.
+1. Execute manual MCP-hosted auth validation in OpenCode/Claude Code using `WORKSPACE_MCP_AUTH_FLOW=auto` (optional forced `callback` sanity run).
+2. Capture and attach post-release smoke evidence, then close WS-06.6.

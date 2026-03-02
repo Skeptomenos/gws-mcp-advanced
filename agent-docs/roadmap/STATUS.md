@@ -5,9 +5,9 @@ Detailed implementation scope and issue-level tracking live in:
 `/Users/david.helmus/repos/ai-dev/_infra/gws-mcp-advanced/gws-mcp-advanced/agent-docs/roadmap/PLAN.md`
 
 ## Metadata
-- Last Updated (UTC): 2026-03-03T00:20:00Z
+- Last Updated (UTC): 2026-03-03T00:30:00Z
 - Active Branch: `main`
-- Overall Status: Rename/migration hardening `DIST-05` is complete and verified; `AUTH-01` remains the only in-progress track, now narrowed to release confirmation (`WS-06.5`) and MCP-host post-release smoke evidence (`WS-06.6`). Canonical execution plan: `/Users/david.helmus/repos/ai-dev/_infra/gws-mcp-advanced/gws-mcp-advanced/agent-docs/roadmap/AUTH_STABILIZATION_PLAN.md`.
+- Overall Status: Rename/migration hardening `DIST-05` is complete and verified; `AUTH-01` remains the only in-progress track and is now narrowed to MCP-host post-release smoke evidence (`WS-06.6`) after `WS-06.5` uvx release verification passed. Canonical execution plan: `/Users/david.helmus/repos/ai-dev/_infra/gws-mcp-advanced/gws-mcp-advanced/agent-docs/roadmap/AUTH_STABILIZATION_PLAN.md`.
 - Implementation Readiness: `YES`
 
 ## Baseline Verification Snapshot
@@ -36,9 +36,9 @@ Detailed implementation scope and issue-level tracking live in:
 | Wave 6 | Distribution validation and rollout | Done | uvx stable/pinned validation is complete (`DT-01`..`DT-03`, `DT-08`) |
 
 ## Current Focus
-1. Verify `Release PyPI` result for `v1.0.1` and confirm package availability.
-2. Execute manual MCP-hosted auth validation (`WORKSPACE_MCP_AUTH_FLOW=auto`) in OpenCode/Claude Code.
-3. Capture post-release smoke evidence and close `AUTH-01`.
+1. Execute manual MCP-hosted auth validation (`WORKSPACE_MCP_AUTH_FLOW=auto`) in OpenCode/Claude Code.
+2. Capture post-release smoke evidence and close `WS-06.6`.
+3. Close `AUTH-01` and sync all living trackers.
 
 ## Open Blockers
 1. `AUTH-01` must be completed before next production rollout.
