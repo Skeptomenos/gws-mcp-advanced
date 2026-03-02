@@ -46,13 +46,7 @@ jobs:
         if: github.event_name == 'push'
         run: |
           TAG_VERSION="${GITHUB_REF_NAME#v}"
-          PROJECT_VERSION="$(python - <<'PY'
-import tomllib
-from pathlib import Path
-data = tomllib.loads(Path("pyproject.toml").read_text(encoding="utf-8"))
-print(data["project"]["version"])
-PY
-)"
+          PROJECT_VERSION="$(python3 -c 'import tomllib; from pathlib import Path; print(tomllib.loads(Path(\"pyproject.toml\").read_text(encoding=\"utf-8\"))[\"project\"][\"version\"])')"
           if [ "$TAG_VERSION" != "$PROJECT_VERSION" ]; then
             echo "Tag version ($TAG_VERSION) does not match pyproject version ($PROJECT_VERSION)"
             exit 1
@@ -62,13 +56,7 @@ PY
         if: github.event_name == 'workflow_dispatch' && github.event.inputs.version != ''
         run: |
           INPUT_VERSION="${{ github.event.inputs.version }}"
-          PROJECT_VERSION="$(python - <<'PY'
-import tomllib
-from pathlib import Path
-data = tomllib.loads(Path("pyproject.toml").read_text(encoding="utf-8"))
-print(data["project"]["version"])
-PY
-)"
+          PROJECT_VERSION="$(python3 -c 'import tomllib; from pathlib import Path; print(tomllib.loads(Path(\"pyproject.toml\").read_text(encoding=\"utf-8\"))[\"project\"][\"version\"])')"
           if [ "$INPUT_VERSION" != "$PROJECT_VERSION" ]; then
             echo "Input version ($INPUT_VERSION) does not match pyproject version ($PROJECT_VERSION)"
             exit 1
