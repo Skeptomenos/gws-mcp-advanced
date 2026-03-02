@@ -50,6 +50,18 @@ jobs:
       - name: Check tool decorator order
         run: uv run python scripts/check_tool_decorators.py
 
+      - name: Check dry-run default safety
+        run: uv run python scripts/check_dry_run_defaults.py
+
+      - name: Check distribution scope references
+        run: uv run python scripts/check_distribution_scope.py
+
+      - name: Check docs separation
+        run: uv run python scripts/check_docs_separation.py
+
+      - name: Check release version coupling
+        run: uv run python scripts/check_release_version_match.py
+
       - name: Run ruff formatter check
         run: uv run ruff format --check .
 
@@ -80,6 +92,16 @@ jobs:
         run: uv run pytest tests/ --cov=. --cov-report=xml
         if: matrix.python-version == '3.11'
 
+      - name: Set up Node for launcher smoke tests
+        if: matrix.python-version == '3.11'
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Launcher smoke tests
+        if: matrix.python-version == '3.11'
+        run: uv run pytest -q tests/unit/core/test_npm_launcher.py tests/unit/core/test_distribution_checks.py
+
       - name: Upload coverage
         uses: codecov/codecov-action@v4
         if: matrix.python-version == '3.11'
@@ -103,9 +125,5 @@ jobs:
       - name: Install dependencies
         run: uv pip install -e ".[dev]" --system
 
-      - name: Install pyright
-        run: pip install pyright
-
       - name: Run type checker
-        run: pyright --verifytypes gws-mcp-advanced || true
-        continue-on-error: true  # Don't fail CI on type errors yet
+        run: uv run pyright --project pyrightconfig.json

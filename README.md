@@ -20,6 +20,7 @@ This project is an advanced fork of [taylorwilsdon/google_workspace_mcp](https:/
 
 - Python 3.11+
 - uv (recommended) or pip
+- Node.js 18+ (only required for `npx` distribution usage)
 
 ### Installation
 
@@ -34,20 +35,39 @@ uv pip install -e .
 pip install -e .
 ```
 
+### Distribution Channels (`npm`/`npx`)
+
+```bash
+# Stable channel (npm latest)
+npx -y @skeptomenos/gws-mcp-advanced --transport stdio
+
+# Prerelease channel (npm next)
+npx -y @skeptomenos/gws-mcp-advanced@next --transport stdio
+
+# Pinned deterministic version (recommended for production rollouts)
+npx -y @skeptomenos/gws-mcp-advanced@1.0.0 --transport stdio
+```
+
+Notes:
+- The npm launcher executes the matching Python release through `uvx` (or `uv tool run` fallback).
+- Override Python package resolution with `GWS_MCP_PYPI_SPEC`, for example:
+  `GWS_MCP_PYPI_SPEC=gws-mcp-advanced==1.0.0 npx -y @skeptomenos/gws-mcp-advanced --transport stdio`
+- Release sequencing, provenance, and rollback guidance: `docs/DISTRIBUTION_RELEASE.md`.
+
 ### Running the Server
 
 ```bash
 # STDIO mode (default, for MCP clients)
-python main.py
+uv run gws-mcp-advanced --transport stdio
 
 # HTTP mode (for web-based clients)
-python main.py --transport streamable-http
+uv run gws-mcp-advanced --transport streamable-http
 
 # Single-user mode (bypasses session mapping)
-python main.py --single-user
+uv run gws-mcp-advanced --single-user
 
 # Load specific services only
-python main.py --tools gmail drive calendar
+uv run gws-mcp-advanced --tools gmail drive calendar
 ```
 
 ### MCP Client Configuration
@@ -57,9 +77,16 @@ Add to your MCP client configuration (e.g., Claude Desktop, OpenCode):
 ```json
 {
   "mcpServers": {
+    "gws-mcp-advanced-stable": {
+      "command": "npx",
+      "args": ["-y", "@skeptomenos/gws-mcp-advanced", "--transport", "stdio"],
+      "env": {
+        "USER_GOOGLE_EMAIL": "your.email@gmail.com"
+      }
+    },
     "gws-mcp-advanced": {
-      "command": "python",
-      "args": ["/path/to/gws-mcp-advanced/main.py"],
+      "command": "uv",
+      "args": ["run", "--project", "/path/to/gws-mcp-advanced", "gws-mcp-advanced", "--transport", "stdio"],
       "env": {
         "USER_GOOGLE_EMAIL": "your.email@gmail.com"
       }
@@ -67,6 +94,11 @@ Add to your MCP client configuration (e.g., Claude Desktop, OpenCode):
   }
 }
 ```
+
+Use the `npx` server entry for stable releases and keep the `uv run --project` entry for local development.
+
+User docs entry point: `docs/INDEX.md`.
+Contributor docs entry points: `AGENTS.md` and `agent-docs/INDEX.md`.
 
 ## Authentication
 

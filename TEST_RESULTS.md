@@ -1,5 +1,8 @@
 # Test Results: Google Docs Markdown Formatting
 
+> Archived Snapshot: This document reflects an early 2026-02-02 test state and is no longer the active source of truth.
+> Use `/Users/david.helmus/repos/ai-dev/_infra/gws-mcp-advanced/gws-mcp-advanced/agent-docs/testing/OPENCODE_MCP_MANUAL_TESTING.md` for current status.
+
 **Date:** Feb 02, 2026
 **Version:** v0.0.21 (First Integration Test)
 

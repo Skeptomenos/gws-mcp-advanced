@@ -33,7 +33,7 @@ Provides 50+ async tools for Gmail, Drive, Calendar, Docs, Sheets, Chat, Forms, 
 *Use Pydantic models for all complex data structures (DTOs).*
 
 ### 🔄 WORKFLOW LOOP
-1.  **READ:** Analyze existing `docs/MCP_PATTERNS.md` and `docs/PYTHON_CONVENTIONS.md`.
+1.  **READ:** Analyze existing `agent-docs/architecture/MCP_PATTERNS.md` and `agent-docs/architecture/PYTHON_CONVENTIONS.md`.
 2.  **PLAN:** Use `update_plan` to define steps and self-verification strategy.
 3.  **TDD:** If applicable, add a test case in `tests/`.
 4.  **CODE:** Implement using `uv` for dependencies and `ruff` for formatting.
