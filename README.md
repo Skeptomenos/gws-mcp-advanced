@@ -53,7 +53,14 @@ uvx google-workspace-mcp-advanced==1.0.0 --transport stdio
 }
 ```
 
-### 4. Authenticate on first run
+### 4. Use client-specific setup guides
+
+- [Claude Code MCP setup](docs/setup/CLAUDE_CODE_MCP_SETUP.md)
+- [Cursor MCP setup](docs/setup/CURSOR_MCP_SETUP.md)
+- [OpenCode MCP setup](docs/setup/OPENCODE_MCP_SETUP.md)
+- [Gemini CLI MCP setup](docs/setup/GEMINI_CLI_MCP_SETUP.md)
+
+### 5. Authenticate on first run
 
 1. Start the server from your MCP client.
 2. Open the OAuth URL shown by the server.
@@ -134,7 +141,11 @@ uv run google-workspace-mcp-advanced --tools gmail drive calendar
 ## Documentation
 
 - User docs: [docs/INDEX.md](docs/INDEX.md)
-- MCP setup guide: [docs/setup/MCP_CLIENT_SETUP_GUIDE.md](docs/setup/MCP_CLIENT_SETUP_GUIDE.md)
+- Client setup hub: [docs/setup/MCP_CLIENT_SETUP_GUIDE.md](docs/setup/MCP_CLIENT_SETUP_GUIDE.md)
+- Claude Code setup: [docs/setup/CLAUDE_CODE_MCP_SETUP.md](docs/setup/CLAUDE_CODE_MCP_SETUP.md)
+- Cursor setup: [docs/setup/CURSOR_MCP_SETUP.md](docs/setup/CURSOR_MCP_SETUP.md)
+- OpenCode setup: [docs/setup/OPENCODE_MCP_SETUP.md](docs/setup/OPENCODE_MCP_SETUP.md)
+- Gemini CLI setup: [docs/setup/GEMINI_CLI_MCP_SETUP.md](docs/setup/GEMINI_CLI_MCP_SETUP.md)
 - Distribution/release guide: [docs/DISTRIBUTION_RELEASE.md](docs/DISTRIBUTION_RELEASE.md)
 - Comparison with upstream: [docs/COMPARISON.md](docs/COMPARISON.md)
 

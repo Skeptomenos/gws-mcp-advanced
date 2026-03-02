@@ -4,7 +4,8 @@ Unit tests for MarkdownToDocsConverter.
 Tests the Markdown-to-Google-Docs-API-request conversion logic without mocking
 the Google API. These tests verify the request generation structure is correct.
 
-Spec Reference: specs/MARKDOWN_STEP_1_CORE.md, IMPLEMENTATION_PLAN_MARKDOWN.md:L106-115
+Spec Reference: specs/MARKDOWN_STEP_1_CORE.md,
+agent-docs/archive/legacy-root/IMPLEMENTATION_PLAN_MARKDOWN.md:L106-115
 """
 
 import importlib.util

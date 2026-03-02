@@ -2,8 +2,8 @@
 
 ## Metadata
 - Last Updated (UTC): 2026-03-01T21:00:38Z
-- Canonical Execution Plan: `/Users/david.helmus/repos/ai-dev/_infra/gws-mcp-advanced/gws-mcp-advanced/agent-docs/roadmap/PLAN.md`
-- Canonical Manual Matrix: `/Users/david.helmus/repos/ai-dev/_infra/gws-mcp-advanced/gws-mcp-advanced/agent-docs/testing/OPENCODE_MCP_MANUAL_TESTING.md`
+- Canonical Execution Plan: `agent-docs/roadmap/PLAN.md`
+- Canonical Manual Matrix: `agent-docs/testing/OPENCODE_MCP_MANUAL_TESTING.md`
 
 ## Current State
 

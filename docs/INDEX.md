@@ -12,6 +12,10 @@ Audience: users and operators running this MCP in clients such as OpenCode, Clau
 ## Guides
 
 - Setup and client configuration: [MCP Client Setup Guide](setup/MCP_CLIENT_SETUP_GUIDE.md)
+- Claude Code setup: [Claude Code MCP Setup](setup/CLAUDE_CODE_MCP_SETUP.md)
+- Cursor setup: [Cursor MCP Setup](setup/CURSOR_MCP_SETUP.md)
+- OpenCode setup: [OpenCode MCP Setup](setup/OPENCODE_MCP_SETUP.md)
+- Gemini CLI setup: [Gemini CLI MCP Setup](setup/GEMINI_CLI_MCP_SETUP.md)
 - Release/versioning/rollback: [Distribution and Release Guide](DISTRIBUTION_RELEASE.md)
 - Product overview and upstream comparison: [Comparison](COMPARISON.md)
 

@@ -5,7 +5,8 @@ This module provides the `MarkdownToDocsConverter` class that translates Markdow
 syntax into Google Docs API `batchUpdate` requests. It enables proper headings,
 lists, formatting (bold/italic), links, code blocks, and tables.
 
-The converter follows the "Index Tracker" pattern (IMPLEMENTATION_PLAN_MARKDOWN.md:L136-168)
+The converter follows the "Index Tracker" pattern
+(`agent-docs/archive/legacy-root/IMPLEMENTATION_PLAN_MARKDOWN.md`:L136-168)
 to track cursor position and generate requests with correct indices.
 
 Example:
@@ -399,7 +400,8 @@ class MarkdownToDocsConverter:
             - Text tokens are inserted directly via _insert_text()
             - Style tokens (strong_open/close, em_open/close) are handled in Task 1.5
             - Link tokens are handled in Task 1.6
-            - Follows the "Index Tracker" pattern from IMPLEMENTATION_PLAN_MARKDOWN.md:L136-168
+            - Follows the "Index Tracker" pattern from
+              `agent-docs/archive/legacy-root/IMPLEMENTATION_PLAN_MARKDOWN.md`:L136-168
         """
         if not token.children:
             return
@@ -450,7 +452,8 @@ class MarkdownToDocsConverter:
         generated in convert() after all text is buffered.
 
         For list items, prepends TAB characters based on nesting level. The Google Docs API
-        determines nesting from leading TABs (see IMPLEMENTATION_PLAN_MARKDOWN.md §6.3).
+        determines nesting from leading TABs (see
+        `agent-docs/archive/legacy-root/IMPLEMENTATION_PLAN_MARKDOWN.md` §6.3).
         """
         if not text:
             return
