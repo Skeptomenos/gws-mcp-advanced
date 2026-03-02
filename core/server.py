@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import os
 from collections.abc import Callable
@@ -21,7 +22,12 @@ from auth.config import (
 from auth.config import (
     set_transport_mode as _set_transport_mode,
 )
-from auth.google_auth import check_client_secrets, handle_auth_callback, start_auth_flow
+from auth.google_auth import (
+    check_client_secrets,
+    get_credentials,
+    handle_auth_callback,
+    initiate_auth_challenge,
+)
 from auth.middleware.auth_info import AuthInfoMiddleware
 from auth.middleware.session import MCPSessionMiddleware
 from auth.oauth21_session_store import get_oauth21_session_store, set_auth_provider
@@ -511,10 +517,21 @@ async def start_google_auth(service_name: str, user_google_email: str | None = U
         return f"**Authentication Error:** {error_message}"
 
     try:
-        auth_message = await start_auth_flow(
+        required_scopes = sorted(get_current_scopes())
+        credentials = await asyncio.to_thread(
+            get_credentials,
+            user_google_email=user_google_email,
+            required_scopes=required_scopes,
+            session_id=None,
+        )
+        if credentials and credentials.valid:
+            return f"Authentication already complete for '{user_google_email}'."
+
+        _, auth_message = await initiate_auth_challenge(
             user_google_email=user_google_email,
             service_name=service_name,
-            redirect_uri=get_oauth_redirect_uri_for_current_mode(),
+            required_scopes=required_scopes,
+            session_id=None,
         )
         return auth_message
     except Exception as e:

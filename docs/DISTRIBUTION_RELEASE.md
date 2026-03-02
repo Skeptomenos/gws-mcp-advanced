@@ -15,7 +15,7 @@ This project ships through PyPI and runs through `uvx`.
 uvx google-workspace-mcp-advanced --transport stdio
 
 # Pinned (recommended for teams)
-uvx google-workspace-mcp-advanced==1.0.0 --transport stdio
+uvx google-workspace-mcp-advanced==1.0.1 --transport stdio
 ```
 
 ## Prerequisite
@@ -57,7 +57,7 @@ uvx google-workspace-mcp-advanced==<good_version> --transport stdio
 
 1. `uv run python scripts/check_distribution_scope.py`
 2. `uv run pytest -q tests/unit/core/test_distribution_checks.py`
-3. `uvx google-workspace-mcp-advanced==1.0.0 --help`
+3. `uvx google-workspace-mcp-advanced==1.0.1 --help`
 
 ## Team Rollout Guidance
 

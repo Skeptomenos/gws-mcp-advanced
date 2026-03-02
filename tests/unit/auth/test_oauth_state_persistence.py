@@ -37,6 +37,18 @@ class TestOAuthStatePersistence:
             path = _get_oauth_states_file_path()
             assert path == os.path.join(self.temp_dir, "oauth_states.json")
 
+    def test_get_oauth_states_file_path_with_workspace_config_dir(self):
+        """Test that file path falls back to WORKSPACE_MCP_CONFIG_DIR when legacy var is unset."""
+        from auth.oauth21_session_store import _get_oauth_states_file_path
+
+        with patch.dict(
+            os.environ,
+            {"WORKSPACE_MCP_CONFIG_DIR": self.temp_dir},
+            clear=True,
+        ):
+            path = _get_oauth_states_file_path()
+            assert path == os.path.join(self.temp_dir, "oauth_states.json")
+
     def test_store_oauth_state_persists_to_disk(self):
         """Test that storing an OAuth state persists it to disk."""
         from auth.oauth21_session_store import OAuth21SessionStore

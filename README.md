@@ -34,7 +34,7 @@ uv --version
 uvx google-workspace-mcp-advanced --transport stdio
 
 # Pinned deterministic version (recommended for teams)
-uvx google-workspace-mcp-advanced==1.0.0 --transport stdio
+uvx google-workspace-mcp-advanced==1.0.1 --transport stdio
 ```
 
 ### 3. Add MCP client config
@@ -44,7 +44,7 @@ uvx google-workspace-mcp-advanced==1.0.0 --transport stdio
   "mcpServers": {
     "google-workspace": {
       "command": "uvx",
-      "args": ["google-workspace-mcp-advanced==1.0.0", "--transport", "stdio"],
+      "args": ["google-workspace-mcp-advanced==1.0.1", "--transport", "stdio"],
       "env": {
         "USER_GOOGLE_EMAIL": "your.email@company.com"
       }
@@ -63,9 +63,13 @@ uvx google-workspace-mcp-advanced==1.0.0 --transport stdio
 ### 5. Authenticate on first run
 
 1. Start the server from your MCP client.
-2. Open the OAuth URL shown by the server.
-3. Sign in and grant the requested scopes.
-4. Credentials are saved in `~/.config/gws-mcp-advanced/credentials/`.
+2. Run any Google tool (for example, list calendars or list Drive files).
+3. In `stdio` mode (default), complete the device flow:
+   - open the verification URL,
+   - enter the user code,
+   - retry your tool call.
+4. In `streamable-http`, complete callback auth by opening the OAuth URL shown by the server.
+5. Credentials are saved in `~/.config/gws-mcp-advanced/credentials/`.
 
 ## Local Development Mode
 
@@ -137,11 +141,13 @@ uv run google-workspace-mcp-advanced --tools gmail drive calendar
 | `GOOGLE_OAUTH_CLIENT_ID` | Yes | OAuth client ID |
 | `GOOGLE_OAUTH_CLIENT_SECRET` | Yes | OAuth client secret |
 | `WORKSPACE_MCP_CONFIG_DIR` | No | Config/credential directory override |
+| `WORKSPACE_MCP_AUTH_FLOW` | No | Auth interaction mode: `auto` (default), `device`, or `callback` |
 
 ## Documentation
 
 - User docs: [docs/INDEX.md](docs/INDEX.md)
 - Client setup hub: [docs/setup/MCP_CLIENT_SETUP_GUIDE.md](docs/setup/MCP_CLIENT_SETUP_GUIDE.md)
+- Authentication model: [docs/setup/AUTHENTICATION_MODEL.md](docs/setup/AUTHENTICATION_MODEL.md)
 - Claude Code setup: [docs/setup/CLAUDE_CODE_MCP_SETUP.md](docs/setup/CLAUDE_CODE_MCP_SETUP.md)
 - Cursor setup: [docs/setup/CURSOR_MCP_SETUP.md](docs/setup/CURSOR_MCP_SETUP.md)
 - OpenCode setup: [docs/setup/OPENCODE_MCP_SETUP.md](docs/setup/OPENCODE_MCP_SETUP.md)

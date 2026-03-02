@@ -2,17 +2,22 @@
 
 ## Living Document Controls
 1. Status: `IN_IMPLEMENTATION`
-2. Last Updated (UTC): `2026-03-02T13:53:12Z`
+2. Last Updated (UTC): `2026-03-02T16:31:22Z`
 3. Canonical Path: `/Users/david.helmus/repos/ai-dev/_infra/gws-mcp-advanced/gws-mcp-advanced/agent-docs/roadmap/PLAN.md`
-4. Active Branch: `codex/run-01-fastmcp-import-smoke`
+4. Active Branch: `main`
 5. Local Task Board: `/Users/david.helmus/repos/ai-dev/_infra/gws-mcp-advanced/gws-mcp-advanced/agent-docs/roadmap/TASKS.md`
-6. Overall Progress: `85.7%` (`18/21` issues `Done`; `0/21` `In Progress`; `3/21` `Not Started`)
+6. Overall Progress: `81.8%` (`18/22` issues `Done`; `1/22` `In Progress`; `3/22` `Not Started`)
 7. Update Cadence:
    1. update this file after every completed issue ID (`SEC-*`, `SAFE-*`, `DIST-*`, etc.),
    2. update this file at the end of each implementation session,
    3. update this file before opening or merging any PR,
    4. during active OpenCode/manual test loops, update this file immediately after each attempt result (`PASS`/`FAIL`/`BLOCKED`) and each local verification rerun.
 8. Source-of-Truth Rule: if another planning file conflicts with this document, this document wins until reconciliation.
+
+## Active Hotfix Track
+1. Authentication stabilization is now tracked in a dedicated living plan:
+   `/Users/david.helmus/repos/ai-dev/_infra/gws-mcp-advanced/gws-mcp-advanced/agent-docs/roadmap/AUTH_STABILIZATION_PLAN.md`
+2. Issue ID for this track: `AUTH-01` (P0, in progress).
 
 ## Implementation Readiness Verdict
 1. Verdict: `YES`, preflight is complete and implementation is active.
@@ -40,6 +45,7 @@
 
 | ID | Status | Owner | Branch | PR | Test Evidence | Last Update |
 |---|---|---|---|---|---|---|
+| AUTH-01 | In Progress | Codex | main | - | Device-flow fallback + auth-flow mode selection + state consumption semantics + path unification are implemented with full suite green (`628 passed`, `3 skipped`); manual MCP-hosted validation and release tasks are next | 2026-03-02 |
 | SEC-01 | Done | Codex | codex/run-01-fastmcp-import-smoke | - | Middleware now rejects unverified JWT identity by default; `WORKSPACE_MCP_ALLOW_UNVERIFIED_JWT=true` break-glass override; guardrail tests added | 2026-02-27 |
 | RUN-01 | Done | Codex | codex/run-01-fastmcp-import-smoke | - | `uv run python -c "import main"` + `uv run python -c "import fastmcp_server"`; CI startup smoke job added | 2026-02-27 |
 | SEC-02 | Done | Codex | codex/run-01-fastmcp-import-smoke | - | Shared secure atomic JSON writer added; credential and session persistence wired to strict permissions; security I/O tests added | 2026-02-27 |

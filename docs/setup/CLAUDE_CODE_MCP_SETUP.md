@@ -13,7 +13,7 @@ claude mcp add \
   --env USER_GOOGLE_EMAIL=your.email@company.com \
   google-workspace \
   -- \
-  uvx google-workspace-mcp-advanced==1.0.0 --transport stdio
+  uvx google-workspace-mcp-advanced==1.0.1 --transport stdio
 ```
 
 List configured servers:
@@ -31,7 +31,7 @@ Create/update `.mcp.json` in your repo:
   "mcpServers": {
     "google-workspace": {
       "command": "uvx",
-      "args": ["google-workspace-mcp-advanced==1.0.0", "--transport", "stdio"],
+      "args": ["google-workspace-mcp-advanced==1.0.1", "--transport", "stdio"],
       "env": {
         "USER_GOOGLE_EMAIL": "your.email@company.com"
       }

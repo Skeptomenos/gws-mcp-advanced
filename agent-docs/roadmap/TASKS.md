@@ -8,8 +8,8 @@ Status dashboard: `/Users/david.helmus/repos/ai-dev/_infra/gws-mcp-advanced/gws-
 Dry-run tracker: `/Users/david.helmus/repos/ai-dev/_infra/gws-mcp-advanced/gws-mcp-advanced/agent-docs/roadmap/DRY_RUN_MATRIX.md`
 
 ## Metadata
-- Last Updated (UTC): 2026-03-02T13:53:12Z
-- Active Branch: `codex/run-01-fastmcp-import-smoke`
+- Last Updated (UTC): 2026-03-02T16:31:22Z
+- Active Branch: `main`
 - Owner: Codex
 
 ## Status Legend
@@ -25,6 +25,7 @@ Dry-run tracker: `/Users/david.helmus/repos/ai-dev/_infra/gws-mcp-advanced/gws-m
 
 | ID | Wave | Status | Next Action |
 |---|---|---|---|
+| AUTH-01 | Hotfix | In Progress | Run manual MCP-hosted auth validation, close remaining WS-01/WS-04 gaps, then publish next PyPI release |
 | SEC-01 | 1 | Done | Completed: default-deny unverified JWT identity, break-glass env override, and guardrail tests |
 | RUN-01 | 1 | Done | Completed: import path fixed and CI startup smoke added |
 | SEC-02 | 1 | Done | Completed: centralized secure atomic persistence + permission enforcement + tests |
@@ -55,6 +56,15 @@ Dry-run tracker: `/Users/david.helmus/repos/ai-dev/_infra/gws-mcp-advanced/gws-m
 - [x] Add `agent-docs/roadmap/DRY_RUN_MATRIX.md`
 - [x] Add local task system in this file (`TASKS.md`)
 - [x] Reconcile stale roadmap/testing docs (`DOC-01`) (`ROADMAP.md`, `TESTING_PLAN_MARKDOWN.md`, legacy reports)
+
+## Hotfix Tasks (AUTH-01)
+
+- [ ] Complete WS-01 callback flow reliability tasks
+- [x] Complete WS-02 persistence path unification tasks
+- [x] Complete WS-03 state handling and error clarity tasks
+- [ ] Complete WS-04 credential read/refresh confidence tasks
+- [x] Complete WS-05 device flow fallback tasks
+- [ ] Complete WS-06 verification and release tasks
 
 ## Wave 1 Tasks (Security + Runtime)
 

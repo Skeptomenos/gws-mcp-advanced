@@ -18,6 +18,7 @@ from typing import Any, Optional, Protocol
 from fastmcp.server.auth import AccessToken
 from google.oauth2.credentials import Credentials
 
+from auth.config import get_credentials_directory
 from auth.security_io import atomic_write_json, ensure_secure_directory
 
 logger = logging.getLogger(__name__)
@@ -31,21 +32,28 @@ class _SecretValueProtocol(Protocol):
 
 def _get_oauth_states_file_path() -> str:
     """Get the file path for persisting OAuth states."""
-    # Use the same directory as credentials
+    base_dir = _get_oauth_persistence_base_dir()
+    return os.path.join(base_dir, "oauth_states.json")
+
+
+def _get_oauth_persistence_base_dir() -> str:
+    """Resolve the base directory for OAuth state and session persistence."""
+    # Backward-compatibility override kept for existing deployments.
     env_dir = os.getenv("GOOGLE_MCP_CREDENTIALS_DIR")
     if env_dir:
         base_dir = env_dir
     else:
-        home_dir = os.path.expanduser("~")
-        if home_dir and home_dir != "~":
-            base_dir = os.path.join(home_dir, ".config", "google-workspace-mcp")
-        else:
-            base_dir = os.path.join(os.getcwd(), ".config", "google-workspace-mcp")
+        base_dir = get_credentials_directory()
 
     # Ensure directory exists with secure permissions
     ensure_secure_directory(base_dir)
+    return base_dir
 
-    return os.path.join(base_dir, "oauth_states.json")
+
+def _get_device_flows_file_path() -> str:
+    """Get the file path for persisting pending OAuth device flows."""
+    base_dir = _get_oauth_persistence_base_dir()
+    return os.path.join(base_dir, "pending_device_flows.json")
 
 
 def _normalize_expiry_to_naive_utc(expiry: Any | None) -> datetime | None:
@@ -221,14 +229,19 @@ class OAuth21SessionStore:
         self._mcp_session_mapping: dict[str, str] = {}  # Maps FastMCP session ID -> user email
         self._session_auth_binding: dict[str, str] = {}  # Maps session ID -> authenticated user email (immutable)
         self._oauth_states: dict[str, dict[str, Any]] = {}
+        self._pending_device_flows: dict[str, dict[str, Any]] = {}
         self._lock = RLock()
         self._states_file_path = _get_oauth_states_file_path()
+        self._device_flows_file_path = _get_device_flows_file_path()
 
         # Load persisted OAuth states on initialization
         self._load_oauth_states_from_disk()
 
         # Load persisted session mappings on initialization
         self._load_session_mappings_from_disk()
+
+        # Load pending device flows on initialization
+        self._load_device_flows_from_disk()
 
     def _cleanup_expired_oauth_states_locked(self):
         """Remove expired OAuth state entries. Caller must hold lock."""
@@ -242,6 +255,19 @@ class OAuth21SessionStore:
                 "Removed expired OAuth state: %s",
                 state[:8] if len(state) > 8 else state,
             )
+
+    def _cleanup_expired_device_flows_locked(self):
+        """Remove expired pending device flows. Caller must hold lock."""
+        now = datetime.now(timezone.utc)
+        expired_users = []
+        for user_email, flow_data in self._pending_device_flows.items():
+            expires_at = flow_data.get("expires_at")
+            if isinstance(expires_at, datetime) and expires_at <= now:
+                expired_users.append(user_email)
+
+        for user_email in expired_users:
+            del self._pending_device_flows[user_email]
+            logger.info("Removed expired pending device flow for %s", user_email)
 
     def _load_oauth_states_from_disk(self):
         """Load persisted OAuth states from disk on initialization."""
@@ -384,6 +410,64 @@ class OAuth21SessionStore:
         except Exception as e:
             logger.error("Unexpected error persisting session mappings: %s", e)
 
+    def _load_device_flows_from_disk(self):
+        """Load pending device auth flows from disk on initialization."""
+        try:
+            if not os.path.exists(self._device_flows_file_path):
+                logger.debug("No persisted pending device flows file found at %s", self._device_flows_file_path)
+                return
+
+            with open(self._device_flows_file_path) as f:
+                persisted_data = json.load(f)
+
+            if not isinstance(persisted_data, dict):
+                logger.warning("Invalid pending device flows file format, ignoring")
+                return
+
+            loaded_count = 0
+            for user_email, flow_data in persisted_data.items():
+                try:
+                    if "expires_at" in flow_data and flow_data["expires_at"]:
+                        flow_data["expires_at"] = datetime.fromisoformat(flow_data["expires_at"])
+                    if "created_at" in flow_data and flow_data["created_at"]:
+                        flow_data["created_at"] = datetime.fromisoformat(flow_data["created_at"])
+                    self._pending_device_flows[user_email] = flow_data
+                    loaded_count += 1
+                except (ValueError, TypeError) as e:
+                    logger.warning("Failed to parse pending device flow for %s: %s", user_email, e)
+
+            self._cleanup_expired_device_flows_locked()
+            logger.info("Loaded %d pending device flows from disk", loaded_count)
+        except json.JSONDecodeError as e:
+            logger.warning("Pending device flows file corrupted, starting fresh: %s", e)
+        except PermissionError as e:
+            logger.error("Permission denied reading pending device flows file: %s", e)
+        except OSError as e:
+            logger.warning("Failed to read pending device flows file: %s", e)
+        except Exception as e:
+            logger.error("Unexpected error loading pending device flows: %s", e)
+
+    def _save_device_flows_to_disk(self):
+        """Persist pending device auth flows to disk. Caller must hold lock."""
+        try:
+            serializable_data = {}
+            for user_email, flow_data in self._pending_device_flows.items():
+                serializable_data[user_email] = {
+                    "device_code": flow_data.get("device_code"),
+                    "user_code": flow_data.get("user_code"),
+                    "verification_url": flow_data.get("verification_url"),
+                    "verification_url_complete": flow_data.get("verification_url_complete"),
+                    "interval": flow_data.get("interval"),
+                    "expires_at": flow_data["expires_at"].isoformat() if flow_data.get("expires_at") else None,
+                    "created_at": flow_data["created_at"].isoformat() if flow_data.get("created_at") else None,
+                }
+            atomic_write_json(self._device_flows_file_path, serializable_data)
+            logger.debug("Persisted %d pending device flows to disk", len(serializable_data))
+        except OSError as e:
+            logger.error("Failed to persist pending device flows to disk: %s", e)
+        except Exception as e:
+            logger.error("Unexpected error persisting pending device flows: %s", e)
+
     def store_oauth_state(
         self,
         state: str,
@@ -467,6 +551,100 @@ class OAuth21SessionStore:
                 state[:8] if len(state) > 8 else state,
             )
             return state_info
+
+    def validate_oauth_state(self, state: str, session_id: str | None = None) -> dict[str, Any]:
+        """
+        Validate an OAuth state value without consuming it.
+
+        This supports retryable callback processing where state should only be consumed
+        after token exchange succeeds.
+        """
+        if not state:
+            raise ValueError("Missing OAuth state parameter")
+
+        with self._lock:
+            self._cleanup_expired_oauth_states_locked()
+            state_info = self._oauth_states.get(state)
+
+            if not state_info:
+                logger.error("SECURITY: OAuth callback received unknown or expired state")
+                raise ValueError("Invalid or expired OAuth state parameter")
+
+            bound_session = state_info.get("session_id")
+            if bound_session and session_id and bound_session != session_id:
+                del self._oauth_states[state]
+                self._save_oauth_states_to_disk()
+                logger.error(
+                    "SECURITY: OAuth state session mismatch (expected %s, got %s)",
+                    bound_session,
+                    session_id,
+                )
+                raise ValueError("OAuth state does not match the initiating session")
+
+            return state_info
+
+    def consume_oauth_state(self, state: str) -> None:
+        """Consume an OAuth state value after successful callback processing."""
+        if not state:
+            raise ValueError("Missing OAuth state parameter")
+
+        with self._lock:
+            self._cleanup_expired_oauth_states_locked()
+            if state in self._oauth_states:
+                del self._oauth_states[state]
+                self._save_oauth_states_to_disk()
+                logger.debug("Consumed OAuth state %s", state[:8] if len(state) > 8 else state)
+
+    def store_pending_device_flow(
+        self,
+        user_email: str,
+        device_code: str,
+        user_code: str,
+        verification_url: str,
+        verification_url_complete: str | None,
+        interval: int,
+        expires_at: datetime,
+    ) -> None:
+        """Store pending OAuth device flow metadata for a user."""
+        if not user_email:
+            raise ValueError("user_email must be provided")
+        if not device_code:
+            raise ValueError("device_code must be provided")
+
+        with self._lock:
+            self._cleanup_expired_device_flows_locked()
+            self._pending_device_flows[user_email] = {
+                "device_code": device_code,
+                "user_code": user_code,
+                "verification_url": verification_url,
+                "verification_url_complete": verification_url_complete,
+                "interval": interval,
+                "created_at": datetime.now(timezone.utc),
+                "expires_at": expires_at,
+            }
+            self._save_device_flows_to_disk()
+
+    def get_pending_device_flow(self, user_email: str) -> dict[str, Any] | None:
+        """Get pending OAuth device flow metadata for a user."""
+        if not user_email:
+            return None
+
+        with self._lock:
+            self._cleanup_expired_device_flows_locked()
+            flow_data = self._pending_device_flows.get(user_email)
+            if not flow_data:
+                return None
+            return dict(flow_data)
+
+    def clear_pending_device_flow(self, user_email: str) -> None:
+        """Clear pending OAuth device flow metadata for a user."""
+        if not user_email:
+            return
+
+        with self._lock:
+            if user_email in self._pending_device_flows:
+                del self._pending_device_flows[user_email]
+                self._save_device_flows_to_disk()
 
     def store_session(
         self,

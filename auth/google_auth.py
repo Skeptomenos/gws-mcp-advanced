@@ -4,10 +4,12 @@ import asyncio
 import json
 import logging
 import os
+from datetime import datetime, timedelta, timezone
 from typing import Any
 from urllib.parse import parse_qs, urlparse
 
 import jwt
+import requests
 from google.auth.exceptions import RefreshError
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
@@ -19,12 +21,15 @@ from auth.config import (
     GOOGLE_WORKSPACE_MCP_APP_NAME,
     get_credentials_directory,
     get_google_oauth_config,
+    get_transport_mode,
     is_stateless_mode,
+)
+from auth.config import (
+    get_oauth_redirect_uri as get_oauth_redirect_uri_for_current_mode,
 )
 from auth.credential_store import get_credential_store
 from auth.oauth21_session_store import get_oauth21_session_store
 from auth.scopes import SCOPES, get_current_scopes  # noqa
-from core.context import get_fastmcp_session_id
 from core.errors import AuthenticationError, GoogleAuthenticationError
 
 # Try to import FastMCP dependencies (may not be available in all environments)
@@ -70,6 +75,12 @@ else:
 # --- Helper Functions ---
 
 DEFAULT_TOKEN_URI = "https://oauth2.googleapis.com/token"
+DEVICE_AUTH_ENDPOINT = "https://oauth2.googleapis.com/device/code"
+DEVICE_TOKEN_GRANT_TYPE = "urn:ietf:params:oauth:grant-type:device_code"
+AUTH_FLOW_MODE_ENV = "WORKSPACE_MCP_AUTH_FLOW"
+AUTH_FLOW_AUTO = "auto"
+AUTH_FLOW_CALLBACK = "callback"
+AUTH_FLOW_DEVICE = "device"
 
 
 def _token_uri_or_default(credentials: Credentials) -> str:
@@ -85,6 +96,344 @@ def _credential_scopes(credentials: Credentials) -> list[str]:
 def _has_required_scopes(credentials: Credentials, required_scopes: list[str]) -> bool:
     granted_scopes = _credential_scopes(credentials)
     return all(scope in granted_scopes for scope in required_scopes)
+
+
+def _get_fastmcp_session_id_safe() -> str | None:
+    """Resolve FastMCP session ID without creating import-time cycles."""
+    try:
+        from core.context import get_fastmcp_session_id
+
+        return get_fastmcp_session_id()
+    except Exception:
+        return None
+
+
+def _get_auth_flow_mode() -> str:
+    """Return requested auth flow mode from environment, defaulting to auto."""
+    mode = os.getenv(AUTH_FLOW_MODE_ENV, AUTH_FLOW_AUTO).strip().lower()
+    if mode in {AUTH_FLOW_AUTO, AUTH_FLOW_CALLBACK, AUTH_FLOW_DEVICE}:
+        return mode
+    logger.warning("Unknown %s value '%s'; falling back to '%s'", AUTH_FLOW_MODE_ENV, mode, AUTH_FLOW_AUTO)
+    return AUTH_FLOW_AUTO
+
+
+def _get_effective_auth_flow_mode() -> str:
+    """
+    Resolve effective auth mode.
+
+    In `auto` mode, stdio prefers device flow (more robust with MCP-hosted subprocess lifecycles),
+    while streamable-http uses callback flow.
+    """
+    configured_mode = _get_auth_flow_mode()
+    if configured_mode in {AUTH_FLOW_CALLBACK, AUTH_FLOW_DEVICE}:
+        return configured_mode
+
+    transport_mode = get_transport_mode()
+    return AUTH_FLOW_DEVICE if transport_mode == "stdio" else AUTH_FLOW_CALLBACK
+
+
+def _resolve_client_id_and_secret() -> tuple[str, str | None]:
+    """Resolve OAuth client credentials for callback/device flows."""
+    config = load_client_secrets_from_env() or {}
+    client_cfg = config.get("web") or config.get("installed") or {}
+    client_id = client_cfg.get("client_id")
+    client_secret = client_cfg.get("client_secret")
+    if not client_id:
+        raise AuthenticationError("OAuth client ID is missing. Set GOOGLE_OAUTH_CLIENT_ID.")
+    return client_id, client_secret
+
+
+def resolve_oauth_redirect_uri_for_auth_flow() -> str:
+    """
+    Resolve redirect URI for callback-based auth and ensure callback availability in stdio mode.
+    """
+    transport_mode = get_transport_mode()
+    if transport_mode != "stdio":
+        return get_oauth_redirect_uri_for_current_mode()
+
+    from auth.oauth_callback_server import start_oauth_callback_server
+
+    success, error_msg, oauth_redirect_uri = start_oauth_callback_server()
+    if not success or not oauth_redirect_uri:
+        error_detail = f" ({error_msg})" if error_msg else ""
+        raise GoogleAuthenticationError(f"Cannot initiate OAuth flow - callback server unavailable{error_detail}")
+    return oauth_redirect_uri
+
+
+def _build_device_auth_message(
+    user_google_email: str,
+    service_name: str,
+    user_code: str,
+    verification_url: str,
+    expires_in_seconds: int,
+    verification_url_complete: str | None = None,
+    status_hint: str | None = None,
+) -> str:
+    minutes = max(1, expires_in_seconds // 60)
+    lines = [
+        f"**ACTION REQUIRED: Google Device Authentication Needed for {service_name} ('{user_google_email}')**",
+        "This MCP is using device authorization flow for reliability in stdio/agent-hosted environments.",
+    ]
+
+    if status_hint == "authorization_pending":
+        lines.append("Authorization is still pending.")
+    elif status_hint == "slow_down":
+        lines.append("Google requested slower polling; authorization is still pending.")
+    elif status_hint == "expired_token":
+        lines.append("Previous device code expired; a new code is provided below.")
+    elif status_hint == "access_denied":
+        lines.append("Previous device code was denied; a new code is provided below.")
+
+    lines.extend(
+        [
+            "",
+            f"Verification URL: {verification_url}",
+            f"User Code: `{user_code}`",
+        ]
+    )
+
+    if verification_url_complete:
+        lines.append(f"Direct Verification Link: {verification_url_complete}")
+
+    lines.extend(
+        [
+            f"Code expires in about {minutes} minute(s).",
+            "After completing authorization in the browser, retry your original command in the MCP client.",
+            "Use the same Google account expected for this MCP server.",
+        ]
+    )
+
+    return "\n".join(lines)
+
+
+def _start_or_resume_device_auth_flow(
+    user_google_email: str,
+    service_name: str,
+    required_scopes: list[str],
+    status_hint: str | None = None,
+) -> str:
+    """
+    Create or reuse a pending device flow for a user and return user instructions.
+    """
+    store = get_oauth21_session_store()
+    pending = store.get_pending_device_flow(user_google_email)
+
+    if pending and status_hint in {None, "authorization_pending", "slow_down"}:
+        expires_at = pending.get("expires_at")
+        remaining_seconds = 900
+        if isinstance(expires_at, datetime):
+            remaining_seconds = max(1, int((expires_at - datetime.now(timezone.utc)).total_seconds()))
+        return _build_device_auth_message(
+            user_google_email=user_google_email,
+            service_name=service_name,
+            user_code=pending.get("user_code", "<unknown>"),
+            verification_url=pending.get("verification_url", "https://www.google.com/device"),
+            verification_url_complete=pending.get("verification_url_complete"),
+            expires_in_seconds=remaining_seconds,
+            status_hint=status_hint,
+        )
+
+    client_id, client_secret = _resolve_client_id_and_secret()
+    scope_string = " ".join(sorted(set(required_scopes)))
+    payload = {
+        "client_id": client_id,
+        "scope": scope_string,
+    }
+    if client_secret:
+        payload["client_secret"] = client_secret
+
+    response = requests.post(DEVICE_AUTH_ENDPOINT, data=payload, timeout=15)
+    if response.status_code >= 400:
+        error_details = response.text
+        try:
+            error_payload = response.json()
+            error_details = f"{error_payload.get('error')}: {error_payload.get('error_description') or response.text}"
+        except ValueError:
+            pass
+        raise GoogleAuthenticationError(f"Failed to start device authorization flow: {error_details}")
+
+    data = response.json()
+    device_code = data.get("device_code")
+    user_code = data.get("user_code")
+    verification_url = data.get("verification_url") or data.get("verification_uri")
+    verification_url_complete = data.get("verification_url_complete")
+    interval = int(data.get("interval", 5))
+    expires_in = int(data.get("expires_in", 1800))
+
+    if not device_code or not user_code or not verification_url:
+        raise GoogleAuthenticationError("Device authorization response from Google is missing required fields.")
+
+    expires_at = datetime.now(timezone.utc) + timedelta(seconds=expires_in)
+    store.store_pending_device_flow(
+        user_email=user_google_email,
+        device_code=device_code,
+        user_code=user_code,
+        verification_url=verification_url,
+        verification_url_complete=verification_url_complete,
+        interval=interval,
+        expires_at=expires_at,
+    )
+
+    return _build_device_auth_message(
+        user_google_email=user_google_email,
+        service_name=service_name,
+        user_code=user_code,
+        verification_url=verification_url,
+        verification_url_complete=verification_url_complete,
+        expires_in_seconds=expires_in,
+        status_hint=status_hint,
+    )
+
+
+async def _poll_pending_device_auth_flow(
+    user_google_email: str,
+    required_scopes: list[str],
+    session_id: str | None = None,
+) -> tuple[Credentials | None, str | None]:
+    """
+    Poll pending device flow once.
+
+    Returns:
+        (credentials, status_hint)
+        - credentials is set when token exchange succeeds
+        - status_hint indicates pending/slow_down/expired_token/access_denied/error
+    """
+    store = get_oauth21_session_store()
+    pending = store.get_pending_device_flow(user_google_email)
+    if not pending:
+        return None, None
+
+    device_code = pending.get("device_code")
+    if not device_code:
+        store.clear_pending_device_flow(user_google_email)
+        return None, "error:missing_device_code"
+
+    client_id, client_secret = _resolve_client_id_and_secret()
+    payload = {
+        "client_id": client_id,
+        "device_code": device_code,
+        "grant_type": DEVICE_TOKEN_GRANT_TYPE,
+    }
+    if client_secret:
+        payload["client_secret"] = client_secret
+
+    response = requests.post(DEFAULT_TOKEN_URI, data=payload, timeout=15)
+    if response.status_code < 400:
+        token_response = response.json()
+        access_token = token_response.get("access_token")
+        refresh_token = token_response.get("refresh_token")
+        expires_in = int(token_response.get("expires_in", 3600))
+        scope_field = token_response.get("scope")
+        scope_list = scope_field.split() if scope_field else required_scopes
+
+        if not access_token:
+            return None, "error:missing_access_token"
+
+        expiry = datetime.now(timezone.utc) + timedelta(seconds=max(expires_in, 60))
+        credentials = Credentials(
+            token=access_token,
+            refresh_token=refresh_token,
+            token_uri=DEFAULT_TOKEN_URI,
+            client_id=client_id,
+            client_secret=client_secret,
+            scopes=scope_list,
+            expiry=expiry,
+        )
+
+        resolved_email = user_google_email
+        user_info = await get_user_info(credentials)
+        if user_info and user_info.get("email"):
+            resolved_email = user_info["email"]
+
+        if resolved_email.lower() != user_google_email.lower():
+            store.clear_pending_device_flow(user_google_email)
+            raise GoogleAuthenticationError(
+                f"Device auth completed for '{resolved_email}', but MCP requested '{user_google_email}'. "
+                "Please retry using the intended account."
+            )
+
+        credential_store = get_credential_store()
+        credential_store.store_credential(resolved_email, credentials)
+
+        store.store_session(
+            user_email=resolved_email,
+            access_token=access_token,
+            refresh_token=refresh_token,
+            token_uri=DEFAULT_TOKEN_URI,
+            client_id=client_id,
+            client_secret=client_secret,
+            scopes=scope_list,
+            expiry=expiry,
+            mcp_session_id=session_id,
+            issuer="https://accounts.google.com",
+        )
+        store.clear_pending_device_flow(user_google_email)
+        return credentials, None
+
+    status_hint = "error:unknown"
+    try:
+        error_payload = response.json()
+        error_code = error_payload.get("error")
+        error_description = error_payload.get("error_description")
+        if error_code in {"authorization_pending", "slow_down"}:
+            status_hint = error_code
+        elif error_code in {"expired_token", "access_denied"}:
+            status_hint = error_code
+            store.clear_pending_device_flow(user_google_email)
+        else:
+            status_hint = f"error:{error_code}:{error_description}"
+    except ValueError:
+        status_hint = f"error:http_{response.status_code}:{response.text}"
+
+    return None, status_hint
+
+
+async def initiate_auth_challenge(
+    user_google_email: str,
+    service_name: str,
+    required_scopes: list[str],
+    session_id: str | None = None,
+) -> tuple[Credentials | None, str]:
+    """
+    Initiate or resume authentication based on configured auth-flow mode.
+
+    Returns:
+        (credentials, message)
+        - credentials: set when auth is already complete (e.g., device flow finalized)
+        - message: actionable instructions when user interaction is required
+    """
+    effective_auth_mode = _get_effective_auth_flow_mode()
+
+    if effective_auth_mode == AUTH_FLOW_DEVICE:
+        credentials, device_status = await _poll_pending_device_auth_flow(
+            user_google_email=user_google_email,
+            required_scopes=required_scopes,
+            session_id=session_id,
+        )
+        if credentials and credentials.valid:
+            return credentials, f"Authentication completed successfully for '{user_google_email}'."
+
+        if device_status and device_status.startswith("error:"):
+            raise GoogleAuthenticationError(
+                "Device authorization polling failed. "
+                f"Details: {device_status}. Try running the command again to restart auth."
+            )
+
+        challenge_message = _start_or_resume_device_auth_flow(
+            user_google_email=user_google_email,
+            service_name=service_name,
+            required_scopes=required_scopes,
+            status_hint=device_status,
+        )
+        return None, challenge_message
+
+    oauth_redirect_uri = resolve_oauth_redirect_uri_for_auth_flow()
+    auth_message = await start_auth_flow(
+        user_google_email=user_google_email,
+        service_name=service_name,
+        redirect_uri=oauth_redirect_uri,
+    )
+    return None, auth_message
 
 
 def _find_any_credentials(
@@ -348,7 +697,7 @@ async def start_auth_flow(
 
         session_id = None
         try:
-            session_id = get_fastmcp_session_id()
+            session_id = _get_fastmcp_session_id_safe()
         except Exception as e:
             logger.debug(f"Could not retrieve FastMCP session ID for state binding: {e}")
 
@@ -449,7 +798,7 @@ async def handle_auth_callback(
 
         if not state:
             raise ValueError("OAuth state parameter is missing or invalid")
-        state_info = store.validate_and_consume_oauth_state(state, session_id=session_id)
+        state_info = store.validate_oauth_state(state, session_id=session_id)
         logger.debug(
             "Validated OAuth callback state %s for session %s",
             (state[:8] if state else "<missing>"),
@@ -500,6 +849,9 @@ async def handle_auth_callback(
         # If session_id is provided, also save to session cache for compatibility
         if session_id:
             save_credentials_to_session(session_id, credentials)
+
+        # Consume the state only after callback processing succeeds.
+        store.consume_oauth_state(state)
 
         return user_google_email, credentials
 
@@ -839,7 +1191,7 @@ async def get_authenticated_google_service(
     if not session_id:
         try:
             # First try context variable (works in async context)
-            session_id = get_fastmcp_session_id()
+            session_id = _get_fastmcp_session_id_safe()
             if session_id:
                 logger.debug(f"[{tool_name}] Got FastMCP session ID from context: {session_id}")
             else:
@@ -885,21 +1237,14 @@ async def get_authenticated_google_service(
         logger.warning(f"[{tool_name}] No valid credentials. Email: '{user_google_email}'.")
         logger.info(f"[{tool_name}] Valid email '{user_google_email}' provided, initiating auth flow.")
 
-        from auth.oauth_callback_server import start_oauth_callback_server
-
-        success, error_msg, oauth_redirect_uri = start_oauth_callback_server()
-        if not success or not oauth_redirect_uri:
-            error_detail = f" ({error_msg})" if error_msg else ""
-            raise GoogleAuthenticationError(f"Cannot initiate OAuth flow - callback server unavailable{error_detail}")
-
-        auth_response = await start_auth_flow(
+        credentials, auth_response = await initiate_auth_challenge(
             user_google_email=user_google_email,
             service_name=f"Google {service_name.title()}",
-            redirect_uri=oauth_redirect_uri,
+            required_scopes=required_scopes,
+            session_id=session_id,
         )
-
-        # Extract the auth URL from the response and raise with it
-        raise GoogleAuthenticationError(auth_response)
+        if not credentials or not credentials.valid:
+            raise GoogleAuthenticationError(auth_response)
 
     try:
         service = build(service_name, version, credentials=credentials)

@@ -1,6 +1,6 @@
 {
   "name": "google-workspace-mcp-advanced",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "npm launcher for the google-workspace-mcp-advanced Python MCP server",
   "license": "MIT",
   "type": "commonjs",

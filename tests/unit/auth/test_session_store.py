@@ -202,6 +202,75 @@ class TestOAuth21SessionStoreOAuthStates:
         with pytest.raises(ValueError, match="Missing"):
             store.validate_and_consume_oauth_state("")
 
+    def test_validate_oauth_state_without_consuming(self, store):
+        """validate_oauth_state keeps state available until consumed."""
+        state = "non_consuming_state"
+        store.store_oauth_state(state, session_id="mcp_session_123")
+
+        result = store.validate_oauth_state(state, session_id="mcp_session_123")
+        assert result["session_id"] == "mcp_session_123"
+
+        # State should still be available when not explicitly consumed.
+        consumed = store.validate_and_consume_oauth_state(state, session_id="mcp_session_123")
+        assert consumed["session_id"] == "mcp_session_123"
+
+    def test_consume_oauth_state_explicitly(self, store):
+        """consume_oauth_state removes state after successful callback processing."""
+        state = "explicit_consume_state"
+        store.store_oauth_state(state)
+
+        store.validate_oauth_state(state)
+        store.consume_oauth_state(state)
+
+        with pytest.raises(ValueError, match="Invalid or expired"):
+            store.validate_oauth_state(state)
+
+
+class TestOAuth21SessionStoreDeviceFlowPersistence:
+    """Tests for pending device flow persistence and cleanup."""
+
+    @pytest.fixture
+    def store(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("GOOGLE_MCP_CREDENTIALS_DIR", str(tmp_path))
+        return OAuth21SessionStore()
+
+    def test_store_and_load_pending_device_flow(self, store, tmp_path, monkeypatch):
+        """Pending device flow metadata persists across store recreation."""
+        expires_at = datetime.now(timezone.utc) + timedelta(minutes=15)
+        store.store_pending_device_flow(
+            user_email="user@example.com",
+            device_code="device-code-123",
+            user_code="ABCD-EFGH",
+            verification_url="https://www.google.com/device",
+            verification_url_complete="https://www.google.com/device?user_code=ABCD-EFGH",
+            interval=5,
+            expires_at=expires_at,
+        )
+
+        monkeypatch.setenv("GOOGLE_MCP_CREDENTIALS_DIR", str(tmp_path))
+        store2 = OAuth21SessionStore()
+        pending = store2.get_pending_device_flow("user@example.com")
+
+        assert pending is not None
+        assert pending["device_code"] == "device-code-123"
+        assert pending["user_code"] == "ABCD-EFGH"
+        assert pending["verification_url_complete"] == "https://www.google.com/device?user_code=ABCD-EFGH"
+
+    def test_expired_pending_device_flow_is_cleaned_up(self, store):
+        """Expired pending device flows are removed during read."""
+        expired = datetime.now(timezone.utc) - timedelta(seconds=10)
+        store.store_pending_device_flow(
+            user_email="expired@example.com",
+            device_code="expired-device-code",
+            user_code="WXYZ-1234",
+            verification_url="https://www.google.com/device",
+            verification_url_complete=None,
+            interval=5,
+            expires_at=expired,
+        )
+
+        assert store.get_pending_device_flow("expired@example.com") is None
+
 
 class TestOAuth21SessionStoreCredentialsValidation:
     """Tests for credential access validation."""

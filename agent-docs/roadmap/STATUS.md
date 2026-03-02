@@ -5,9 +5,9 @@ Detailed implementation scope and issue-level tracking live in:
 `/Users/david.helmus/repos/ai-dev/_infra/gws-mcp-advanced/gws-mcp-advanced/agent-docs/roadmap/PLAN.md`
 
 ## Metadata
-- Last Updated (UTC): 2026-03-02T13:53:12Z
-- Active Branch: `codex/run-01-fastmcp-import-smoke`
-- Overall Status: Wave 3 is complete (`RM-01`..`RM-04` closed) and pre-merge kitchen-sink gate `OP-70` is PASS. OpenCode matrix is `81 PASS`, `0 FAIL`, `1 BLOCKED` (`OP-06` deferred by product decision). PyPI `1.0.0` is published and uvx-first distribution is complete. npm/npx lane is de-scoped by product decision.
+- Last Updated (UTC): 2026-03-02T16:31:22Z
+- Active Branch: `main`
+- Overall Status: Authentication stabilization hotfix `AUTH-01` implementation is complete for core code paths and is now `READY_FOR_MANUAL_TEST`; release tasks remain. Canonical execution plan: `/Users/david.helmus/repos/ai-dev/_infra/gws-mcp-advanced/gws-mcp-advanced/agent-docs/roadmap/AUTH_STABILIZATION_PLAN.md`.
 - Implementation Readiness: `YES`
 
 ## Baseline Verification Snapshot
@@ -15,9 +15,9 @@ Detailed implementation scope and issue-level tracking live in:
 | Command | Result | Notes |
 |---|---|---|
 | `uv run ruff check .` | Pass | No lint violations |
-| `uv run ruff format --check .` | Pass | Formatter drift corrected |
+| `uv run ruff format --check .` | Pass | `151` files unchanged |
 | `uv run pyright --project pyrightconfig.json` | Pass | Blocking source-scoped type gate is green (0 errors) |
-| `uv run pytest` | Pass | 615 passed, 3 skipped |
+| `uv run pytest` | Pass | 628 passed, 3 skipped |
 | `uv run python scripts/check_dry_run_defaults.py` | Pass | Dry-run default static guard is green |
 | `uv run python scripts/check_tool_decorators.py` | Pass | Decorator-order static guard is green |
 | `uv run python scripts/check_distribution_scope.py` | Pass | Canonical npm package references are guarded (`google-workspace-mcp-advanced`) |
@@ -36,12 +36,12 @@ Detailed implementation scope and issue-level tracking live in:
 | Wave 6 | Distribution validation and rollout | Done | uvx stable/pinned validation is complete (`DT-01`..`DT-03`, `DT-08`) |
 
 ## Current Focus
-1. Commit/push uvx-first docs and tracking updates.
-2. Merge branch to `main`.
-3. Continue roadmap wave 7 (`RM-05`..`RM-07`) as future enhancements.
+1. Execute manual MCP-hosted auth validation (`WORKSPACE_MCP_AUTH_FLOW=auto`) in OpenCode/Claude Code.
+2. Close remaining AUTH-01 gaps (WS-01.5 parity evidence, WS-04 credential-source diagnostics/tests).
+3. Prepare and publish next PyPI release after manual verification.
 
 ## Open Blockers
-1. `OP-06` remains product-deferred and non-blocking.
+1. `AUTH-01` must be completed before next production rollout.
 
 ## Update Rules
 1. Update this file at the end of each implementation session.

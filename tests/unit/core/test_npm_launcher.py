@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 import shutil
 import stat
@@ -27,7 +28,14 @@ def _launcher_path() -> Path:
     return Path(__file__).resolve().parents[3] / "bin" / "google-workspace-mcp-advanced.cjs"
 
 
+def _package_version() -> str:
+    package_json = Path(__file__).resolve().parents[3] / "package.json"
+    package_data = json.loads(package_json.read_text(encoding="utf-8"))
+    return str(package_data["version"])
+
+
 def test_launcher_uses_uvx_when_available(tmp_path: Path) -> None:
+    version = _package_version()
     log_path = tmp_path / "uvx.log"
     uvx_path = tmp_path / "uvx"
     _write_executable(
@@ -54,10 +62,11 @@ exit 0
 
     assert result.returncode == 0, result.stderr
     args = log_path.read_text(encoding="utf-8")
-    assert "--from google-workspace-mcp-advanced==1.0.0 google-workspace-mcp-advanced --transport stdio" in args
+    assert f"--from google-workspace-mcp-advanced=={version} google-workspace-mcp-advanced --transport stdio" in args
 
 
 def test_launcher_falls_back_to_uv_tool_run(tmp_path: Path) -> None:
+    version = _package_version()
     log_path = tmp_path / "uv.log"
     uv_path = tmp_path / "uv"
     _write_executable(
@@ -85,8 +94,9 @@ exit 0
     assert result.returncode == 0, result.stderr
     args = log_path.read_text(encoding="utf-8")
     assert (
-        "tool run --from google-workspace-mcp-advanced==1.0.0 google-workspace-mcp-advanced --transport stdio"
-    ) in args
+        f"tool run --from google-workspace-mcp-advanced=={version} google-workspace-mcp-advanced --transport stdio"
+        in args
+    )
 
 
 def test_launcher_fails_without_uv_runtime(tmp_path: Path) -> None:
