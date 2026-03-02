@@ -9,6 +9,7 @@ import pytest
 from google.oauth2.credentials import Credentials
 
 import auth.oauth21_session_store as oauth21_session_store_module
+from auth.google_auth import get_credentials
 from auth.middleware.auth_info import AuthInfoMiddleware
 from auth.oauth21_session_store import ensure_session_from_access_token, get_credentials_from_token
 
@@ -219,3 +220,32 @@ def test_get_credentials_from_token_fallback_builds_minimal_credentials(monkeypa
     assert result.client_id == "client-id"
     assert result.client_secret == "client-secret"
     assert result.expiry is not None
+
+
+def test_get_credentials_logs_credential_source_selection(monkeypatch, caplog):
+    """Credential lookup should emit source diagnostics for file-store resolution."""
+
+    class _Store:
+        def get_credential(self, _user_email: str) -> Credentials:
+            return Credentials(
+                token="token-from-file",
+                refresh_token="refresh-token",
+                token_uri="https://oauth2.googleapis.com/token",
+                client_id="client-id",
+                client_secret="client-secret",
+                scopes=["scope.read"],
+                expiry=datetime.utcnow() + timedelta(hours=1),
+            )
+
+    caplog.set_level("INFO")
+    monkeypatch.setattr("auth.google_auth.is_stateless_mode", lambda: False)
+    monkeypatch.setattr("auth.google_auth.get_credential_store", lambda: _Store())
+
+    credentials = get_credentials(
+        user_google_email="diag@example.com",
+        required_scopes=["scope.read"],
+        session_id=None,
+    )
+
+    assert credentials is not None
+    assert any("[CRED_SOURCE] source=file_store" in rec.message for rec in caplog.records)

@@ -14,6 +14,7 @@ from auth.google_auth import (
     AUTH_FLOW_DEVICE,
     _get_effective_auth_flow_mode,
     _start_or_resume_device_auth_flow,
+    get_authenticated_google_service,
     initiate_auth_challenge,
 )
 from core.errors import GoogleAuthenticationError
@@ -154,3 +155,51 @@ async def test_initiate_auth_challenge_callback_mode_uses_start_auth_flow(monkey
     assert resolved_credentials is None
     assert message == "callback-auth-link"
     start_auth_flow_mock.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_start_google_auth_manual_path_delegates_to_shared_challenge(monkeypatch):
+    import core.server as core_server
+
+    challenge_mock = AsyncMock(return_value=(None, "shared-auth-message"))
+
+    monkeypatch.setattr(core_server, "check_client_secrets", lambda: None)
+    monkeypatch.setattr(core_server, "get_current_scopes", lambda: {"scope.b", "scope.a"})
+    monkeypatch.setattr(core_server, "get_credentials", lambda **_: None)
+    monkeypatch.setattr(core_server, "initiate_auth_challenge", challenge_mock)
+
+    start_google_auth_tool = core_server.start_google_auth
+    start_google_auth = (
+        getattr(start_google_auth_tool, "fn", None)
+        or getattr(start_google_auth_tool, "func", None)
+        or getattr(start_google_auth_tool, "_fn", None)
+    )
+    assert callable(start_google_auth), "Could not resolve callable start_google_auth tool function"
+
+    result = await start_google_auth(
+        service_name="Google Drive",
+        user_google_email="user@example.com",
+    )
+
+    assert result == "shared-auth-message"
+    challenge_mock.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_get_authenticated_google_service_auto_path_delegates_to_shared_challenge(monkeypatch):
+    challenge_mock = AsyncMock(return_value=(None, "shared-auth-message"))
+
+    monkeypatch.setattr("auth.google_auth.get_credentials", lambda **_: None)
+    monkeypatch.setattr("auth.google_auth.initiate_auth_challenge", challenge_mock)
+
+    with pytest.raises(GoogleAuthenticationError, match="shared-auth-message"):
+        await get_authenticated_google_service(
+            service_name="drive",
+            version="v3",
+            tool_name="test_tool",
+            user_google_email="user@example.com",
+            required_scopes=["scope.a"],
+            session_id="mcp-session-123",
+        )
+
+    challenge_mock.assert_awaited_once()

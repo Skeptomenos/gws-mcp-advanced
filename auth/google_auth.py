@@ -98,6 +98,25 @@ def _has_required_scopes(credentials: Credentials, required_scopes: list[str]) -
     return all(scope in granted_scopes for scope in required_scopes)
 
 
+def _log_credential_source(
+    source: str,
+    user_google_email: str | None,
+    session_id: str | None,
+    found: bool,
+    reason: str | None = None,
+) -> None:
+    """Emit consistent diagnostics for credential source selection."""
+    session_hint = session_id[:8] if session_id else None
+    logger.info(
+        "[CRED_SOURCE] source=%s user=%s session=%s found=%s reason=%s",
+        source,
+        user_google_email,
+        session_hint,
+        found,
+        reason or "-",
+    )
+
+
 def _get_fastmcp_session_id_safe() -> str | None:
     """Resolve FastMCP session ID without creating import-time cycles."""
     try:
@@ -891,6 +910,7 @@ def get_credentials(
             credentials = store.get_credentials_by_mcp_session(session_id)
             if credentials:
                 logger.info(f"[get_credentials] Found OAuth 2.1 credentials for MCP session {session_id}")
+                _log_credential_source("oauth21_mcp_session", user_google_email, session_id, True, "loaded")
 
                 # Check scopes
                 if not _has_required_scopes(credentials, required_scopes):
@@ -925,7 +945,16 @@ def get_credentials(
                         return credentials
                     except Exception as e:
                         logger.error(f"[get_credentials] Failed to refresh OAuth 2.1 credentials: {e}")
+                        _log_credential_source(
+                            "oauth21_mcp_session",
+                            user_google_email,
+                            session_id,
+                            False,
+                            "refresh_failed",
+                        )
                         return None
+            else:
+                _log_credential_source("oauth21_mcp_session", user_google_email, session_id, False, "not_found")
         except ImportError:
             pass  # OAuth 2.1 store not available
         except Exception as e:
@@ -948,6 +977,9 @@ def get_credentials(
 
                     file_credentials = cred_store.get_credential(single_user)
                     if file_credentials:
+                        _log_credential_source(
+                            "file_store_auto_recovery", single_user, session_id, True, "single_user_bind"
+                        )
                         file_token = file_credentials.token
                         if not file_token:
                             logger.warning("[get_credentials] Auto-recovered credentials missing access token")
@@ -1001,6 +1033,10 @@ def get_credentials(
                                     logger.error(f"[get_credentials] Failed to refresh auto-recovered credentials: {e}")
                         except ValueError as e:
                             logger.warning(f"[get_credentials] Could not auto-bind session: {e}")
+                    else:
+                        _log_credential_source(
+                            "file_store_auto_recovery", single_user, session_id, False, "missing_user_file"
+                        )
         except Exception as e:
             logger.debug(f"[get_credentials] Error in auto-recovery: {e}")
 
@@ -1010,7 +1046,9 @@ def get_credentials(
         credentials = _find_any_credentials(credentials_base_dir)
         if not credentials:
             logger.info(f"[get_credentials] Single-user mode: No credentials found in {credentials_base_dir}")
+            _log_credential_source("single_user_scan", user_google_email, session_id, False, "no_files")
             return None
+        _log_credential_source("single_user_scan", user_google_email, session_id, True, "loaded")
 
         if not user_google_email and credentials.valid:
             try:
@@ -1037,6 +1075,7 @@ def get_credentials(
             credentials = load_credentials_from_session(session_id)
             if credentials:
                 logger.debug(f"[get_credentials] Loaded credentials from session for session_id '{session_id}'.")
+                _log_credential_source("session_cache", user_google_email, session_id, True, "loaded")
 
         if not credentials and user_google_email:
             if not is_stateless_mode():
@@ -1045,10 +1084,12 @@ def get_credentials(
                 )
                 credential_store = get_credential_store()
                 credentials = credential_store.get_credential(user_google_email)
+                _log_credential_source("file_store", user_google_email, session_id, bool(credentials), "lookup")
             else:
                 logger.debug(
                     f"[get_credentials] No session credentials, skipping file store in stateless mode for user_google_email '{user_google_email}'."
                 )
+                _log_credential_source("file_store", user_google_email, session_id, False, "stateless_skip")
 
             if credentials and session_id:
                 logger.debug(
@@ -1060,6 +1101,7 @@ def get_credentials(
             logger.info(
                 f"[get_credentials] No credentials found for user '{user_google_email}' or session '{session_id}'."
             )
+            _log_credential_source("all_sources", user_google_email, session_id, False, "none_available")
             return None
 
     logger.debug(

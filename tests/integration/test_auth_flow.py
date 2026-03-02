@@ -5,11 +5,13 @@ including credential persistence across "restarts".
 """
 
 from datetime import datetime, timedelta
+from pathlib import Path
 
 import pytest
 from google.oauth2.credentials import Credentials
 
 from auth.credential_store import LocalDirectoryCredentialStore
+from auth.google_auth import get_credentials
 from auth.oauth21_session_store import OAuth21SessionStore
 
 
@@ -155,6 +157,50 @@ class TestTokenRefresh:
         assert retrieved is not None
         assert retrieved.token == "refreshed_token"
         assert retrieved.refresh_token == "original_refresh"
+
+    def test_get_credentials_refreshes_expired_file_credentials_before_reauth(self, temp_creds_dir, monkeypatch):
+        """Expired file credentials should refresh before forcing re-auth."""
+        user_email = "refresh@example.com"
+        store = LocalDirectoryCredentialStore(temp_creds_dir)
+
+        expired_creds = Credentials(
+            token="expired_token",
+            refresh_token="refresh_token",
+            token_uri="https://oauth2.googleapis.com/token",
+            client_id="test_id",
+            client_secret="test_secret",
+            scopes=["https://www.googleapis.com/auth/drive"],
+            expiry=datetime.utcnow() - timedelta(hours=1),
+        )
+        store.store_credential(user_email, expired_creds)
+
+        refreshed_session: dict[str, str | None] = {}
+
+        class _SessionStore:
+            def get_credentials_by_mcp_session(self, _session_id):
+                return None
+
+            def store_session(self, **kwargs):
+                refreshed_session.update(kwargs)
+
+        def _fake_refresh(self, _request):
+            self.token = "refreshed_token"
+            self.expiry = datetime.utcnow() + timedelta(hours=1)
+
+        monkeypatch.setattr(Credentials, "refresh", _fake_refresh, raising=False)
+        monkeypatch.setattr("auth.google_auth.get_credential_store", lambda: store)
+        monkeypatch.setattr("auth.google_auth.get_oauth21_session_store", lambda: _SessionStore())
+
+        resolved = get_credentials(
+            user_google_email=user_email,
+            required_scopes=["https://www.googleapis.com/auth/drive"],
+            session_id="mcp-session-refresh",
+        )
+
+        assert resolved is not None
+        assert resolved.token == "refreshed_token"
+        assert refreshed_session["user_email"] == user_email
+        assert refreshed_session["access_token"] == "refreshed_token"
 
 
 class TestMultiUserIsolation:
@@ -323,3 +369,13 @@ class TestSessionRemovalPersistence:
         # user1 should be gone, user2 should remain
         assert store2.get_user_by_mcp_session(session1) is None
         assert store2.get_user_by_mcp_session(session2) == user2
+
+
+def test_default_store_respects_workspace_mcp_config_dir(tmp_path, monkeypatch):
+    """Default credential store path should resolve from WORKSPACE_MCP_CONFIG_DIR."""
+    monkeypatch.delenv("GOOGLE_MCP_CREDENTIALS_DIR", raising=False)
+    monkeypatch.setenv("WORKSPACE_MCP_CONFIG_DIR", str(tmp_path))
+
+    store = LocalDirectoryCredentialStore()
+
+    assert Path(store.base_dir) == tmp_path / "credentials"

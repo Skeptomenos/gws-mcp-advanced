@@ -2,7 +2,7 @@
 
 ## Living Document Controls
 1. Status: `IN_IMPLEMENTATION`
-2. Last Updated (UTC): `2026-03-02T22:50:00Z`
+2. Last Updated (UTC): `2026-03-03T00:20:00Z`
 3. Canonical Path: `/Users/david.helmus/repos/ai-dev/_infra/gws-mcp-advanced/gws-mcp-advanced/agent-docs/roadmap/PLAN.md`
 4. Active Branch: `main`
 5. Local Task Board: `/Users/david.helmus/repos/ai-dev/_infra/gws-mcp-advanced/gws-mcp-advanced/agent-docs/roadmap/TASKS.md`
@@ -45,7 +45,7 @@
 
 | ID | Status | Owner | Branch | PR | Test Evidence | Last Update |
 |---|---|---|---|---|---|---|
-| AUTH-01 | In Progress | Codex | main | - | Core auth stabilization implemented and released as `v1.0.1` tag (`86b6b04`); waiting for PyPI workflow confirmation and post-release manual MCP validation | 2026-03-02 |
+| AUTH-01 | In Progress | Codex | main | - | WS-01 and WS-04 are now closed with additional parity/env-path/refresh/diagnostics coverage; remaining closure gates are `WS-06.5` (PyPI release confirmation for `v1.0.1`) and `WS-06.6` (post-release MCP-host smoke evidence). | 2026-03-03 |
 | SEC-01 | Done | Codex | codex/run-01-fastmcp-import-smoke | - | Middleware now rejects unverified JWT identity by default; `WORKSPACE_MCP_ALLOW_UNVERIFIED_JWT=true` break-glass override; guardrail tests added | 2026-02-27 |
 | RUN-01 | Done | Codex | codex/run-01-fastmcp-import-smoke | - | `uv run python -c "import main"` + `uv run python -c "import fastmcp_server"`; CI startup smoke job added | 2026-02-27 |
 | SEC-02 | Done | Codex | codex/run-01-fastmcp-import-smoke | - | Shared secure atomic JSON writer added; credential and session persistence wired to strict permissions; security I/O tests added | 2026-02-27 |
@@ -413,6 +413,8 @@ The plan resolves:
 
 | Date (UTC) | Scope | Commands | Result | Notes |
 |---|---|---|---|---|
+| 2026-03-03 | AUTH-01 parity/env-path/refresh/diagnostics closure | `uv run pytest tests/unit/auth/test_google_auth_flow_modes.py tests/unit/auth/test_auth_runtime_paths.py tests/integration/test_auth_flow.py -q` | Pass | Added WS-01.5 + WS-04.1/2/3 coverage (`29 passed`) |
+| 2026-03-03 | AUTH-01 full verification rerun | `uv run ruff check . && uv run ruff format --check . && uv run pytest` | Pass | Full suite remains green after auth updates (`633 passed`, `3 skipped`) |
 | 2026-03-02 | DIST-05 rename/migration hardening | `uv run ruff check . && uv run ruff format --check . && uv run pytest` | Pass | Canonical runtime/config rename + migration-guide/docs/test naming cleanup verified (`628 passed`, `3 skipped`) |
 | 2026-02-27 | Baseline | `uv run ruff check .` | Pass | - |
 | 2026-02-27 | Baseline | `uv run ruff format --check .` | Fail | `gcalendar/calendar_tools.py` requires formatting |
@@ -528,13 +530,13 @@ The plan resolves:
 | 2026-02-28 | Keep OpenCode live lifecycle smoke opt-in (`OPENCODE_SMOKE_LIVE=1`) | Preserve deterministic local validation of prompt execution/teardown without forcing model/provider credentials in default test runs | OPC-01, QUAL-02 |
 
 ## Session Handoff (Living)
-1. Current Focus: `Close AUTH-01 remaining validation and evidence updates`
+1. Current Focus: `Close AUTH-01 with release confirmation and MCP-host post-release smoke evidence`
 2. Next 3 Actions:
-   1. run post-release MCP auth validation in OpenCode/Claude Code with current `v1.0.1` package path,
-   2. close remaining AUTH-01 WS-01/WS-04 tracking items with current evidence,
-   3. prepare commit/push for the DIST-05 rename/migration hardening set.
+   1. verify `Release PyPI` outcome for `v1.0.1` and confirm package visibility,
+   2. run MCP-host manual smoke in OpenCode/Claude Code (`WORKSPACE_MCP_AUTH_FLOW=auto`),
+   3. capture smoke evidence and close `WS-06.6` / `AUTH-01`.
 3. Active Blockers:
-   1. `AUTH-01` remains open pending final manual validation evidence closure.
+   1. `AUTH-01` remains open pending external release confirmation and manual MCP-host smoke evidence.
 
 ## Execution Changelog (Living)
 1. 2026-02-27: Promoted `PLAN.md` to canonical living execution doc; added readiness verdict, wave schedule, issue tracker, update protocol, evidence log, decision log, and session handoff.
@@ -615,3 +617,4 @@ The plan resolves:
 76. 2026-03-02: Finalized uvx-only user-doc rollout (README/setup/distribution guides), reconciled roadmap/testing docs to de-scope npm blockers, and re-ran full verification protocol (`uv run ruff check .`, `uv run ruff format --check .`, `uv run pytest`) with green results (`615 passed`, `3 skipped`).
 77. 2026-03-02: Started `DIST-05` rename/migration hardening to make canonical runtime/config identity fully consistent (`google-workspace-mcp-advanced`) while preserving backward compatibility via legacy config-directory fallback; `PLAN.md` updated first to preserve state before compaction.
 78. 2026-03-02: Closed `DIST-05` by completing canonical runtime/config naming cleanup (including `core/utils.py`, sync-map defaults, auth store fallback migration), publishing `docs/setup/MIGRATING_FROM_GWS_MCP_ADVANCED.md`, cleaning active docs/tests naming drift, and re-running full verification (`628 passed`, `3 skipped`).
+79. 2026-03-03: Advanced `AUTH-01` by closing WS-01.5 and WS-04.1/WS-04.2/WS-04.3 with new parity/env-path/refresh/diagnostics coverage and logging improvements in `auth/google_auth.py`; targeted auth suite and full verification are green (`633 passed`, `3 skipped`), leaving only WS-06.5/WS-06.6 external validation gates.

@@ -1,8 +1,8 @@
 # ExecPlan: Authentication Stabilization (Production + Enterprise)
 
 ## Living Document Controls
-- Status: `RELEASE_TRIGGERED_PENDING_VERIFICATION`
-- Last Updated (UTC): `2026-03-02T21:34:45Z`
+- Status: `IN_IMPLEMENTATION_PENDING_HOST_VALIDATION`
+- Last Updated (UTC): `2026-03-03T00:20:00Z`
 - Canonical Path: `/Users/david.helmus/repos/ai-dev/_infra/gws-mcp-advanced/gws-mcp-advanced/agent-docs/roadmap/AUTH_STABILIZATION_PLAN.md`
 - Parent Plan: `/Users/david.helmus/repos/ai-dev/_infra/gws-mcp-advanced/gws-mcp-advanced/agent-docs/roadmap/PLAN.md`
 - Active Branch: `main`
@@ -45,7 +45,7 @@ Observed failure themes:
 - [x] WS-01.2 Use shared resolver in auto-auth path (`get_authenticated_google_service`).
 - [x] WS-01.3 Use shared resolver in manual-auth tool (`start_google_auth`).
 - [x] WS-01.4 Ensure message output always reflects the actual active callback URI.
-- [ ] WS-01.5 Add regression tests for manual and automatic auth parity.
+- [x] WS-01.5 Add regression tests for manual and automatic auth parity.
 
 ### WS-02 Persistence Path Unification
 - [x] WS-02.1 Unify OAuth state/session persistence with `WORKSPACE_MCP_CONFIG_DIR` path model.
@@ -60,9 +60,9 @@ Observed failure themes:
 - [x] WS-03.4 Add tests for success, mismatch, retryable failure, and consumed-state replay.
 
 ### WS-04 Credentials Read/Refresh Confidence
-- [ ] WS-04.1 Add integration tests for loading credentials from disk path configured by env.
-- [ ] WS-04.2 Add integration tests for expired token refresh path before re-auth fallback.
-- [ ] WS-04.3 Add diagnostics improvements for credential source selection.
+- [x] WS-04.1 Add integration tests for loading credentials from disk path configured by env.
+- [x] WS-04.2 Add integration tests for expired token refresh path before re-auth fallback.
+- [x] WS-04.3 Add diagnostics improvements for credential source selection.
 - [x] WS-04.4 Update docs with concrete expected credential file location and format.
 
 ### WS-05 Device Flow Fallback (Callback-Independent)
@@ -85,20 +85,21 @@ Observed failure themes:
 
 | ID | Risk | Impact | Mitigation | Status |
 |---|---|---|---|---|
-| AUTH-R1 | Regression in existing callback auth | High | Keep callback path, add parity tests, gate on full suite | Mitigated (manual parity row pending) |
+| AUTH-R1 | Regression in existing callback auth | High | Keep callback path, add parity tests, gate on full suite | Mitigated |
 | AUTH-R2 | Device flow unsupported for current OAuth client type | High | Feature flag mode, clear runtime error, docs for client requirements | Open |
 | AUTH-R3 | Session/state migration breaks existing installations | Medium | Backward-compatible env override path + migration tests | Mitigated |
-| AUTH-R4 | Ambiguous auth errors reduce operator confidence | Medium | Structured error messages + diagnostics coverage | Partial |
+| AUTH-R4 | Ambiguous auth errors reduce operator confidence | Medium | Structured error messages + diagnostics coverage | Mitigated |
 | AUTH-R5 | Release drift between docs and code | Medium | Update docs in same PR and run release checklist | Partial |
 
 ## Test and Evidence Matrix
 
 | Area | Test Type | Command / Location | Pass Criteria | Status |
 |---|---|---|---|---|
-| Callback parity | Unit/Integration | `tests/unit/auth/*`, `tests/integration/test_auth_flow.py` | Manual and auto auth use same callback readiness path | Partial |
+| Callback parity | Unit/Integration | `tests/unit/auth/test_google_auth_flow_modes.py` | Manual and auto auth delegate to shared auth-challenge orchestration path | Pass |
 | Persistence path | Unit/Integration | `tests/unit/auth/test_oauth_state_persistence.py`, `tests/unit/auth/test_session_store.py` | State/session files resolve to configured dir | Pass |
 | State semantics | Unit | `tests/unit/auth/test_session_store.py`, `tests/unit/auth/test_oauth_state_persistence.py` | Validate/consume behavior matches contract | Pass |
-| Credential refresh | Integration | `tests/integration/test_auth_flow.py` | Expired credentials refresh before re-auth | Pass (existing), targeted env-path additions pending |
+| Credential refresh | Integration | `tests/integration/test_auth_flow.py` | Expired credentials refresh before re-auth | Pass |
+| Credential source diagnostics | Unit | `tests/unit/auth/test_auth_runtime_paths.py` | Credential source selection emits deterministic diagnostics (`[CRED_SOURCE] ...`) | Pass |
 | Device flow | Unit/Integration (mocked HTTP) | `tests/unit/auth/test_google_auth_flow_modes.py` | Device lifecycle stable across retries | Pass (unit) |
 | Full quality gate | Repo-wide | `uv run ruff check . && uv run ruff format --check . && uv run pytest` | All green | Pass |
 
@@ -114,6 +115,8 @@ Observed failure themes:
 - 2026-03-02T21:34:45Z: Bumped release version to `1.0.1` (`pyproject.toml`, `package.json`, `uv.lock`) and updated pinned user-doc examples.
 - 2026-03-02T21:34:45Z: Tagged and pushed `v1.0.1` (`86b6b04`) to trigger `.github/workflows/release-pypi.yml`.
 - 2026-03-02T21:34:45Z: GitHub/PyPI API verification is blocked in this environment due restricted outbound DNS/network; publish confirmation must be validated from CI UI or external shell.
+- 2026-03-03T00:20:00Z: Closed WS-01.5 and WS-04.1/WS-04.2/WS-04.3 by adding manual+automatic auth parity regressions, env-path credential-store integration coverage, refresh-before-reauth integration coverage, and credential-source diagnostics in `auth/google_auth.py`.
+- 2026-03-03T00:20:00Z: Ran targeted auth suite (`29 passed`) and full verification protocol (`uv run ruff check .`, `uv run ruff format --check .`, `uv run pytest`) with green results (`633 passed`, `3 skipped`).
 
 ## Open Questions
 1. Do we require a dedicated `start_google_device_auth_status` tool, or is retry-on-next-call sufficient operationally?
@@ -121,6 +124,5 @@ Observed failure themes:
 
 ## Next Execution Slice
 1. Verify `Release PyPI` workflow result for tag `v1.0.1` and confirm PyPI latest version.
-2. Execute manual MCP-hosted auth validation in OpenCode/Claude Code using `WORKSPACE_MCP_AUTH_FLOW=auto` (and optional forced `callback` sanity run).
-3. Close WS-01.5 with manual+auto parity evidence and add any missing targeted tests.
-4. Complete WS-04.1/WS-04.2/WS-04.3 (credential source diagnostics + env-path/refresh explicit integration assertions) and WS-06.6 post-release smoke.
+2. Execute manual MCP-hosted auth validation in OpenCode/Claude Code using `WORKSPACE_MCP_AUTH_FLOW=auto` (optional forced `callback` sanity run).
+3. Capture and attach post-release smoke evidence, then close WS-06.6.
