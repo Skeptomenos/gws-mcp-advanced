@@ -8,7 +8,7 @@ Status dashboard: `/Users/david.helmus/repos/ai-dev/_infra/gws-mcp-advanced/gws-
 Dry-run tracker: `/Users/david.helmus/repos/ai-dev/_infra/gws-mcp-advanced/gws-mcp-advanced/agent-docs/roadmap/DRY_RUN_MATRIX.md`
 
 ## Metadata
-- Last Updated (UTC): 2026-03-02T16:31:22Z
+- Last Updated (UTC): 2026-03-02T21:34:45Z
 - Active Branch: `main`
 - Owner: Codex
 
@@ -25,7 +25,7 @@ Dry-run tracker: `/Users/david.helmus/repos/ai-dev/_infra/gws-mcp-advanced/gws-m
 
 | ID | Wave | Status | Next Action |
 |---|---|---|---|
-| AUTH-01 | Hotfix | In Progress | Run manual MCP-hosted auth validation, close remaining WS-01/WS-04 gaps, then publish next PyPI release |
+| AUTH-01 | Hotfix | In Progress | Release tag `v1.0.1` pushed; verify PyPI publish completion, run post-release MCP auth validation, then close remaining WS-01/WS-04 gaps |
 | SEC-01 | 1 | Done | Completed: default-deny unverified JWT identity, break-glass env override, and guardrail tests |
 | RUN-01 | 1 | Done | Completed: import path fixed and CI startup smoke added |
 | SEC-02 | 1 | Done | Completed: centralized secure atomic persistence + permission enforcement + tests |

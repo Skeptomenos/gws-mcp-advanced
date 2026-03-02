@@ -1,8 +1,8 @@
 # ExecPlan: Authentication Stabilization (Production + Enterprise)
 
 ## Living Document Controls
-- Status: `READY_FOR_MANUAL_TEST`
-- Last Updated (UTC): `2026-03-02T16:31:22Z`
+- Status: `RELEASE_TRIGGERED_PENDING_VERIFICATION`
+- Last Updated (UTC): `2026-03-02T21:34:45Z`
 - Canonical Path: `/Users/david.helmus/repos/ai-dev/_infra/gws-mcp-advanced/gws-mcp-advanced/agent-docs/roadmap/AUTH_STABILIZATION_PLAN.md`
 - Parent Plan: `/Users/david.helmus/repos/ai-dev/_infra/gws-mcp-advanced/gws-mcp-advanced/agent-docs/roadmap/PLAN.md`
 - Active Branch: `main`
@@ -77,7 +77,7 @@ Observed failure themes:
 - [x] WS-06.1 Run full verification protocol (`ruff check`, `ruff format --check`, `pytest`).
 - [x] WS-06.2 Run targeted auth test suite and capture evidence.
 - [x] WS-06.3 Update user docs (auth modes, enterprise rollout, troubleshooting).
-- [ ] WS-06.4 Bump version and prepare release notes.
+- [x] WS-06.4 Bump version and prepare release notes.
 - [ ] WS-06.5 Publish to PyPI and verify `uvx` install path.
 - [ ] WS-06.6 Post-release smoke validation in MCP hosts.
 
@@ -111,13 +111,16 @@ Observed failure themes:
 - 2026-03-02T16:31:22Z: Added auth unit coverage (`tests/unit/auth/test_google_auth_flow_modes.py`) and expanded session/state persistence coverage.
 - 2026-03-02T16:31:22Z: Ran full quality gate successfully: `ruff check .`, `ruff format .`, `pytest` (`628 passed`, `3 skipped`).
 - 2026-03-02T16:31:22Z: Updated user auth docs (`README.md`, `docs/setup/MCP_CLIENT_SETUP_GUIDE.md`, `docs/setup/AUTHENTICATION_MODEL.md`) to document device-flow default and auth mode flag.
+- 2026-03-02T21:34:45Z: Bumped release version to `1.0.1` (`pyproject.toml`, `package.json`, `uv.lock`) and updated pinned user-doc examples.
+- 2026-03-02T21:34:45Z: Tagged and pushed `v1.0.1` (`86b6b04`) to trigger `.github/workflows/release-pypi.yml`.
+- 2026-03-02T21:34:45Z: GitHub/PyPI API verification is blocked in this environment due restricted outbound DNS/network; publish confirmation must be validated from CI UI or external shell.
 
 ## Open Questions
 1. Do we require a dedicated `start_google_device_auth_status` tool, or is retry-on-next-call sufficient operationally?
 2. Should we add explicit telemetry counters for credential source choice (session/file/refresh/device-complete) before release?
 
 ## Next Execution Slice
-1. Execute manual MCP-hosted auth validation in OpenCode/Claude Code using `WORKSPACE_MCP_AUTH_FLOW=auto` (and optional forced `callback` sanity run).
-2. Close WS-01.5 with manual+auto parity evidence and add any missing targeted tests.
-3. Complete WS-04.1/WS-04.2/WS-04.3 (credential source diagnostics + env-path/refresh explicit integration assertions).
-4. Bump version, prepare release notes, and publish next PyPI release.
+1. Verify `Release PyPI` workflow result for tag `v1.0.1` and confirm PyPI latest version.
+2. Execute manual MCP-hosted auth validation in OpenCode/Claude Code using `WORKSPACE_MCP_AUTH_FLOW=auto` (and optional forced `callback` sanity run).
+3. Close WS-01.5 with manual+auto parity evidence and add any missing targeted tests.
+4. Complete WS-04.1/WS-04.2/WS-04.3 (credential source diagnostics + env-path/refresh explicit integration assertions) and WS-06.6 post-release smoke.

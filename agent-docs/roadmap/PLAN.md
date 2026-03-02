@@ -2,7 +2,7 @@
 
 ## Living Document Controls
 1. Status: `IN_IMPLEMENTATION`
-2. Last Updated (UTC): `2026-03-02T16:31:22Z`
+2. Last Updated (UTC): `2026-03-02T21:34:45Z`
 3. Canonical Path: `/Users/david.helmus/repos/ai-dev/_infra/gws-mcp-advanced/gws-mcp-advanced/agent-docs/roadmap/PLAN.md`
 4. Active Branch: `main`
 5. Local Task Board: `/Users/david.helmus/repos/ai-dev/_infra/gws-mcp-advanced/gws-mcp-advanced/agent-docs/roadmap/TASKS.md`
@@ -45,7 +45,7 @@
 
 | ID | Status | Owner | Branch | PR | Test Evidence | Last Update |
 |---|---|---|---|---|---|---|
-| AUTH-01 | In Progress | Codex | main | - | Device-flow fallback + auth-flow mode selection + state consumption semantics + path unification are implemented with full suite green (`628 passed`, `3 skipped`); manual MCP-hosted validation and release tasks are next | 2026-03-02 |
+| AUTH-01 | In Progress | Codex | main | - | Core auth stabilization implemented and released as `v1.0.1` tag (`86b6b04`); waiting for PyPI workflow confirmation and post-release manual MCP validation | 2026-03-02 |
 | SEC-01 | Done | Codex | codex/run-01-fastmcp-import-smoke | - | Middleware now rejects unverified JWT identity by default; `WORKSPACE_MCP_ALLOW_UNVERIFIED_JWT=true` break-glass override; guardrail tests added | 2026-02-27 |
 | RUN-01 | Done | Codex | codex/run-01-fastmcp-import-smoke | - | `uv run python -c "import main"` + `uv run python -c "import fastmcp_server"`; CI startup smoke job added | 2026-02-27 |
 | SEC-02 | Done | Codex | codex/run-01-fastmcp-import-smoke | - | Shared secure atomic JSON writer added; credential and session persistence wired to strict permissions; security I/O tests added | 2026-02-27 |
