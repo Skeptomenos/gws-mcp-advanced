@@ -1,4 +1,4 @@
-"""Distribution scope guard for npm/npx packaging references."""
+"""Distribution scope guard for uvx-first packaging references."""
 
 from __future__ import annotations
 
@@ -7,9 +7,8 @@ from pathlib import Path
 
 EXPECTED_PACKAGE = "google-workspace-mcp-advanced"
 README_REQUIRED_SNIPPETS = (
-    "npx -y google-workspace-mcp-advanced",
-    "npx -y google-workspace-mcp-advanced@next",
-    "npx -y google-workspace-mcp-advanced@1.0.0",
+    "uvx google-workspace-mcp-advanced --transport stdio",
+    "uvx google-workspace-mcp-advanced==1.0.0 --transport stdio",
 )
 
 

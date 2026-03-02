@@ -1,78 +1,58 @@
 # Distribution and Release Guide
 
 ## Metadata
-- Last Updated (UTC): 2026-03-01T21:00:38Z
-- npm Package: `google-workspace-mcp-advanced`
+- Last Updated (UTC): 2026-03-02T13:53:12Z
+- Primary Distribution: `uvx` from PyPI
 - Python Package: `google-workspace-mcp-advanced`
 
-## Channels
-1. Stable: `latest`
-2. Prerelease: `next`
-3. Pinned: explicit version (`@x.y.z`)
+## Primary Channels (uvx-first)
+1. Stable: latest PyPI release
+2. Pinned: explicit version (`==x.y.z`)
 
-## Consumer Install Paths
+## Prerequisite: Install uv
+`uvx` is provided by `uv`, so users must install `uv` first.
+
 ```bash
-# Stable
-npx -y google-workspace-mcp-advanced --transport stdio
+# macOS (Homebrew)
+brew install uv
 
-# Prerelease
-npx -y google-workspace-mcp-advanced@next --transport stdio
+# Linux/macOS (official installer)
+curl -LsSf https://astral.sh/uv/install.sh | sh
 
-# Deterministic pinned
-npx -y google-workspace-mcp-advanced@1.0.0 --transport stdio
+# Verify
+uv --version
 ```
 
-## Release Order (Required)
-1. Publish Python package to PyPI first.
-2. Publish npm package second, only after matching PyPI version exists.
+## Consumer Install Paths (Recommended)
+```bash
+# Stable
+uvx google-workspace-mcp-advanced --transport stdio
 
-This ordering is enforced by:
-1. `scripts/check_release_version_match.py` (Python/npm version coupling).
-2. `scripts/check_pypi_version_available.py` (npm publish blocked until PyPI has matching version).
+# Deterministic pinned
+uvx google-workspace-mcp-advanced==1.0.0 --transport stdio
+```
+
+## Release Order
+1. Publish Python package to PyPI.
+2. Validate stable (`uvx package`) and pinned (`uvx package==x.y.z`) paths.
 
 ## GitHub Workflows
-1. PyPI publish workflow: `.github/workflows/release-pypi.yml`
-2. npm publish workflow: `.github/workflows/release-npm.yml`
+1. `.github/workflows/release-pypi.yml`
 
-### Trusted Publishing Requirements
-1. Configure PyPI trusted publisher for this repository and target project.
-2. Configure npm trusted publisher for this repository and package.
-3. Keep workflow permissions:
+## Trusted Publishing Requirements
+1. Configure PyPI trusted publisher for this repository/project.
+2. Keep workflow permissions:
    - `id-token: write`
    - `contents: read`
 
-## Provenance
-1. npm publishes use provenance:
-   - `npm publish --access public --provenance`
-2. Preserve workflow OIDC permissions in release workflows to keep provenance active.
+## Rollback Playbook (uvx-first)
+If a release is bad, pin consumers to the last known-good version:
 
-## Rollback Playbook
-If the latest npm release is bad:
-
-1. Identify previous good version:
 ```bash
-npm view google-workspace-mcp-advanced versions --json
+uvx google-workspace-mcp-advanced==<good_version> --transport stdio
 ```
 
-2. Repoint `latest` dist-tag to known-good:
-```bash
-npm dist-tag add google-workspace-mcp-advanced@<good_version> latest
-```
-
-3. Optionally remove bad `latest` tag association:
-```bash
-npm dist-tag rm google-workspace-mcp-advanced latest
-npm dist-tag add google-workspace-mcp-advanced@<good_version> latest
-```
-
-4. Keep pinned consumer fallback:
-```bash
-npx -y google-workspace-mcp-advanced@<good_version> --transport stdio
-```
-
-## Pre-Release Validation Checklist
+## Pre-Release Validation Checklist (Primary Lane)
 1. `uv run python scripts/check_distribution_scope.py`
-2. `uv run python scripts/check_release_version_match.py`
-3. `uv run pytest -q tests/unit/core/test_npm_launcher.py tests/unit/core/test_distribution_checks.py`
-4. `node --check bin/google-workspace-mcp-advanced.cjs`
-5. `npm pack --dry-run`
+2. `uv run pytest -q tests/unit/core/test_distribution_checks.py`
+3. `uvx google-workspace-mcp-advanced==1.0.0 --help`

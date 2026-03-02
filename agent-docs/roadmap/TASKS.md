@@ -8,7 +8,7 @@ Status dashboard: `/Users/david.helmus/repos/ai-dev/_infra/gws-mcp-advanced/gws-
 Dry-run tracker: `/Users/david.helmus/repos/ai-dev/_infra/gws-mcp-advanced/gws-mcp-advanced/agent-docs/roadmap/DRY_RUN_MATRIX.md`
 
 ## Metadata
-- Last Updated (UTC): 2026-03-02T11:54:53Z
+- Last Updated (UTC): 2026-03-02T13:53:12Z
 - Active Branch: `codex/run-01-fastmcp-import-smoke`
 - Owner: Codex
 
@@ -43,10 +43,10 @@ Dry-run tracker: `/Users/david.helmus/repos/ai-dev/_infra/gws-mcp-advanced/gws-m
 | DOC-01 | 0/3 | Done | Completed: roadmap/testing docs reconciled; historical reports marked archived snapshots |
 | OPC-01 | 4 | Done | Completed: real OpenCode lifecycle smoke is operational (`serve` spawn, health check, attached prompt, deterministic teardown) |
 | DIST-00 | 5 | Done | Completed: canonical npm identity standardized; distribution guard enforced in CI + release workflows |
-| DIST-01 | 5 | In Progress | PyPI/npm workflows and PyPI-first gating implemented; pending first live publish run validation |
+| DIST-01 | 5 | Done | PyPI `1.0.0` successfully published (`Release PyPI` run `22577853068`); uvx stable/pinned lanes validated |
 | DIST-02 | 5 | Done | Completed: launcher preflight/remediation and automated launcher smoke tests added |
 | DIST-03 | 6 | Done | Completed: pinned install and rollback runbook documented |
-| DIST-04 | 5 | In Progress | OIDC/provenance wiring implemented in release workflows; pending external trusted-publisher config + live validation |
+| DIST-04 | 5 | Done | npm/npx lane is de-scoped by product decision and no longer blocks distribution readiness |
 
 ## Wave 0 Tasks
 
@@ -217,9 +217,9 @@ Dry-run tracker: `/Users/david.helmus/repos/ai-dev/_infra/gws-mcp-advanced/gws-m
 - [x] Add npm publish workflow
 - [x] Block npm publish until matching PyPI version exists
 - [x] Add version-coupling check (`pyproject.toml` vs `package.json`) and enforce in CI
-- [ ] Ensure `.github/workflows/release-pypi.yml` is committed and present on `main` (required for `workflow_dispatch`)
-- [ ] Ensure `.github/workflows/release-npm.yml` is committed and present on `main` (required for `workflow_dispatch`)
-- [ ] Re-run `DT-01`..`DT-03` after workflow files are visible on default branch
+- [x] Ensure `.github/workflows/release-pypi.yml` is committed and present on `main` (required for `workflow_dispatch`)
+- [x] Ensure `.github/workflows/release-npm.yml` is committed and present on `main` (required for `workflow_dispatch`)
+- [x] Validate uvx distribution baseline (`DT-01`..`DT-03`)
 
 ### DIST-02
 - [x] Implement npm launcher preflight for `uvx`/`uv`
@@ -227,14 +227,15 @@ Dry-run tracker: `/Users/david.helmus/repos/ai-dev/_infra/gws-mcp-advanced/gws-m
 - [x] Add launcher smoke tests
 
 ### DIST-03
-- [x] Add pinned install examples (`@x.y.z`) in docs
+- [x] Add pinned install examples (`==x.y.z`) in docs
 - [x] Add rollback guidance for dist-tags
 
 ### DIST-04
 - [x] Configure trusted publishing (OIDC) in release workflow permissions for PyPI and npm
 - [x] Enable npm provenance publish command (`npm publish --provenance`)
-- [ ] Verify release metadata checks in CI
-- [ ] Complete external trusted publisher setup in PyPI and npm project settings
+- [x] Verify release metadata checks in CI
+- [x] De-scope npm trusted publisher setup from release-critical path
+- [x] De-scope npm auth remediation from release-critical path
 
 ## Verification Commands
 
@@ -244,7 +245,6 @@ Dry-run tracker: `/Users/david.helmus/repos/ai-dev/_infra/gws-mcp-advanced/gws-m
 - `uv run pytest -m mcp_protocol tests/mcp_protocol`
 - `uv run pytest -m "live_mcp and live_write" tests/live_mcp`
 - `uv run python scripts/check_distribution_scope.py`
-- `uv run python scripts/check_release_version_match.py`
 
 ## Session Log
 
@@ -306,3 +306,10 @@ Dry-run tracker: `/Users/david.helmus/repos/ai-dev/_infra/gws-mcp-advanced/gws-m
 - 2026-03-02: Added smart-chip roadmap wave tasks (`RM-05`, `RM-06`, `RM-07`) to track native checklist bullets, person-chip mentions, and add-ons-based third-party chip feasibility.
 - 2026-03-02: Attempted live release dispatch (`gh workflow run release-pypi.yml --ref codex/run-01-fastmcp-import-smoke`); GitHub returned `HTTP 404` because release workflows are not present on default branch (`main`) yet. Distribution validation remains blocked pending merge to `main`.
 - 2026-03-02: Re-validated distribution blockers against `main` after merge (`a39b34f`): `gh workflow list` still shows only `CI`, `DT-01..DT-03` fail with workflow 404 on default branch, and `DT-07` remains blocked (`npm view google-workspace-mcp-advanced` -> `E404`).
+- 2026-03-02: Merged follow-up release workflow fixes to `main` (PR #2 and PR #3), restoring valid `Release PyPI` metadata/dispatch behavior and keeping mainline CI green.
+- 2026-03-02: Executed `Release PyPI` workflow-dispatch run `22577418832`; verify/build passed, publish failed at trusted publishing exchange with `invalid-publisher` for claims `repository=Skeptomenos/google-workspace-mcp-advanced`, `workflow_ref=.github/workflows/release-pypi.yml@refs/heads/main`, `environment=pypi`.
+- 2026-03-02: Confirmed package is still unpublished after failed exchange (`https://pypi.org/pypi/google-workspace-mcp-advanced/json` -> 404, `npm view google-workspace-mcp-advanced` -> E404); distribution phase is now blocked only on external publisher configuration.
+- 2026-03-02: Re-ran `Release PyPI` after trusted publisher setup (`22577853068`) and completed publish successfully; PyPI package is live (`https://pypi.org/pypi/google-workspace-mcp-advanced/json` -> 200, version `1.0.0`).
+- 2026-03-02: `Release npm` auto-run (`22577900946`) passed verification and provenance signing but failed publish with npm auth error (`Access token expired or revoked`, `E404`), indicating npm auth/trusted-publisher configuration is now the sole distribution blocker.
+- 2026-03-02: Product decision updated to uvx-only distribution for current release. npm/npx lane is explicitly de-scoped and no longer tracked as a blocker.
+- 2026-03-02: Completed uvx-only user-doc cleanup (`README.md`, setup/distribution guides), reconciled roadmap/testing status docs, and re-ran verification protocol (`uv run ruff check .`, `uv run ruff format --check .`, `uv run pytest`) with green results (`615 passed`, `3 skipped`).

@@ -4,15 +4,29 @@ Audience: Users.
 
 This guide explains how to connect `google-workspace-mcp-advanced` from common MCP clients.
 
+## Prerequisite: Install uv
+`uvx` is the recommended runtime path, so install `uv` first.
+
+```bash
+# macOS (Homebrew)
+brew install uv
+
+# Linux/macOS (official installer)
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# Verify
+uv --version
+```
+
 ## Stable Team Setup (Recommended)
-Use the published npm package with pinned versions for production teams.
+Use pinned `uvx` versions for production teams.
 
 ```json
 {
   "mcpServers": {
     "google-workspace": {
-      "command": "npx",
-      "args": ["-y", "google-workspace-mcp-advanced@1.0.0", "--transport", "stdio"],
+      "command": "uvx",
+      "args": ["google-workspace-mcp-advanced==1.0.0", "--transport", "stdio"],
       "env": {
         "USER_GOOGLE_EMAIL": "your.email@company.com"
       }
@@ -62,5 +76,5 @@ Use the same `mcpServers` structure if the client supports standard MCP config J
 - `GOOGLE_OAUTH_CLIENT_ID` / `GOOGLE_OAUTH_CLIENT_SECRET` (required for OAuth flow)
 
 ## Notes
-- Prefer pinned npm versions (`@x.y.z`) for team stability.
+- Prefer pinned `uvx` versions (`==x.y.z`) for team stability.
 - Keep a separate local-dev MCP entry to avoid mixing unreleased code into production workflows.

@@ -2,11 +2,11 @@
 
 ## Living Document Controls
 1. Status: `IN_IMPLEMENTATION`
-2. Last Updated (UTC): `2026-03-02T11:54:53Z`
+2. Last Updated (UTC): `2026-03-02T13:53:12Z`
 3. Canonical Path: `/Users/david.helmus/repos/ai-dev/_infra/gws-mcp-advanced/gws-mcp-advanced/agent-docs/roadmap/PLAN.md`
 4. Active Branch: `codex/run-01-fastmcp-import-smoke`
 5. Local Task Board: `/Users/david.helmus/repos/ai-dev/_infra/gws-mcp-advanced/gws-mcp-advanced/agent-docs/roadmap/TASKS.md`
-6. Overall Progress: `76.2%` (`16/21` issues `Done`; `2/21` `In Progress`; `3/21` `Not Started`)
+6. Overall Progress: `85.7%` (`18/21` issues `Done`; `0/21` `In Progress`; `3/21` `Not Started`)
 7. Update Cadence:
    1. update this file after every completed issue ID (`SEC-*`, `SAFE-*`, `DIST-*`, etc.),
    2. update this file at the end of each implementation session,
@@ -33,8 +33,8 @@
 | Wave 2 | Dry-run + quality gates | 2026-03-01 to 2026-03-03 | `SAFE-01`, `QUAL-01`, `QUAL-02` closed |
 | Wave 3 | Roadmap closure | 2026-03-03 to 2026-03-05 | `RM-01`..`RM-04` closed or explicitly re-scoped |
 | Wave 4 | Autonomous MCP verification | 2026-03-02 to 2026-03-06 | Protocol + live lanes operational |
-| Wave 5 | npm/npx infra | 2026-03-06 to 2026-03-07 | Scoped package + release workflows working |
-| Wave 6 | Distribution validation | 2026-03-07 to 2026-03-08 | `latest`/`next`/pinned validation complete |
+| Wave 5 | Distribution infra | 2026-03-06 to 2026-03-07 | PyPI release workflow + uvx distribution path working |
+| Wave 6 | Distribution validation | 2026-03-07 to 2026-03-08 | uvx stable/pinned validation complete |
 
 ## Issue Execution Tracker (Living)
 
@@ -57,10 +57,10 @@
 | RM-06 | Not Started | Codex | codex/run-01-fastmcp-import-smoke | - | Future extension: markdown mention-to-chip support using Docs `InsertPersonRequest` with graceful fallback for unresolved mentions. | 2026-03-02 |
 | RM-07 | Not Started | Codex | codex/run-01-fastmcp-import-smoke | - | Future extension: evaluate/add Google Workspace Add-ons path for third-party smart chips (`workspace.linkpreview` / `workspace.linkcreate`) where Docs API direct writes are not available. | 2026-03-02 |
 | DIST-00 | Done | Codex | codex/run-01-fastmcp-import-smoke | - | Canonical package identity is standardized (`google-workspace-mcp-advanced`) across npm metadata/docs, and distribution guard checks are enforced in CI + release workflows. | 2026-03-01 |
-| DIST-01 | In Progress | Codex | codex/run-01-fastmcp-import-smoke | - | PyPI/npm release workflow design, guard scripts, and CI coupling checks are implemented locally; release workflows are still not present on default branch (`main`), so first live publish cycle remains blocked. | 2026-03-02 |
+| DIST-01 | Done | Codex | codex/run-01-fastmcp-import-smoke | - | PyPI release workflow is operational and published `google-workspace-mcp-advanced==1.0.0` (run `22577853068`) with verified uvx startup path. | 2026-03-02 |
 | DIST-02 | Done | Codex | codex/run-01-fastmcp-import-smoke | - | npm launcher preflight/remediation path is implemented and automated smoke tests are in place (`tests/unit/core/test_npm_launcher.py`) and wired into CI. | 2026-03-01 |
 | DIST-03 | Done | Codex | codex/run-01-fastmcp-import-smoke | - | Deterministic pinned install and rollback guidance is documented in README + `docs/DISTRIBUTION_RELEASE.md`. | 2026-03-01 |
-| DIST-04 | In Progress | Codex | codex/run-01-fastmcp-import-smoke | - | OIDC/provenance strategy is defined, but live verification is blocked until release workflows are committed to `main` and first publish can run. | 2026-03-02 |
+| DIST-04 | Done | Codex | codex/run-01-fastmcp-import-smoke | - | npm provenance/auth path is de-scoped by product decision because npm/npx distribution is no longer in the release-critical path. | 2026-03-02 |
 
 ## Summary
 This plan follows the Codex ExecPlan model and is scoped to **actionable current issues**, sequenced in **risk-first waves**, with a **full MCP harness + live smoke testing** strategy using `david@helmus.me` in **full-write mode**.
@@ -68,7 +68,7 @@ This plan follows the Codex ExecPlan model and is scoped to **actionable current
 The plan is **decision-complete** for:
 1. dry-run rollout across mutating tools (inventory + contract + migration waves),
 2. runtime/security hardening,
-3. canonical distribution path via npm/npx with explicit scope alignment.
+3. canonical distribution path via PyPI + `uvx` with explicit scope alignment.
 
 The plan resolves:
 1. Security and runtime blockers.
@@ -96,7 +96,7 @@ The plan resolves:
 5. `SEC-01` implemented: unverified JWT identity extraction is denied by default; break-glass override is explicit and logged.
 6. `SEC-02` implemented: credential and session JSON persistence now use centralized secure atomic writes with restrictive permissions.
 7. Planning/status docs are internally inconsistent and stale in places.
-8. Distribution packaging has started: canonical npm launcher metadata and guardrails exist; publish workflows and release sequencing are still pending.
+8. Distribution packaging is operational for the primary lane: PyPI publish + uvx stable/pinned paths are verified.
 
 ## Issue Register and Mitigation Strategy
 
@@ -115,13 +115,11 @@ The plan resolves:
 | RM-02 | P2 | Table reliability still tracked as open in roadmap/testing docs | Add regression e2e and close with proof; if failing, apply pre-defined fallback path via table manager flow | `gdocs/markdown_parser.py`, integration/live tests, docs |
 | RM-03 | P3 | Extra empty bullet after task lists | Add explicit post-task-list bullet reset behavior and regression tests | `gdocs/markdown_parser.py`, tests |
 | RM-04 | P3 | Images are implemented but insufficiently verified | Add deterministic tests for image insertion paths and structure assertions | `gdocs/markdown_parser.py`, integration/live tests |
-| DIST-00 | P1 | npm package naming mismatch across docs/plans | Standardize to `google-workspace-mcp-advanced` for all npx examples and release automation | `PLAN.md`, wrapper `AGENTS.md`, `README.md`, npm package metadata |
+| DIST-00 | P1 | Distribution package naming mismatch across docs/plans | Standardize to `google-workspace-mcp-advanced` for PyPI/uvx examples and release automation | `PLAN.md`, `README.md`, `docs/DISTRIBUTION_RELEASE.md`, release metadata |
 
 ## Open Roadmap Items Included
 1. PSE-backed `search_custom` enablement remains intentionally deferred (`OP-06`) by product decision.
-2. Distribution wave (`DIST-00`..`DIST-04`) remains open.
-3. Release workflow sequencing (PyPI then npm with coupling checks) remains open.
-4. Smart-chip extension roadmap is now tracked as `RM-05`, `RM-06`, `RM-07` (not started).
+2. Smart-chip extension roadmap is now tracked as `RM-05`, `RM-06`, `RM-07` (not started).
 
 ## Execution Waves (Risk-First)
 
@@ -347,107 +345,40 @@ The plan resolves:
 5. MCP autonomous verification is required, not optional.
 6. OpenCode manual testing remains supported, but autonomous harness becomes primary verification path.
 
-## npm/npx Distribution Extension (Added 2026-02-27)
+## Distribution Strategy Update (uvx-first, 2026-03-02)
 
-### Objective
-Enable stable MCP distribution via `npx` for consumers while preserving a fast local-development execution path for repository contributors.
+### Decision
+1. Primary distribution is `uvx` from PyPI.
+2. npm/npx wrapper lane is de-scoped for now and not required for release readiness.
+3. Core delivery is considered complete when PyPI release + uvx startup validation pass.
 
-### Distribution Strategy
-1. Stable channel: `npx -y google-workspace-mcp-advanced` using npm `latest`.
-2. Prerelease channel: `npx -y google-workspace-mcp-advanced@next` using npm `next`.
-3. Local development channel: `uv run --project <repo-path> gws-mcp-advanced --transport stdio`.
-4. Deterministic release pinning: production docs use explicit version examples (`@x.y.z`) for rollback and reproducibility.
-5. Version coupling: npm wrapper version `x.y.z` launches Python package `google-workspace-mcp-advanced==x.y.z` by default.
+### Primary Distribution Contract
+1. Stable channel:
+   1. `uvx google-workspace-mcp-advanced --transport stdio`
+2. Deterministic pinned channel:
+   1. `uvx google-workspace-mcp-advanced==x.y.z --transport stdio`
+3. Local development channel:
+   1. `uv run --project <repo-path> google-workspace-mcp-advanced --transport stdio`
 
-### Packaging Design (Thin Launcher + uvx)
-1. Add npm package `google-workspace-mcp-advanced` with a single `bin` entry.
-2. Launcher implementation:
-   1. Resolve target Python spec from `GWS_MCP_PYPI_SPEC` or default to `google-workspace-mcp-advanced==<npm-version>`.
-   2. Execute `uvx --from <spec> gws-mcp-advanced ...args`.
-   3. Pass through stdio cleanly with no wrapper-side JSON/log pollution.
-3. Launcher safety behavior:
-   1. If `uvx` is unavailable, fail with actionable install instructions.
-   2. Exit non-zero on process spawn or transport errors.
-   3. Do not handle secrets; only forward env provided by MCP client config.
-4. MCP config examples to document:
-   1. Stable install path via `npx`.
-   2. Local dev path via `uv run --project`.
-   3. Optional pinned package version for deterministic environments.
-   4. Scoped package path is canonical (`google-workspace-mcp-advanced`) for all examples.
+### Release Pipeline (Primary Lane)
+1. Required workflow:
+   1. `.github/workflows/release-pypi.yml`
+2. Required trust setup:
+   1. PyPI trusted publisher for repository `Skeptomenos/google-workspace-mcp-advanced`
+3. Required validations:
+   1. `scripts/check_distribution_scope.py`
+   2. `uvx google-workspace-mcp-advanced==<version> --help`
 
-### Release Pipeline
-1. Publish order is strict:
-   1. Publish Python package to PyPI first.
-   2. Publish npm wrapper second.
-2. npm publish guard:
-   1. Block publish when matching PyPI version is not yet available.
-   2. Block `latest` tag promotion when smoke tests fail.
-3. Trust and provenance:
-   1. Use GitHub Actions OIDC trusted publishing for PyPI and npm.
-   2. Enable npm provenance metadata on publish.
-4. Tag policy:
-   1. `latest` for production-ready versions.
-   2. `next` for prerelease validation.
-5. Rollback policy:
-   1. Rapid npm dist-tag rollback (`latest` back to previous good version).
-   2. Keep previous Python versions installable for rollback compatibility.
+### Deferred npm Wrapper Lane
+1. Wrapper workflow and launcher assets are retained in-repo for potential future reactivation.
+2. This lane is intentionally out of scope for current release readiness.
 
-### Additional Issue Register Entries (Distribution)
-
-| ID | Severity | Issue | Mitigation Strategy | Primary Files |
-|---|---|---|---|---|
-| DIST-00 | P1 | Package name mismatch across planning/docs/release artifacts | Canonicalize all references to `google-workspace-mcp-advanced` and enforce in CI checks | `PLAN.md`, `README.md`, npm metadata, release workflows |
-| DIST-01 | P1 | Wrapper/Python version drift | Enforce publish order and version-coupling checks in release CI | `.github/workflows/*`, npm package metadata |
-| DIST-02 | P1 | Missing `uvx` on consumer machine causes hard failure | Add launcher preflight and clear remediation output | npm launcher script |
-| DIST-03 | P2 | npx non-determinism without pinned version usage | Document pinned installs and keep `latest` strict to vetted builds | `README.md`, release docs |
-| DIST-04 | P2 | Supply-chain integrity risk | OIDC trusted publishing + provenance + minimal launcher surface | publish workflows |
-
-### Execution Waves (Distribution Add-On)
-
-#### Wave 5: Distribution Infrastructure (Day 8-9)
-1. Create npm wrapper package and launcher script.
-2. Add release workflows for Python + npm with publish ordering guarantees.
-3. Add release smoke checks for both `latest` and `next`.
-4. Document stable vs local-dev MCP configuration in `README.md` with canonical package examples only.
-
-#### Wave 6: Distribution Validation and Adoption (Day 9-10)
-1. Validate clean-machine install path using `npx`.
-2. Validate upgrade/downgrade behavior via dist-tags.
-3. Validate local developer path remains faster and unaffected.
-4. Add support notes and troubleshooting for `uvx` prerequisites.
-
-### MCP Test Matrix Additions (Distribution)
-
-| Lane | Transport | Package Source | Purpose |
-|---|---|---|---|
-| DIST-A | `stdio` via `uv run --project <repo-path>` | local project path | Verify local dev loop and immediate code changes |
-| DIST-B | `stdio` via `npx -y google-workspace-mcp-advanced` | npm `latest` | Verify production install path |
-| DIST-C | `stdio` via `npx -y google-workspace-mcp-advanced@next` | npm `next` | Verify prerelease channel before promotion |
-| DIST-D | `stdio` via `npx -y google-workspace-mcp-advanced@x.y.z` | pinned version | Verify deterministic versioned deployments |
-
-### Concrete Distribution Test Cases
-1. `list_tools` parity between local (`uv run --project`) and stable (`npx latest`) channels.
-2. CLI arg passthrough (`--transport`, `--tools`, `--tool-tier`) via npm launcher.
-3. Environment passthrough for auth variables from MCP client config.
-4. Failure-path test when `uvx` is missing.
-5. Version-coupling test that npm `x.y.z` resolves and launches Python `x.y.z`.
-6. End-to-end smoke: initialize client, list tools, call representative read tool, clean exit.
-7. Scope integrity test: wrapper install/launch only through `google-workspace-mcp-advanced`.
-
-### Acceptance Gates (Expanded)
-1. Existing gates remain mandatory:
-   1. `uv run ruff check .`
-   2. `uv run ruff format --check .`
-   3. `uv run pytest`
-2. New distribution gates:
-   1. Launcher smoke (`npx` path) passes in CI.
-   2. Local dev smoke (`uv run --project` path) passes in CI.
-   3. Publish workflow blocks npm release on failed smoke or missing matching PyPI version.
-   4. Publish workflow blocks release if package name differs from `google-workspace-mcp-advanced`.
-3. Documentation gate:
-   1. `README.md` contains both stable and local-dev MCP configuration examples.
-   2. Stable examples use `google-workspace-mcp-advanced` only.
-   3. Release notes include pinned install example and rollback note.
+### Distribution Acceptance (Updated)
+1. Primary lane:
+   1. PyPI release successful for target version.
+   2. uvx stable and uvx pinned commands start successfully.
+2. Deferred lane:
+   1. npm publish/provenance may be validated later without blocking shipment.
 
 ## Update Protocol (Required)
 1. On every issue transition (`Not Started` -> `In Progress` -> `Blocked`/`Done`), update the row in `Issue Execution Tracker (Living)`.
@@ -588,15 +519,13 @@ Enable stable MCP distribution via `npx` for consumers while preserving a fast l
 | 2026-02-28 | Keep OpenCode live lifecycle smoke opt-in (`OPENCODE_SMOKE_LIVE=1`) | Preserve deterministic local validation of prompt execution/teardown without forcing model/provider credentials in default test runs | OPC-01, QUAL-02 |
 
 ## Session Handoff (Living)
-1. Current Focus: `Wave 5 distribution execution`
+1. Current Focus: `Finalize uvx-first rollout (docs sync, verification, commit/push/merge)`
 2. Next 3 Actions:
-   1. merge/push release workflow files to `main` so `workflow_dispatch` and release automation are available on the default branch,
-   2. run first live release validation in order: `release-pypi.yml` then `release-npm.yml` for the same version,
-   3. verify trusted publisher bindings/provenance and execute distribution channel validation (`DT-01`..`DT-07`).
+   1. complete final user-doc cleanup for uvx-only guidance,
+   2. run verification protocol (`ruff`, `format --check`, `pytest`),
+   3. commit, push, and merge.
 3. Active Blockers:
-   1. Distribution workflow dispatch remains blocked until release workflows are on default branch (`main`).
-   2. External trusted-publisher configuration and first live publish verification are still pending in PyPI/npm settings.
-   3. `OP-06` remains intentionally deferred by product decision.
+   1. `OP-06` remains intentionally deferred by product decision.
 
 ## Execution Changelog (Living)
 1. 2026-02-27: Promoted `PLAN.md` to canonical living execution doc; added readiness verdict, wave schedule, issue tracker, update protocol, evidence log, decision log, and session handoff.
@@ -669,3 +598,9 @@ Enable stable MCP distribution via `npx` for consumers while preserving a fast l
 68. 2026-03-02: Added smart-chip roadmap extensions `RM-05`/`RM-06`/`RM-07` to the issue tracker as the next markdown feature wave after distribution closure.
 69. 2026-03-02: Attempted first live release execution via `gh workflow run release-pypi.yml --ref codex/run-01-fastmcp-import-smoke`; GitHub returned `HTTP 404` because release workflows are still absent on default branch (`main`), confirming `DIST-01`/`DIST-04` remain externally blocked until merge.
 70. 2026-03-02: Re-validated distribution blockers against `main` after merge (`a39b34f`): `gh workflow list` still exposes only `CI`, `DT-01..DT-03` remain blocked with workflow-404 responses on default branch, and `DT-07` remains blocked because npm package `google-workspace-mcp-advanced` is not yet published (`npm view` returns `E404`).
+71. 2026-03-02: Completed mainline hardening and merge path for distribution: resolved CI-only FastMCP metadata drift (tool `.fn`/`.name` compatibility shim + Python 3.10 time API fix), repaired `release-pypi.yml` YAML parsing/dispatch issues, and merged follow-up PRs so both `Release PyPI` and `Release npm` are active on `main`.
+72. 2026-03-02: Executed first live `Release PyPI` workflow-dispatch run (`22577418832`) through `verify` and `build`; publish step initially failed with PyPI trusted publishing exchange error `invalid-publisher` for claims `repository=Skeptomenos/google-workspace-mcp-advanced`, `workflow_ref=.../release-pypi.yml@refs/heads/main`, `environment=pypi`.
+73. 2026-03-02: Re-ran `Release PyPI` after publisher setup (`22577853068`) and completed all jobs successfully (`verify`, `build`, `publish`), confirming PyPI package availability (`https://pypi.org/pypi/google-workspace-mcp-advanced/json` -> 200, version `1.0.0`).
+74. 2026-03-02: `Release npm` auto-trigger run (`22577900946`) passed verification gates and provenance generation but failed final publish with npm auth error (`Access token expired or revoked`, `E404` PUT publish). Distribution closure now depends on npm auth/trusted-publisher remediation.
+75. 2026-03-02: Product decision updated distribution scope to uvx-only for now; npm/npx wrapper lane is explicitly de-scoped (retained in-repo for possible future reactivation) and no longer tracked as a release blocker.
+76. 2026-03-02: Finalized uvx-only user-doc rollout (README/setup/distribution guides), reconciled roadmap/testing docs to de-scope npm blockers, and re-ran full verification protocol (`uv run ruff check .`, `uv run ruff format --check .`, `uv run pytest`) with green results (`615 passed`, `3 skipped`).

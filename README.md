@@ -19,8 +19,20 @@ This project is an advanced fork of [taylorwilsdon/google_workspace_mcp](https:/
 ### Prerequisites
 
 - Python 3.11+
-- uv (recommended) or pip
-- Node.js 18+ (only required for `npx` distribution usage)
+- uv (required for `uvx` distribution path)
+
+Install `uv`:
+
+```bash
+# macOS (Homebrew)
+brew install uv
+
+# Linux/macOS (official installer)
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# Verify
+uv --version
+```
 
 ### Installation
 
@@ -35,24 +47,19 @@ uv pip install -e .
 pip install -e .
 ```
 
-### Distribution Channels (`npm`/`npx`)
+### Distribution Channels (`uv`/`uvx`, Recommended)
 
 ```bash
-# Stable channel (npm latest)
-npx -y google-workspace-mcp-advanced --transport stdio
-
-# Prerelease channel (npm next)
-npx -y google-workspace-mcp-advanced@next --transport stdio
+# Stable channel (latest PyPI release)
+uvx google-workspace-mcp-advanced --transport stdio
 
 # Pinned deterministic version (recommended for production rollouts)
-npx -y google-workspace-mcp-advanced@1.0.0 --transport stdio
+uvx google-workspace-mcp-advanced==1.0.0 --transport stdio
 ```
 
 Notes:
-- The npm launcher executes the matching Python release through `uvx` (or `uv tool run` fallback).
-- Override Python package resolution with `GWS_MCP_PYPI_SPEC`, for example:
-  `GWS_MCP_PYPI_SPEC=google-workspace-mcp-advanced==1.0.0 npx -y google-workspace-mcp-advanced --transport stdio`
-- Release sequencing, provenance, and rollback guidance: `docs/DISTRIBUTION_RELEASE.md`.
+- `uvx` is the primary distribution path and directly installs/runs from PyPI.
+- Release sequencing and rollback guidance: `docs/DISTRIBUTION_RELEASE.md`.
 
 ### Running the Server
 
@@ -78,8 +85,8 @@ Add to your MCP client configuration (e.g., Claude Desktop, OpenCode):
 {
   "mcpServers": {
     "google-workspace": {
-      "command": "npx",
-      "args": ["-y", "google-workspace-mcp-advanced", "--transport", "stdio"],
+      "command": "uvx",
+      "args": ["google-workspace-mcp-advanced==1.0.0", "--transport", "stdio"],
       "env": {
         "USER_GOOGLE_EMAIL": "your.email@gmail.com"
       }
@@ -102,7 +109,7 @@ Add to your MCP client configuration (e.g., Claude Desktop, OpenCode):
 }
 ```
 
-Use the `npx` server entry for stable releases and keep the `uv run --project` entry for local development.
+Use the `uvx` server entry for stable releases and keep the `uv run --project` entry for local development.
 
 User docs entry point: `docs/INDEX.md`.
 Contributor docs entry points: `AGENTS.md` and `agent-docs/INDEX.md`.
