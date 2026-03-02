@@ -21,8 +21,8 @@ GMAIL_REQUEST_DELAY = 0.1
 
 
 @server.tool()
-@require_google_service("gmail", "gmail_read")
 @handle_http_errors("get_gmail_thread_content", is_read_only=True, service_type="gmail")
+@require_google_service("gmail", "gmail_read")
 async def get_gmail_thread_content(service, thread_id: str, user_google_email: str) -> str:
     """
     Retrieves the complete content of a Gmail conversation thread, including all messages.
@@ -44,8 +44,8 @@ async def get_gmail_thread_content(service, thread_id: str, user_google_email: s
 
 
 @server.tool()
-@require_google_service("gmail", "gmail_read")
 @handle_http_errors("get_gmail_threads_content_batch", is_read_only=True, service_type="gmail")
+@require_google_service("gmail", "gmail_read")
 async def get_gmail_threads_content_batch(
     service,
     thread_ids: list[str],

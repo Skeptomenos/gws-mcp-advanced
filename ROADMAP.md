@@ -1,52 +1,36 @@
 # Product Roadmap
 
-## Active Features
+## Metadata
+- Last Updated (UTC): 2026-03-01T21:00:38Z
+- Canonical Execution Plan: `/Users/david.helmus/repos/ai-dev/_infra/gws-mcp-advanced/gws-mcp-advanced/agent-docs/roadmap/PLAN.md`
+- Canonical Manual Matrix: `/Users/david.helmus/repos/ai-dev/_infra/gws-mcp-advanced/gws-mcp-advanced/agent-docs/testing/OPENCODE_MCP_MANUAL_TESTING.md`
 
-### Google Docs Markdown Formatting
-**Status:** In Progress
-**Branch:** `feature/gdocs-markdown-formatting`
+## Current State
 
-#### Problem
-The current `create_doc` tool treats all input as plain text. When AI assistants generate content (which is typically Markdown), it appears in the Google Doc with raw syntax (e.g., `# Heading`, `**bold**`) rather than proper formatting. This creates a poor user experience requiring manual cleanup.
+### Completed Roadmap Closures (Wave 3)
+1. `RM-01` Code-block rendering parity: complete.
+   - Evidence: OpenCode `OP-68` PASS.
+2. `RM-02` Table reliability: complete.
+   - Evidence: multi-table and preceding-content integration regressions plus manual extended-matrix PASS.
+3. `RM-03` Task-list trailing bullet regression: complete.
+   - Evidence: OpenCode `OP-67` PASS.
+4. `RM-04` Markdown image rendering regression: complete.
+   - Evidence: OpenCode `OP-69` PASS (visual confirmation).
+   - Note: `inspect_doc_structure` does not surface inline image objects reliably for this scenario; visual verification is authoritative for image presence.
 
-#### Research & Options
-We investigated three approaches to solve this:
+### Deferred Platform Item (Non-Blocking)
+1. Programmable Search Engine (`search_custom`) enablement.
+   - Status: Deferred by product decision.
+   - Scope: `GOOGLE_PSE_API_KEY` + `GOOGLE_PSE_ENGINE_ID`.
+   - Reason: web-search coverage currently provided by other MCPs.
+   - Revisit trigger: when unified web-search routing through this MCP becomes a product requirement.
 
-1.  **Drive Import (HTML Conversion)**
-    *   **Strategy:** Convert Markdown → HTML locally, then upload to Drive using the `convert=True` option.
-    *   **Pros:** Easy implementation; handles complex HTML elements.
-    *   **Cons:** **Cannot update existing files** easily (overwrites file); styles depend on Google's default HTML import (often looks like a "webpage" printout, not a native Doc).
+## Next Roadmap Focus
+1. Distribution wave (`DIST-00`..`DIST-04`):
+   - Scoped npm launcher (`@skeptomenos/gws-mcp-advanced`)
+   - Release coupling and publish guardrails
+   - Pinned-version rollout guidance
 
-2.  **Native Markdown Parser (Recommended by User)**
-    *   **Strategy:** Write a custom Python parser to translate Markdown syntax directly into Google Docs API `batchUpdate` requests (`insertText`, `updateParagraphStyle`, `createParagraphBullets`, `insertTable`).
-    *   **Pros:** 
-        *   **Native Formatting:** Uses proper Google Docs styles (e.g., `HEADING_1`, `NORMAL_TEXT`) so the Outline view works.
-        *   **Updatable:** Can insert formatted content into *existing* docs at any index.
-        *   **Clean Data:** Results in a clean document structure, not a "converted HTML" blob.
-    *   **Cons:** Higher initial development effort to write the parser.
-
-3.  **Client-Side HTML**
-    *   **Strategy:** Require the AI to send HTML.
-    *   **Pros:** Zero dev effort.
-    *   **Cons:** Poor UX; prone to errors.
-
-#### Implementation Plan (Option 2 - Native Parser)
-We will implement a robust **Native Markdown Parser** to satisfy the requirement for high-quality, updatable documents.
-
-1.  **New Module:** Create `gdocs/markdown_parser.py`.
-    *   Implement a parser that tokenizes Markdown (CommonMark subset).
-    *   Map tokens to Google Docs API `Request` objects.
-    *   **Support:**
-        *   Headings (`#`) -> `updateParagraphStyle` (namedStyleType: HEADING_1, etc.)
-        *   Bold/Italic (`**`, `*`) -> `updateTextStyle`
-        *   Lists (`-`, `1.`) -> `createParagraphBullets`
-        *   Tables (`| col |`) -> `insertTable` + cell population
-        *   Code blocks (```) -> Monospace font + background
-
-2.  **Tool Updates:**
-    *   **`create_doc`**: Add `parse_markdown=True` flag (default). Use the parser to generate the initial `batchUpdate` requests.
-    *   **`append_to_doc`** (or `modify_doc_text`): Enable Markdown support for inserting text into existing documents.
-
-3.  **Testing:**
-    *   Create test cases for mixed formatting (lists inside sections, tables).
-    *   Verify "native" feel (Outline view works).
+## Closure Notes
+1. Markdown formatting is no longer an active roadmap risk area.
+2. Historical design exploration for markdown parsing is preserved in commit history and specs; this roadmap now tracks only forward-looking work.

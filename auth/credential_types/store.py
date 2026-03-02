@@ -13,6 +13,8 @@ from datetime import datetime
 
 from google.oauth2.credentials import Credentials
 
+from auth.security_io import atomic_write_json, ensure_secure_directory
+
 logger = logging.getLogger(__name__)
 
 
@@ -60,8 +62,9 @@ class LocalDirectoryCredentialStore(CredentialStore):
 
     def _get_credential_path(self, user_email: str) -> str:
         """Get the file path for a user's credentials."""
-        if not os.path.exists(self.base_dir):
-            os.makedirs(self.base_dir)
+        dir_existed = os.path.exists(self.base_dir)
+        ensure_secure_directory(self.base_dir)
+        if not dir_existed:
             logger.info(f"Created credentials directory: {self.base_dir}")
         return os.path.join(self.base_dir, f"{user_email}.json")
 
@@ -118,8 +121,7 @@ class LocalDirectoryCredentialStore(CredentialStore):
         }
 
         try:
-            with open(creds_path, "w") as f:
-                json.dump(creds_data, f, indent=2)
+            atomic_write_json(creds_path, creds_data)
             logger.info(f"Stored credentials for {user_email} to {creds_path}")
             return True
         except OSError as e:

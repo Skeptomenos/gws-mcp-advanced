@@ -18,6 +18,13 @@ if TYPE_CHECKING:
     from fastmcp import Context
 
 logger = logging.getLogger(__name__)
+UNVERIFIED_JWT_OVERRIDE_ENV = "WORKSPACE_MCP_ALLOW_UNVERIFIED_JWT"
+
+
+def _allow_unverified_jwt_identity() -> bool:
+    """Return whether unverified JWT identity extraction is explicitly allowed."""
+    raw_value = os.getenv(UNVERIFIED_JWT_OVERRIDE_ENV, "").strip().lower()
+    return raw_value in {"1", "true", "yes", "on"}
 
 
 def _get_context(context: MiddlewareContext) -> "Context":
@@ -111,6 +118,20 @@ class AuthInfoMiddleware(Middleware):
 
     def _handle_jwt_token(self, context: MiddlewareContext, token_str: str) -> bool:
         """Handle JWT token authentication."""
+        if not _allow_unverified_jwt_identity():
+            logger.warning(
+                "SECURITY: Rejected unverified JWT identity claims. "
+                "Set %s=true only for temporary emergency compatibility.",
+                UNVERIFIED_JWT_OVERRIDE_ENV,
+            )
+            return False
+
+        logger.warning(
+            "SECURITY WARNING: Accepting unverified JWT identity claims because %s=true. "
+            "This bypasses signature verification and should only be used as a temporary break-glass measure.",
+            UNVERIFIED_JWT_OVERRIDE_ENV,
+        )
+
         ctx = _get_context(context)
         try:
             token_payload = jwt.decode(token_str, options={"verify_signature": False})
@@ -137,7 +158,7 @@ class AuthInfoMiddleware(Middleware):
             user_email = token_payload.get("email", token_payload.get("username"))
             if user_email:
                 ctx.set_state("authenticated_user_email", user_email)
-                ctx.set_state("authenticated_via", "jwt_token")
+                ctx.set_state("authenticated_via", "jwt_token_unverified")
                 return True
             return False
 

@@ -262,6 +262,7 @@ async def create_event(
     use_default_reminders: bool = True,
     transparency: str | None = None,
     visibility: str | None = None,
+    dry_run: bool = True,
 ) -> str:
     """
     Creates a new event.
@@ -282,6 +283,7 @@ async def create_event(
         use_default_reminders (bool): Whether to use calendar's default reminders. If False, uses custom reminders. Defaults to True.
         transparency (Optional[str]): Event transparency for busy/free status. "opaque" shows as Busy (default), "transparent" shows as Available/Free. Defaults to None (uses Google Calendar default).
         visibility (Optional[str]): Event visibility. "default" uses calendar default, "public" is visible to all, "private" is visible only to attendees, "confidential" is same as private (legacy). Defaults to None (uses Google Calendar default).
+        dry_run (bool): If True, returns a preview and does not create the event. Defaults to True.
 
     Returns:
         str: Confirmation message of the successful event creation with event link.
@@ -331,6 +333,16 @@ async def create_event(
     # Handle visibility validation
     _apply_visibility_if_valid(event_body, visibility, "create_event")
 
+    if dry_run:
+        attachment_count = len(attachments) if attachments else 0
+        dry_run_message = (
+            f"DRY RUN: Would create event '{summary}' in calendar '{calendar_id}' for {user_google_email} "
+            f"(start={start_time}, end={end_time}, attendees={len(attendees) if attendees else 0}, "
+            f"attachments={attachment_count}, add_google_meet={add_google_meet})."
+        )
+        logger.info("[create_event] Dry run enabled; skipping create mutation.")
+        return dry_run_message
+
     if add_google_meet:
         request_id = str(uuid.uuid4())
         event_body["conferenceData"] = {
@@ -367,13 +379,15 @@ async def create_event(
                 if drive_service:
                     try:
                         file_metadata = await asyncio.to_thread(
-                            lambda fid=file_id: drive_service.files()  # type: ignore[misc]
-                            .get(
-                                fileId=fid,
-                                fields="mimeType,name",
-                                supportsAllDrives=True,
+                            lambda fid=file_id: (
+                                drive_service.files()  # type: ignore[misc]
+                                .get(
+                                    fileId=fid,
+                                    fields="mimeType,name",
+                                    supportsAllDrives=True,
+                                )
+                                .execute()
                             )
-                            .execute()
                         )
                         mime_type = file_metadata.get("mimeType", mime_type)
                         filename = file_metadata.get("name")
@@ -392,24 +406,28 @@ async def create_event(
                     }
                 )
         created_event = await asyncio.to_thread(
-            lambda: service.events()
-            .insert(
-                calendarId=calendar_id,
-                body=event_body,
-                supportsAttachments=True,
-                conferenceDataVersion=1 if add_google_meet else 0,
+            lambda: (
+                service.events()
+                .insert(
+                    calendarId=calendar_id,
+                    body=event_body,
+                    supportsAttachments=True,
+                    conferenceDataVersion=1 if add_google_meet else 0,
+                )
+                .execute()
             )
-            .execute()
         )
     else:
         created_event = await asyncio.to_thread(
-            lambda: service.events()
-            .insert(
-                calendarId=calendar_id,
-                body=event_body,
-                conferenceDataVersion=1 if add_google_meet else 0,
+            lambda: (
+                service.events()
+                .insert(
+                    calendarId=calendar_id,
+                    body=event_body,
+                    conferenceDataVersion=1 if add_google_meet else 0,
+                )
+                .execute()
             )
-            .execute()
         )
     link = created_event.get("htmlLink", "No link available")
     confirmation_message = (
@@ -452,6 +470,7 @@ async def modify_event(
     transparency: str | None = None,
     visibility: str | None = None,
     color_id: str | None = None,
+    dry_run: bool = True,
 ) -> str:
     """
     Modifies an existing event.
@@ -473,6 +492,7 @@ async def modify_event(
         transparency (Optional[str]): Event transparency for busy/free status. "opaque" shows as Busy, "transparent" shows as Available/Free. If None, preserves existing transparency setting.
         visibility (Optional[str]): Event visibility. "default" uses calendar default, "public" is visible to all, "private" is visible only to attendees, "confidential" is same as private (legacy). If None, preserves existing visibility setting.
         color_id (Optional[str]): Event color ID (1-11). If None, preserves existing color.
+        dry_run (bool): If True, returns a preview and does not modify the event. Defaults to True.
 
     Returns:
         str: Confirmation message of the successful event modification with event link.
@@ -509,6 +529,8 @@ async def modify_event(
         reminder_data: dict[str, bool | list[dict[str, str | int]]] = {}
         if use_default_reminders is not None:
             reminder_data["useDefault"] = use_default_reminders
+        elif dry_run:
+            reminder_data["useDefault"] = True
         else:
             # Preserve existing event's useDefault value if not explicitly specified
             try:
@@ -559,6 +581,15 @@ async def modify_event(
 
     # Log the event ID for debugging
     logger.info(f"[modify_event] Attempting to update event with ID: '{event_id}' in calendar '{calendar_id}'")
+
+    if dry_run:
+        planned_fields = ", ".join(sorted(event_body.keys()))
+        dry_run_message = (
+            f"DRY RUN: Would modify event '{event_id}' in calendar '{calendar_id}' for {user_google_email}. "
+            f"Planned fields: {planned_fields}. add_google_meet={add_google_meet}."
+        )
+        logger.info("[modify_event] Dry run enabled; skipping update mutation.")
+        return dry_run_message
 
     # Get the existing event to preserve fields that aren't being updated
     try:
@@ -614,14 +645,16 @@ async def modify_event(
 
     # Proceed with the update
     updated_event = await asyncio.to_thread(
-        lambda: service.events()
-        .update(
-            calendarId=calendar_id,
-            eventId=event_id,
-            body=event_body,
-            conferenceDataVersion=1,
+        lambda: (
+            service.events()
+            .update(
+                calendarId=calendar_id,
+                eventId=event_id,
+                body=event_body,
+                conferenceDataVersion=1,
+            )
+            .execute()
         )
-        .execute()
     )
 
     link = updated_event.get("htmlLink", "No link available")
@@ -647,7 +680,13 @@ async def modify_event(
 @server.tool()
 @handle_http_errors("delete_event", service_type="calendar")
 @require_google_service("calendar", "calendar_events")
-async def delete_event(service, user_google_email: str, event_id: str, calendar_id: str = "primary") -> str:
+async def delete_event(
+    service,
+    user_google_email: str,
+    event_id: str,
+    calendar_id: str = "primary",
+    dry_run: bool = True,
+) -> str:
     """
     Deletes an existing event.
 
@@ -655,6 +694,7 @@ async def delete_event(service, user_google_email: str, event_id: str, calendar_
         user_google_email (str): The user's Google email address. Required.
         event_id (str): The ID of the event to delete.
         calendar_id (str): Calendar ID (default: 'primary').
+        dry_run (bool): If True, returns a preview and does not delete the event. Defaults to True.
 
     Returns:
         str: Confirmation message of the successful event deletion.
@@ -663,6 +703,13 @@ async def delete_event(service, user_google_email: str, event_id: str, calendar_
 
     # Log the event ID for debugging
     logger.info(f"[delete_event] Attempting to delete event with ID: '{event_id}' in calendar '{calendar_id}'")
+
+    if dry_run:
+        dry_run_message = (
+            f"DRY RUN: Would delete event '{event_id}' from calendar '{calendar_id}' for {user_google_email}."
+        )
+        logger.info("[delete_event] Dry run enabled; skipping delete mutation.")
+        return dry_run_message
 
     # Try to get the event first to verify it exists
     try:

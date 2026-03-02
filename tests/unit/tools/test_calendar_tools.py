@@ -10,6 +10,9 @@ Tests cover:
 - Tool registration
 """
 
+import ast
+from pathlib import Path
+
 from gcalendar.calendar_helpers import (
     _apply_transparency_if_valid,
     _apply_visibility_if_valid,
@@ -20,6 +23,20 @@ from gcalendar.calendar_helpers import (
     _parse_reminders_json,
     _preserve_existing_fields,
 )
+
+CALENDAR_TOOLS_PATH = Path(__file__).resolve().parents[3] / "gcalendar" / "calendar_tools.py"
+
+
+def _load_calendar_tools_tree() -> tuple[str, ast.Module]:
+    source = CALENDAR_TOOLS_PATH.read_text(encoding="utf-8")
+    return source, ast.parse(source)
+
+
+def _get_function_node(tree: ast.Module, function_name: str) -> ast.AsyncFunctionDef:
+    for node in tree.body:
+        if isinstance(node, ast.AsyncFunctionDef) and node.name == function_name:
+            return node
+    raise AssertionError(f"Function '{function_name}' not found in calendar_tools.py")
 
 
 class TestParseRemindersJson:
@@ -387,3 +404,45 @@ class TestNormalizeAttendees:
         attendees = [{"name": "John"}, 12345]
         result = _normalize_attendees(json.dumps(attendees))
         assert result is None
+
+
+class TestCalendarMutatorDryRunContract:
+    """Static contract tests for calendar mutator dry-run behavior."""
+
+    def test_mutators_expose_dry_run_default_true(self):
+        """Mutating tools should define dry_run with a default of True."""
+        _, tree = _load_calendar_tools_tree()
+
+        for function_name in ("create_event", "modify_event", "delete_event"):
+            function_node = _get_function_node(tree, function_name)
+            arg_names = [arg.arg for arg in function_node.args.args]
+            assert arg_names[-1] == "dry_run"
+
+            default_offset = len(arg_names) - len(function_node.args.defaults)
+            defaults_by_arg = {
+                arg_names[default_offset + index]: default for index, default in enumerate(function_node.args.defaults)
+            }
+            dry_run_default = defaults_by_arg["dry_run"]
+            assert isinstance(dry_run_default, ast.Constant)
+            assert dry_run_default.value is True
+
+    def test_mutators_check_dry_run_before_mutation_call(self):
+        """Dry-run guard should be defined before the concrete mutation call."""
+        source, tree = _load_calendar_tools_tree()
+        mutation_markers = {
+            "create_event": ".insert(",
+            "modify_event": ".update(",
+            "delete_event": ".delete(",
+        }
+
+        for function_name, mutation_marker in mutation_markers.items():
+            function_node = _get_function_node(tree, function_name)
+            function_source = ast.get_source_segment(source, function_node)
+            assert function_source is not None
+
+            dry_run_guard_index = function_source.find("if dry_run:")
+            mutation_index = function_source.find(mutation_marker)
+            assert dry_run_guard_index != -1
+            assert mutation_index != -1
+            assert dry_run_guard_index < mutation_index
+            assert "DRY RUN:" in function_source

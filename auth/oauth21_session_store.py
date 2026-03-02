@@ -10,7 +10,6 @@ import contextvars
 import json
 import logging
 import os
-import tempfile
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from threading import RLock
@@ -18,6 +17,8 @@ from typing import Any, Optional, Protocol
 
 from fastmcp.server.auth import AccessToken
 from google.oauth2.credentials import Credentials
+
+from auth.security_io import atomic_write_json, ensure_secure_directory
 
 logger = logging.getLogger(__name__)
 
@@ -41,45 +42,10 @@ def _get_oauth_states_file_path() -> str:
         else:
             base_dir = os.path.join(os.getcwd(), ".config", "google-workspace-mcp")
 
-    # Ensure directory exists
-    if not os.path.exists(base_dir):
-        os.makedirs(base_dir, exist_ok=True)
+    # Ensure directory exists with secure permissions
+    ensure_secure_directory(base_dir)
 
     return os.path.join(base_dir, "oauth_states.json")
-
-
-def _atomic_write_json(file_path: str, data: dict, mode: int = 0o600) -> None:
-    """
-    Atomically write JSON data to a file with restrictive permissions.
-
-    Uses a temporary file + rename pattern to ensure the file is never
-    left in a corrupted state if the process crashes mid-write.
-
-    Args:
-        file_path: Target file path
-        data: Dictionary to serialize as JSON
-        mode: File permission mode (default: 0o600 = owner read/write only)
-    """
-    dir_path = os.path.dirname(file_path)
-    if dir_path and not os.path.exists(dir_path):
-        os.makedirs(dir_path, exist_ok=True)
-
-    # Create temp file in same directory to ensure same filesystem (for atomic rename)
-    fd, temp_path = tempfile.mkstemp(dir=dir_path, suffix=".tmp")
-    try:
-        # Set restrictive permissions before writing sensitive data
-        os.fchmod(fd, mode)
-        with os.fdopen(fd, "w") as f:
-            json.dump(data, f, indent=2)
-        # Atomic rename (POSIX guarantees this is atomic on same filesystem)
-        os.replace(temp_path, file_path)
-    except Exception:
-        # Clean up temp file on failure
-        try:
-            os.unlink(temp_path)
-        except OSError:
-            pass
-        raise
 
 
 def _normalize_expiry_to_naive_utc(expiry: Any | None) -> datetime | None:
@@ -338,7 +304,7 @@ class OAuth21SessionStore:
                     "created_at": data["created_at"].isoformat() if data.get("created_at") else None,
                 }
 
-            _atomic_write_json(self._states_file_path, serializable_data)
+            atomic_write_json(self._states_file_path, serializable_data)
             logger.debug("Persisted %d OAuth states to disk", len(serializable_data))
 
         except OSError as e:
@@ -410,7 +376,7 @@ class OAuth21SessionStore:
                 "session_auth_binding": self._session_auth_binding,
             }
 
-            _atomic_write_json(sessions_file, data)
+            atomic_write_json(sessions_file, data)
             logger.debug("Persisted session mappings to %s", sessions_file)
 
         except OSError as e:

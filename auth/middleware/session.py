@@ -6,6 +6,7 @@ for use by tool functions.
 """
 
 import logging
+import os
 from collections.abc import Callable
 from typing import Any
 
@@ -19,6 +20,13 @@ from auth.oauth21_session_store import (
 )
 
 logger = logging.getLogger(__name__)
+UNVERIFIED_JWT_OVERRIDE_ENV = "WORKSPACE_MCP_ALLOW_UNVERIFIED_JWT"
+
+
+def _allow_unverified_jwt_identity() -> bool:
+    """Return whether unverified JWT identity extraction is explicitly allowed."""
+    raw_value = os.getenv(UNVERIFIED_JWT_OVERRIDE_ENV, "").strip().lower()
+    return raw_value in {"1", "true", "yes", "on"}
 
 
 class MCPSessionMiddleware(BaseHTTPMiddleware):
@@ -57,16 +65,28 @@ class MCPSessionMiddleware(BaseHTTPMiddleware):
 
             auth_header = headers.get("authorization")
             if auth_header and auth_header.lower().startswith("bearer ") and not user_email:
-                try:
-                    import jwt
+                if _allow_unverified_jwt_identity():
+                    logger.warning(
+                        "SECURITY WARNING: Extracting identity from unverified JWT in session middleware because %s=true. "
+                        "This should only be used as a temporary break-glass measure.",
+                        UNVERIFIED_JWT_OVERRIDE_ENV,
+                    )
+                    try:
+                        import jwt
 
-                    token = auth_header[7:]
-                    claims = jwt.decode(token, options={"verify_signature": False})
-                    user_email = claims.get("email")
-                    if user_email:
-                        logger.debug(f"Extracted user email from JWT: {user_email}")
-                except Exception as e:
-                    logger.debug(f"Failed to decode JWT from Authorization header: {e}")
+                        token = auth_header[7:]
+                        claims = jwt.decode(token, options={"verify_signature": False})
+                        user_email = claims.get("email")
+                        if user_email:
+                            logger.debug(f"Extracted user email from unverified JWT: {user_email}")
+                    except Exception as e:
+                        logger.debug(f"Failed to decode JWT from Authorization header: {e}")
+                else:
+                    logger.warning(
+                        "SECURITY: Ignoring unverified JWT identity claims in session middleware. "
+                        "Set %s=true only for temporary emergency compatibility.",
+                        UNVERIFIED_JWT_OVERRIDE_ENV,
+                    )
 
             if session_id or auth_context or user_email or mcp_session_id:
                 effective_session_id = session_id

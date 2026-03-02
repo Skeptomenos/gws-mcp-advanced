@@ -130,7 +130,7 @@ set_transport_mode("streamable-http")
 import gmail
 import gdrive
 import gcalendar.calendar_tools
-import gdocs.docs_tools
+import gdocs
 import gsheets.sheets_tools
 import gchat.chat_tools
 import gforms.forms_tools

@@ -279,6 +279,7 @@ async def create_drive_file(
     folder_id: str = "root",
     mime_type: str = "text/plain",
     fileUrl: str | None = None,
+    dry_run: bool = True,
 ) -> str:
     """
     Creates a new file in Google Drive, supporting creation within shared drives.
@@ -291,6 +292,7 @@ async def create_drive_file(
         folder_id (str): The ID of the parent folder. Defaults to 'root'. For shared drives, this must be a folder ID within the shared drive.
         mime_type (str): The MIME type of the file. Defaults to 'text/plain'.
         fileUrl (Optional[str]): If provided, fetches the file content from this URL. Supports file://, http://, and https:// protocols.
+        dry_run (bool): If True, returns a preview and does not create the file. Defaults to True.
 
     Returns:
         str: Confirmation message of the successful file creation with file link.
@@ -301,6 +303,17 @@ async def create_drive_file(
 
     if not content and not fileUrl:
         raise ValidationError("You must provide either 'content' or 'fileUrl'.")
+
+    if dry_run:
+        source_label = "fileUrl" if fileUrl else "content"
+        dry_run_message = (
+            f"DRY RUN: Would create Drive file '{file_name}' in folder '{folder_id}' for {user_google_email} "
+            f"using {source_label} source (mime_type={mime_type})."
+        )
+        if fileUrl:
+            dry_run_message += f" Source URL: {fileUrl}"
+        logger.info("[create_drive_file] Dry run enabled; skipping create mutation.")
+        return dry_run_message
 
     file_data = None
     created_file = None
@@ -492,6 +505,7 @@ async def update_drive_file(
     writers_can_share: bool | None = None,
     copy_requires_writer_permission: bool | None = None,
     properties: dict | None = None,
+    dry_run: bool = True,
 ) -> str:
     """
     Updates metadata and properties of a Google Drive file.
@@ -509,11 +523,42 @@ async def update_drive_file(
         writers_can_share (Optional[bool]): Whether editors can share the file.
         copy_requires_writer_permission (Optional[bool]): Whether copying requires writer permission.
         properties (Optional[dict]): Custom key-value properties for the file.
+        dry_run (bool): If True, returns a preview and does not update the file. Defaults to True.
 
     Returns:
         str: Confirmation message with details of the updates applied.
     """
     logger.info(f"[update_drive_file] Updating file {file_id} for {user_google_email}")
+
+    if dry_run:
+        planned_fields = []
+        if name is not None:
+            planned_fields.append("name")
+        if description is not None:
+            planned_fields.append("description")
+        if mime_type is not None:
+            planned_fields.append("mimeType")
+        if add_parents:
+            planned_fields.append("addParents")
+        if remove_parents:
+            planned_fields.append("removeParents")
+        if starred is not None:
+            planned_fields.append("starred")
+        if trashed is not None:
+            planned_fields.append("trashed")
+        if writers_can_share is not None:
+            planned_fields.append("writersCanShare")
+        if copy_requires_writer_permission is not None:
+            planned_fields.append("copyRequiresWriterPermission")
+        if properties is not None:
+            planned_fields.append("properties")
+
+        planned_summary = ", ".join(planned_fields) if planned_fields else "no field changes provided"
+        dry_run_message = (
+            f"DRY RUN: Would update Drive file '{file_id}' for {user_google_email}. Planned changes: {planned_summary}."
+        )
+        logger.info("[update_drive_file] Dry run enabled; skipping update mutation.")
+        return dry_run_message
 
     current_file_fields = (
         "name, description, mimeType, parents, starred, trashed, webViewLink, "

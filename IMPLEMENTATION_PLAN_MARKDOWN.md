@@ -69,7 +69,7 @@ Google Docs is a single stream. Every insertion shifts subsequent indices.
 ### 3.1 New Tool: `insert_markdown`
 A dedicated tool for inserting formatted content into *existing* docs.
 
-**Note:** To ensure compatibility with Vertex AI / Gemini function calling, complex parameters like `operations` must be passed as JSON strings rather than Python lists/dicts to avoid `anyOf` schema validation errors. See the "Parameter Type Constraints" section in [docs/MCP_PATTERNS.md](docs/MCP_PATTERNS.md) for the required implementation pattern.
+**Note:** To ensure compatibility with Vertex AI / Gemini function calling, complex parameters like `operations` must be passed as JSON strings rather than Python lists/dicts to avoid `anyOf` schema validation errors. See the "Parameter Type Constraints" section in [agent-docs/architecture/MCP_PATTERNS.md](agent-docs/architecture/MCP_PATTERNS.md) for the required implementation pattern.
 
 ```python
 async def insert_markdown(
@@ -223,3 +223,113 @@ Vertex AI and Gemini function calling have a strict requirement: if a parameter 
 
 ### 8.2 Async Implementation
 All tool logic must be `async`. Wrap blocking SDK calls in `asyncio.to_thread()`.
+
+---
+
+## 9. Future Extensions: Smart Chips and Advanced Linked Objects
+
+This section captures the forward roadmap after Markdown rendering parity is complete, focused on smart-chip behavior in Google Docs.
+
+### 9.1 Product Context for This MCP
+
+Current behavior in this project:
+1. Markdown task lists (`- [ ]`, `- [x]`) render as checkbox characters (`☐`, `☑`) in document text.
+2. This gives stable visual output and preserves markdown semantics, but does not create native interactive Docs checklist bullets/chips.
+3. Users now ask for native smart-chip behavior where technically possible.
+
+### 9.2 Google API Capability Matrix (What We Can and Cannot Do)
+
+| Target UX | API Status | Supported via Docs API batchUpdate? | Notes |
+| :--- | :--- | :--- | :--- |
+| Person chip / mention | Available | Yes | Use `InsertPersonRequest` (`documents.request`). |
+| Native checklist bullets | Available | Yes | Use `createParagraphBullets` + `BULLET_CHECKBOX`. |
+| Generic third-party smart chip insertion | Not exposed in Docs API writes | No (directly) | `RichLink` is modeled in document structure, but creation is not exposed as a Docs write request. |
+| Rich link metadata mutation | Read-only in Docs model | No | `richLinkProperties` are output-only in `documents` resource. |
+| Third-party smart chips based on URLs | Available via Add-ons platform | Not in plain Docs API flow | Requires Google Workspace Add-ons (`workspace.linkpreview` / `workspace.linkcreate`) and add-on deployment. |
+
+### 9.3 Authoritative Documentation Links
+
+Primary references for implementation and constraints:
+1. Docs API request reference (`batchUpdate` request types, including `InsertPersonRequest` and `createParagraphBullets`):
+   1. https://developers.google.com/workspace/docs/api/reference/rest/v1/documents/request
+2. Docs API document resource (`RichLink`, `richLinkProperties` output-only model fields):
+   1. https://developers.google.com/workspace/docs/api/reference/rest/v1/documents
+3. Workspace Add-ons smart-chip insertion (resource chips):
+   1. https://developers.google.com/workspace/add-ons/guides/create-insert-resource-smart-chip
+4. Workspace Add-ons link-preview smart chips:
+   1. https://developers.google.com/workspace/add-ons/guides/preview-links-smart-chips
+
+### 9.4 Extension Roadmap (Phased)
+
+#### Phase A: Native checklist bullets in Docs (Low-Medium complexity)
+Goal: Upgrade markdown task lists from Unicode characters to native Docs checkbox bullets where possible.
+
+Implementation outline:
+1. Add parser mode for task-list paragraphs that applies `createParagraphBullets` with `bulletPreset=BULLET_CHECKBOX`.
+2. Keep existing Unicode checkbox mode as explicit fallback (`task_list_mode="unicode"`), because native Docs checklist APIs may not preserve explicit checked-state fidelity from markdown in all cases.
+3. Maintain existing anti-regression logic:
+   1. no list-bleed after task lists,
+   2. no empty trailing bullet paragraphs,
+   3. no index drift in mixed table/image/list docs.
+
+Acceptance criteria:
+1. No visual regressions in `tests/manual/kitchen_sink.md`.
+2. OP-70 gate remains PASS.
+3. New manual matrix rows validate both modes:
+   1. `native_checklist`,
+   2. `unicode_fallback`.
+
+Estimated effort:
+1. Engineering: 1-2 days.
+2. Manual validation and documentation: 0.5-1 day.
+
+Risk:
+1. Medium. Main risk is behavior mismatch between markdown checked/unchecked state and Docs native checklist rendering semantics.
+
+#### Phase B: Person chip support (`@user`) (Medium complexity)
+Goal: Add markdown-to-Docs person mentions using `InsertPersonRequest`.
+
+Implementation outline:
+1. Define deterministic markdown syntax extension for mentions (example: `@user@example.com` under opt-in parse mode).
+2. Resolve mention tokens and emit `InsertPersonRequest` at calculated indices.
+3. Provide fallback to plain text when mention resolution is unavailable/invalid.
+
+Acceptance criteria:
+1. Mention inserts produce native person chips in Docs.
+2. Invalid mention inputs degrade gracefully with explicit warning in tool response.
+3. No range/index regressions in mixed-content docs.
+
+Estimated effort:
+1. Engineering: 2-4 days.
+2. Validation and hardening: 1 day.
+
+Risk:
+1. Medium. Main risk is token parsing ambiguity and account/identity resolution edge cases.
+
+#### Phase C: Broad third-party smart chips (High complexity)
+Goal: Enable richer third-party chip experiences beyond Docs API direct writes.
+
+Implementation outline:
+1. Build and deploy a Google Workspace Add-on with link preview/create integrations.
+2. Use add-on scopes and callbacks for chip insertion flows.
+3. Keep MCP integration as orchestration layer (not direct chip write path).
+
+Acceptance criteria:
+1. Add-on can render supported chips in Docs/Sheets under configured URL patterns.
+2. End-to-end auth and permission model documented and testable.
+
+Estimated effort:
+1. Engineering + platform setup: 1-3+ weeks.
+
+Risk:
+1. High. Includes new deployment architecture, OAuth/scope governance, marketplace/admin constraints, and cross-product UX variability.
+
+### 9.5 Proposed Defaults for This Repository
+
+1. Keep current Unicode checkbox implementation as the stable default until Phase A is complete.
+2. Treat native checklist mode as opt-in behind a parser/tool flag first.
+3. Keep generic smart-chip promises out of user-facing claims until Add-ons path is implemented.
+4. Track phases as roadmap items:
+   1. `RM-05`: Native checklist bullets (`BULLET_CHECKBOX`) with fallback mode.
+   2. `RM-06`: Person-chip markdown mentions (`InsertPersonRequest`).
+   3. `RM-07`: Add-ons smart-chip integration feasibility and architecture.

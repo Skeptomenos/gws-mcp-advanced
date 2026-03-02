@@ -1,4 +1,8 @@
 # Technical Debt & Compliance Report
+
+> Archived Snapshot: This report reflects a historical remediation point-in-time.
+> Current implementation status is tracked in `/Users/david.helmus/repos/ai-dev/_infra/gws-mcp-advanced/gws-mcp-advanced/agent-docs/roadmap/PLAN.md`
+> and `/Users/david.helmus/repos/ai-dev/_infra/gws-mcp-advanced/gws-mcp-advanced/agent-docs/roadmap/STATUS.md`.
 **Date:** Feb 02, 2026
 **Scope:** Architecture (`tach`) and Type Safety (`mypy`) Compliance
 **Target Standards:** Strict 3-Layer Architecture, 100% Type Hints, No Circular Dependencies.

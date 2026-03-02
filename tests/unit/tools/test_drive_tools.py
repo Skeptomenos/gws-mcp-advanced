@@ -9,9 +9,27 @@ Tests cover:
 - Tool registration verification
 """
 
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
+
+
+def _get_innermost_tool_function(tool_name: str):
+    from gdrive import files as drive_files
+
+    function = getattr(drive_files, tool_name).fn
+    while hasattr(function, "__wrapped__"):
+        function = function.__wrapped__
+    return function
+
+
+def _get_innermost_permission_tool_function(tool_name: str):
+    from gdrive import permissions as drive_permissions
+
+    function = getattr(drive_permissions, tool_name).fn
+    while hasattr(function, "__wrapped__"):
+        function = function.__wrapped__
+    return function
 
 
 class TestValidateShareRole:
@@ -298,6 +316,402 @@ class TestResolveFileIdOrAlias:
             mock_manager.resolve_alias.return_value = "abc123xyz"
             result = resolve_file_id_or_alias("abc123xyz")
             assert result == "abc123xyz"
+
+
+class TestDriveMutatorDryRunBehavior:
+    """Tests for dry-run defaults on Drive mutating tools."""
+
+    @pytest.mark.asyncio
+    async def test_create_drive_file_dry_run_skips_resolution_and_mutation(self, monkeypatch):
+        """Default dry-run should return preview without resolving folder or mutating."""
+        create_impl = _get_innermost_tool_function("create_drive_file")
+        service = MagicMock()
+        resolve_called = False
+
+        async def fake_resolve_folder_id(_service, _folder_id):
+            nonlocal resolve_called
+            resolve_called = True
+            return "resolved-folder"
+
+        monkeypatch.setattr("gdrive.files.resolve_folder_id", fake_resolve_folder_id)
+
+        result = await create_impl(
+            service=service,
+            user_google_email="user@example.com",
+            file_name="demo.txt",
+            content="hello world",
+        )
+
+        assert result.startswith("DRY RUN:")
+        assert "Would create Drive file 'demo.txt'" in result
+        assert resolve_called is False
+        assert service.files.call_count == 0
+
+    @pytest.mark.asyncio
+    async def test_create_drive_file_dry_run_false_calls_drive_create(self, monkeypatch):
+        """Explicit dry_run=False should execute Drive create mutation."""
+        create_impl = _get_innermost_tool_function("create_drive_file")
+        service = MagicMock()
+        service.files.return_value.create.return_value.execute.return_value = {
+            "id": "file-123",
+            "name": "demo.txt",
+            "webViewLink": "https://drive.google.com/file/d/file-123/view",
+        }
+
+        async def fake_resolve_folder_id(_service, _folder_id):
+            return "resolved-folder"
+
+        monkeypatch.setattr("gdrive.files.resolve_folder_id", fake_resolve_folder_id)
+
+        result = await create_impl(
+            service=service,
+            user_google_email="user@example.com",
+            file_name="demo.txt",
+            content="hello world",
+            dry_run=False,
+        )
+
+        assert "Successfully created file" in result
+        assert service.files.return_value.create.call_count == 1
+
+    @pytest.mark.asyncio
+    async def test_update_drive_file_dry_run_skips_resolution_and_mutation(self, monkeypatch):
+        """Default dry-run should skip file resolution and update mutation."""
+        update_impl = _get_innermost_tool_function("update_drive_file")
+        service = MagicMock()
+        resolve_called = False
+
+        async def fake_resolve_drive_item(_service, _file_id, extra_fields=None):
+            nonlocal resolve_called
+            resolve_called = True
+            return "resolved-file", {"name": "Old Name"}
+
+        monkeypatch.setattr("gdrive.files.resolve_drive_item", fake_resolve_drive_item)
+
+        result = await update_impl(
+            service=service,
+            user_google_email="user@example.com",
+            file_id="file-123",
+            name="New Name",
+        )
+
+        assert result.startswith("DRY RUN:")
+        assert "Would update Drive file 'file-123'" in result
+        assert "name" in result
+        assert resolve_called is False
+        assert service.files.call_count == 0
+
+    @pytest.mark.asyncio
+    async def test_update_drive_file_dry_run_false_calls_drive_update(self, monkeypatch):
+        """Explicit dry_run=False should execute Drive update mutation."""
+        update_impl = _get_innermost_tool_function("update_drive_file")
+        service = MagicMock()
+        service.files.return_value.update.return_value.execute.return_value = {
+            "id": "file-123",
+            "name": "New Name",
+            "webViewLink": "https://drive.google.com/file/d/file-123/view",
+        }
+
+        async def fake_resolve_drive_item(_service, _file_id, extra_fields=None):
+            return "resolved-file", {
+                "name": "Old Name",
+                "description": "old",
+                "starred": False,
+                "trashed": False,
+                "writersCanShare": True,
+                "copyRequiresWriterPermission": False,
+            }
+
+        monkeypatch.setattr("gdrive.files.resolve_drive_item", fake_resolve_drive_item)
+
+        result = await update_impl(
+            service=service,
+            user_google_email="user@example.com",
+            file_id="file-123",
+            name="New Name",
+            dry_run=False,
+        )
+
+        assert "Successfully updated file" in result
+        assert service.files.return_value.update.call_count == 1
+
+
+class TestDrivePermissionMutatorDryRunBehavior:
+    """Tests for dry-run defaults on Drive permission mutating tools."""
+
+    @pytest.mark.asyncio
+    async def test_share_drive_file_dry_run_skips_resolution_and_mutation(self, monkeypatch):
+        """Default dry-run should not resolve file metadata or create permission."""
+        share_impl = _get_innermost_permission_tool_function("share_drive_file")
+        service = MagicMock()
+        resolve_called = False
+
+        async def fake_resolve_drive_item(_service, _file_id, extra_fields=None):
+            nonlocal resolve_called
+            resolve_called = True
+            return "resolved-file", {"name": "Demo"}
+
+        monkeypatch.setattr("gdrive.permissions.resolve_drive_item", fake_resolve_drive_item)
+
+        result = await share_impl(
+            service=service,
+            user_google_email="user@example.com",
+            file_id="file-123",
+            share_with="friend@example.com",
+        )
+
+        assert result.startswith("DRY RUN:")
+        assert "Would share file 'file-123'" in result
+        assert resolve_called is False
+        assert service.permissions.call_count == 0
+
+    @pytest.mark.asyncio
+    async def test_share_drive_file_dry_run_false_calls_create(self, monkeypatch):
+        """Explicit dry_run=False should execute permission create mutation."""
+        share_impl = _get_innermost_permission_tool_function("share_drive_file")
+        service = MagicMock()
+        service.permissions.return_value.create.return_value.execute.return_value = {
+            "id": "perm-1",
+            "type": "user",
+            "role": "reader",
+            "emailAddress": "friend@example.com",
+        }
+
+        async def fake_resolve_drive_item(_service, _file_id, extra_fields=None):
+            return "resolved-file", {"name": "Demo", "webViewLink": "https://drive.google.com/file/d/file-123/view"}
+
+        monkeypatch.setattr("gdrive.permissions.resolve_drive_item", fake_resolve_drive_item)
+
+        result = await share_impl(
+            service=service,
+            user_google_email="user@example.com",
+            file_id="file-123",
+            share_with="friend@example.com",
+            dry_run=False,
+        )
+
+        assert "Successfully shared" in result
+        assert service.permissions.return_value.create.call_count == 1
+
+    @pytest.mark.asyncio
+    async def test_batch_share_drive_file_dry_run_skips_resolution_and_mutation(self, monkeypatch):
+        """Default dry-run should return preview without creating permissions."""
+        from gdrive.permissions import ShareRecipient
+
+        batch_impl = _get_innermost_permission_tool_function("batch_share_drive_file")
+        service = MagicMock()
+        resolve_called = False
+
+        async def fake_resolve_drive_item(_service, _file_id, extra_fields=None):
+            nonlocal resolve_called
+            resolve_called = True
+            return "resolved-file", {"name": "Demo", "webViewLink": "https://example.com"}
+
+        monkeypatch.setattr("gdrive.permissions.resolve_drive_item", fake_resolve_drive_item)
+
+        recipients = [ShareRecipient(email="friend@example.com", role="reader", share_type="user")]
+        result = await batch_impl(
+            service=service,
+            user_google_email="user@example.com",
+            file_id="file-123",
+            recipients=recipients,
+        )
+
+        assert result.startswith("DRY RUN:")
+        assert "Would batch share file 'file-123'" in result
+        assert "1 valid recipient" in result
+        assert resolve_called is False
+        assert service.permissions.call_count == 0
+
+    @pytest.mark.asyncio
+    async def test_batch_share_drive_file_dry_run_false_calls_create(self, monkeypatch):
+        """Explicit dry_run=False should execute permission create mutations."""
+        from gdrive.permissions import ShareRecipient
+
+        batch_impl = _get_innermost_permission_tool_function("batch_share_drive_file")
+        service = MagicMock()
+        service.permissions.return_value.create.return_value.execute.return_value = {
+            "id": "perm-1",
+            "type": "user",
+            "role": "reader",
+            "emailAddress": "friend@example.com",
+        }
+
+        async def fake_resolve_drive_item(_service, _file_id, extra_fields=None):
+            return "resolved-file", {"name": "Demo", "webViewLink": "https://drive.google.com/file/d/file-123/view"}
+
+        monkeypatch.setattr("gdrive.permissions.resolve_drive_item", fake_resolve_drive_item)
+
+        recipients = [ShareRecipient(email="friend@example.com", role="reader", share_type="user")]
+        result = await batch_impl(
+            service=service,
+            user_google_email="user@example.com",
+            file_id="file-123",
+            recipients=recipients,
+            dry_run=False,
+        )
+
+        assert "Batch share results" in result
+        assert service.permissions.return_value.create.call_count == 1
+
+    @pytest.mark.asyncio
+    async def test_update_drive_permission_dry_run_skips_resolution_and_mutation(self, monkeypatch):
+        """Default dry-run should skip permission update mutation."""
+        update_impl = _get_innermost_permission_tool_function("update_drive_permission")
+        service = MagicMock()
+        resolve_called = False
+
+        async def fake_resolve_drive_item(_service, _file_id, extra_fields=None):
+            nonlocal resolve_called
+            resolve_called = True
+            return "resolved-file", {"name": "Demo"}
+
+        monkeypatch.setattr("gdrive.permissions.resolve_drive_item", fake_resolve_drive_item)
+
+        result = await update_impl(
+            service=service,
+            user_google_email="user@example.com",
+            file_id="file-123",
+            permission_id="perm-1",
+            role="writer",
+        )
+
+        assert result.startswith("DRY RUN:")
+        assert "Would update permission 'perm-1'" in result
+        assert resolve_called is False
+        assert service.permissions.call_count == 0
+
+    @pytest.mark.asyncio
+    async def test_update_drive_permission_dry_run_false_calls_update(self, monkeypatch):
+        """Explicit dry_run=False should execute permission update mutation."""
+        update_impl = _get_innermost_permission_tool_function("update_drive_permission")
+        service = MagicMock()
+        service.permissions.return_value.update.return_value.execute.return_value = {
+            "id": "perm-1",
+            "type": "user",
+            "role": "writer",
+            "emailAddress": "friend@example.com",
+        }
+
+        async def fake_resolve_drive_item(_service, _file_id, extra_fields=None):
+            return "resolved-file", {"name": "Demo"}
+
+        monkeypatch.setattr("gdrive.permissions.resolve_drive_item", fake_resolve_drive_item)
+
+        result = await update_impl(
+            service=service,
+            user_google_email="user@example.com",
+            file_id="file-123",
+            permission_id="perm-1",
+            role="writer",
+            dry_run=False,
+        )
+
+        assert "Successfully updated permission" in result
+        assert service.permissions.return_value.update.call_count == 1
+
+    @pytest.mark.asyncio
+    async def test_remove_drive_permission_dry_run_skips_resolution_and_delete(self, monkeypatch):
+        """Default dry-run should skip permission delete mutation."""
+        remove_impl = _get_innermost_permission_tool_function("remove_drive_permission")
+        service = MagicMock()
+        resolve_called = False
+
+        async def fake_resolve_drive_item(_service, _file_id, extra_fields=None):
+            nonlocal resolve_called
+            resolve_called = True
+            return "resolved-file", {"name": "Demo"}
+
+        monkeypatch.setattr("gdrive.permissions.resolve_drive_item", fake_resolve_drive_item)
+
+        result = await remove_impl(
+            service=service,
+            user_google_email="user@example.com",
+            file_id="file-123",
+            permission_id="perm-1",
+        )
+
+        assert result.startswith("DRY RUN:")
+        assert "Would remove permission 'perm-1'" in result
+        assert resolve_called is False
+        assert service.permissions.call_count == 0
+
+    @pytest.mark.asyncio
+    async def test_remove_drive_permission_dry_run_false_calls_delete(self, monkeypatch):
+        """Explicit dry_run=False should execute permission delete mutation."""
+        remove_impl = _get_innermost_permission_tool_function("remove_drive_permission")
+        service = MagicMock()
+        service.permissions.return_value.delete.return_value.execute.return_value = None
+
+        async def fake_resolve_drive_item(_service, _file_id, extra_fields=None):
+            return "resolved-file", {"name": "Demo"}
+
+        monkeypatch.setattr("gdrive.permissions.resolve_drive_item", fake_resolve_drive_item)
+
+        result = await remove_impl(
+            service=service,
+            user_google_email="user@example.com",
+            file_id="file-123",
+            permission_id="perm-1",
+            dry_run=False,
+        )
+
+        assert "Successfully removed permission" in result
+        assert service.permissions.return_value.delete.call_count == 1
+
+    @pytest.mark.asyncio
+    async def test_transfer_drive_ownership_dry_run_skips_resolution_and_create(self, monkeypatch):
+        """Default dry-run should skip ownership transfer mutation."""
+        transfer_impl = _get_innermost_permission_tool_function("transfer_drive_ownership")
+        service = MagicMock()
+        resolve_called = False
+
+        async def fake_resolve_drive_item(_service, _file_id, extra_fields=None):
+            nonlocal resolve_called
+            resolve_called = True
+            return "resolved-file", {"name": "Demo", "owners": [{"emailAddress": "old@example.com"}]}
+
+        monkeypatch.setattr("gdrive.permissions.resolve_drive_item", fake_resolve_drive_item)
+
+        result = await transfer_impl(
+            service=service,
+            user_google_email="user@example.com",
+            file_id="file-123",
+            new_owner_email="new-owner@example.com",
+        )
+
+        assert result.startswith("DRY RUN:")
+        assert "Would transfer ownership of file 'file-123'" in result
+        assert resolve_called is False
+        assert service.permissions.call_count == 0
+
+    @pytest.mark.asyncio
+    async def test_transfer_drive_ownership_dry_run_false_calls_create(self, monkeypatch):
+        """Explicit dry_run=False should execute ownership transfer mutation."""
+        transfer_impl = _get_innermost_permission_tool_function("transfer_drive_ownership")
+        service = MagicMock()
+        service.permissions.return_value.create.return_value.execute.return_value = {
+            "id": "perm-owner",
+            "type": "user",
+            "role": "owner",
+            "emailAddress": "new-owner@example.com",
+        }
+
+        async def fake_resolve_drive_item(_service, _file_id, extra_fields=None):
+            return "resolved-file", {"name": "Demo", "owners": [{"emailAddress": "old@example.com"}]}
+
+        monkeypatch.setattr("gdrive.permissions.resolve_drive_item", fake_resolve_drive_item)
+
+        result = await transfer_impl(
+            service=service,
+            user_google_email="user@example.com",
+            file_id="file-123",
+            new_owner_email="new-owner@example.com",
+            dry_run=False,
+        )
+
+        assert "Successfully transferred ownership" in result
+        assert service.permissions.return_value.create.call_count == 1
 
 
 class TestToolRegistration:

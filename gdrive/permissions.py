@@ -209,6 +209,7 @@ async def share_drive_file(
     email_message: str | None = None,
     expiration_time: str | None = None,
     allow_file_discovery: bool | None = None,
+    dry_run: bool = True,
 ) -> str:
     """
     Shares a Google Drive file or folder with a user, group, domain, or anyone with the link.
@@ -225,6 +226,7 @@ async def share_drive_file(
         email_message (Optional[str]): Custom message for the notification email.
         expiration_time (Optional[str]): Expiration time in RFC 3339 format (e.g., "2025-01-15T00:00:00Z"). Permission auto-revokes after this time.
         allow_file_discovery (Optional[bool]): For 'domain' or 'anyone' shares - whether the file can be found via search. Defaults to None (API default).
+        dry_run (bool): If True, returns a preview and does not create sharing permissions. Defaults to True.
 
     Returns:
         str: Confirmation with permission details and shareable link.
@@ -240,9 +242,6 @@ async def share_drive_file(
         raise ValueError(f"share_with is required for share_type '{share_type}'")
     if share_type == "domain" and not share_with:
         raise ValueError("share_with (domain name) is required for share_type 'domain'")
-
-    resolved_file_id, file_metadata = await resolve_drive_item(service, file_id, extra_fields="name, webViewLink")
-    file_id = resolved_file_id
 
     permission_body: dict = {
         "type": share_type,
@@ -260,6 +259,27 @@ async def share_drive_file(
 
     if share_type in ("domain", "anyone") and allow_file_discovery is not None:
         permission_body["allowFileDiscovery"] = allow_file_discovery
+
+    if dry_run:
+        target_identifier = share_with if share_with else "(no explicit recipient)"
+        preview_lines = [
+            f"DRY RUN: Would share file '{file_id}' for {user_google_email}.",
+            f"  - type: {share_type}",
+            f"  - role: {role}",
+            f"  - target: {target_identifier}",
+            f"  - send_notification: {send_notification}",
+        ]
+        if email_message:
+            preview_lines.append("  - email_message: provided")
+        if expiration_time:
+            preview_lines.append(f"  - expiration_time: {expiration_time}")
+        if allow_file_discovery is not None:
+            preview_lines.append(f"  - allow_file_discovery: {allow_file_discovery}")
+        logger.info("[share_drive_file] Dry run enabled; skipping permission create mutation.")
+        return "\n".join(preview_lines)
+
+    resolved_file_id, file_metadata = await resolve_drive_item(service, file_id, extra_fields="name, webViewLink")
+    file_id = resolved_file_id
 
     create_params: dict = {
         "fileId": file_id,
@@ -297,6 +317,7 @@ async def batch_share_drive_file(
     recipients: list[ShareRecipient],
     send_notification: bool = True,
     email_message: str | None = None,
+    dry_run: bool = True,
 ) -> str:
     """
     Shares a Google Drive file or folder with multiple users or groups in a single operation.
@@ -312,6 +333,7 @@ async def batch_share_drive_file(
         recipients (List[ShareRecipient]): List of recipient objects.
         send_notification (bool): Whether to send notification emails. Defaults to True.
         email_message (Optional[str]): Custom message for notification emails.
+        dry_run (bool): If True, returns a preview and does not create sharing permissions. Defaults to True.
 
     Returns:
         str: Summary of created permissions with success/failure for each recipient.
@@ -320,11 +342,57 @@ async def batch_share_drive_file(
         f"[batch_share_drive_file] Invoked. Email: '{user_google_email}', File ID: '{file_id}', Recipients: {len(recipients)}"
     )
 
-    resolved_file_id, file_metadata = await resolve_drive_item(service, file_id, extra_fields="name, webViewLink")
-    file_id = resolved_file_id
-
     if not recipients:
         raise ValueError("recipients list cannot be empty")
+
+    if dry_run:
+        preview_results = []
+        valid_count = 0
+        invalid_count = 0
+        for recipient in recipients:
+            share_type = recipient.share_type
+            role = recipient.role
+            expiration_time = recipient.expiration_time
+
+            if share_type == "domain":
+                if not recipient.domain:
+                    preview_results.append("  - Skipped: missing domain for domain share")
+                    invalid_count += 1
+                    continue
+                identifier = recipient.domain
+            else:
+                if not recipient.email:
+                    preview_results.append("  - Skipped: missing email address")
+                    invalid_count += 1
+                    continue
+                identifier = recipient.email
+
+            if expiration_time:
+                try:
+                    validate_expiration_time(expiration_time)
+                except ValueError as e:
+                    preview_results.append(f"  - {identifier}: Failed validation - {e}")
+                    invalid_count += 1
+                    continue
+
+            preview_results.append(f"  - Would grant {role} ({share_type}) to {identifier}")
+            valid_count += 1
+
+        output_parts = [
+            f"DRY RUN: Would batch share file '{file_id}' for {user_google_email}.",
+            "",
+            f"Summary: {valid_count} valid recipient(s), {invalid_count} invalid recipient(s)",
+            "",
+            "Planned operations:",
+            *preview_results,
+            "",
+            f"send_notification={send_notification}, email_message={'provided' if email_message else 'none'}",
+        ]
+        logger.info("[batch_share_drive_file] Dry run enabled; skipping batch permission create mutations.")
+        return "\n".join(output_parts)
+
+    resolved_file_id, file_metadata = await resolve_drive_item(service, file_id, extra_fields="name, webViewLink")
+    file_id = resolved_file_id
 
     results = []
     success_count = 0
@@ -417,6 +485,7 @@ async def update_drive_permission(
     permission_id: str,
     role: str | None = None,
     expiration_time: str | None = None,
+    dry_run: bool = True,
 ) -> str:
     """
     Updates an existing permission on a Google Drive file or folder.
@@ -427,6 +496,7 @@ async def update_drive_permission(
         permission_id (str): The ID of the permission to update (from get_drive_file_permissions). Required.
         role (Optional[str]): New role - 'reader', 'commenter', or 'writer'. If not provided, role unchanged.
         expiration_time (Optional[str]): Expiration time in RFC 3339 format (e.g., "2025-01-15T00:00:00Z"). Set or update when permission expires.
+        dry_run (bool): If True, returns a preview and does not update permissions. Defaults to True.
 
     Returns:
         str: Confirmation with updated permission details.
@@ -442,6 +512,16 @@ async def update_drive_permission(
         validate_share_role(role)
     if expiration_time:
         validate_expiration_time(expiration_time)
+
+    if dry_run:
+        output_parts = [
+            f"DRY RUN: Would update permission '{permission_id}' on file '{file_id}' for {user_google_email}.",
+            f"  - role: {role if role else '(unchanged)'}",
+        ]
+        if expiration_time:
+            output_parts.append(f"  - expiration_time: {expiration_time}")
+        logger.info("[update_drive_permission] Dry run enabled; skipping permission update mutation.")
+        return "\n".join(output_parts)
 
     resolved_file_id, file_metadata = await resolve_drive_item(service, file_id, extra_fields="name")
     file_id = resolved_file_id
@@ -493,6 +573,7 @@ async def remove_drive_permission(
     user_google_email: str,
     file_id: str,
     permission_id: str,
+    dry_run: bool = True,
 ) -> str:
     """
     Removes a permission from a Google Drive file or folder, revoking access.
@@ -501,6 +582,7 @@ async def remove_drive_permission(
         user_google_email (str): The user's Google email address. Required.
         file_id (str): The ID of the file or folder. Required.
         permission_id (str): The ID of the permission to remove (from get_drive_file_permissions). Required.
+        dry_run (bool): If True, returns a preview and does not remove permissions. Defaults to True.
 
     Returns:
         str: Confirmation of the removed permission.
@@ -508,6 +590,10 @@ async def remove_drive_permission(
     logger.info(
         f"[remove_drive_permission] Invoked. Email: '{user_google_email}', File ID: '{file_id}', Permission ID: '{permission_id}'"
     )
+
+    if dry_run:
+        logger.info("[remove_drive_permission] Dry run enabled; skipping permission delete mutation.")
+        return f"DRY RUN: Would remove permission '{permission_id}' from file '{file_id}' for {user_google_email}."
 
     resolved_file_id, file_metadata = await resolve_drive_item(service, file_id, extra_fields="name")
     file_id = resolved_file_id
@@ -534,6 +620,7 @@ async def transfer_drive_ownership(
     file_id: str,
     new_owner_email: str,
     move_to_new_owners_root: bool = False,
+    dry_run: bool = True,
 ) -> str:
     """
     Transfers ownership of a Google Drive file or folder to another user.
@@ -546,6 +633,7 @@ async def transfer_drive_ownership(
         file_id (str): The ID of the file or folder to transfer. Required.
         new_owner_email (str): Email address of the new owner. Required.
         move_to_new_owners_root (bool): If True, moves the file to the new owner's My Drive root. Defaults to False.
+        dry_run (bool): If True, returns a preview and does not transfer ownership. Defaults to True.
 
     Returns:
         str: Confirmation of the ownership transfer.
@@ -553,6 +641,15 @@ async def transfer_drive_ownership(
     logger.info(
         f"[transfer_drive_ownership] Invoked. Email: '{user_google_email}', File ID: '{file_id}', New owner: '{new_owner_email}'"
     )
+
+    if dry_run:
+        output_parts = [
+            f"DRY RUN: Would transfer ownership of file '{file_id}' for {user_google_email}.",
+            f"  - new_owner: {new_owner_email}",
+            f"  - move_to_new_owners_root: {move_to_new_owners_root}",
+        ]
+        logger.info("[transfer_drive_ownership] Dry run enabled; skipping transfer mutation.")
+        return "\n".join(output_parts)
 
     resolved_file_id, file_metadata = await resolve_drive_item(service, file_id, extra_fields="name, owners")
     file_id = resolved_file_id

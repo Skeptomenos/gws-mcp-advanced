@@ -1,5 +1,7 @@
 """Unit tests for LocalDirectoryCredentialStore."""
 
+import os
+import stat
 from datetime import datetime, timedelta
 
 import pytest
@@ -166,3 +168,14 @@ class TestLocalDirectoryCredentialStore:
         assert retrieved is not None
         assert retrieved.token == "test_token"
         assert retrieved.expiry is None
+
+    @pytest.mark.skipif(os.name == "nt", reason="POSIX file mode semantics are not guaranteed on Windows")
+    def test_stored_credential_file_has_secure_permissions(self, store, sample_credentials):
+        """Credential files should be written with restrictive permissions."""
+        user_email = "secure@example.com"
+        store.store_credential(user_email, sample_credentials)
+
+        file_path = store._get_credential_path(user_email)  # noqa: SLF001 - private path helper used for verification
+        file_mode = stat.S_IMODE(os.stat(file_path).st_mode)
+
+        assert file_mode == 0o600
