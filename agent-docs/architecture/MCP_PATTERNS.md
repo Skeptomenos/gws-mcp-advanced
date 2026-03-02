@@ -138,7 +138,7 @@ Common service type mappings (see `auth/scopes.py` for full list):
 ## Architecture References
 
 - For auth flow details, see `auth/ARCHITECTURE.md`
-- For security considerations, see `docs/MCP_SECURITY_STRATEGY.md`
+- For security considerations, see `agent-docs/architecture/MCP_SECURITY_STRATEGY.md`
 
 ## Google Docs API batchUpdate Pattern
 

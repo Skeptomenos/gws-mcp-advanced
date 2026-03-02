@@ -19,7 +19,9 @@ logger = logging.getLogger(__name__)
 @server.tool()
 @handle_http_errors("create_presentation", service_type="slides")
 @require_google_service("slides", "slides")
-async def create_presentation(service, user_google_email: str, title: str = "Untitled Presentation") -> str:
+async def create_presentation(
+    service, user_google_email: str, title: str = "Untitled Presentation", dry_run: bool = True
+) -> str:
     """
     Create a new Google Slides presentation.
 
@@ -31,6 +33,9 @@ async def create_presentation(service, user_google_email: str, title: str = "Unt
         str: Details about the created presentation including ID and URL.
     """
     logger.info(f"[create_presentation] Invoked. Email: '{user_google_email}', Title: '{title}'")
+
+    if dry_run:
+        return f"DRY RUN: Would create presentation '{title}' for {user_google_email}."
 
     body = {"title": title}
 
@@ -140,6 +145,7 @@ async def batch_update_presentation(
     user_google_email: str,
     presentation_id: str,
     requests: list[dict[str, Any]],
+    dry_run: bool = True,
 ) -> str:
     """
     Apply batch updates to a Google Slides presentation.
@@ -155,6 +161,12 @@ async def batch_update_presentation(
     logger.info(
         f"[batch_update_presentation] Invoked. Email: '{user_google_email}', ID: '{presentation_id}', Requests: {len(requests)}"
     )
+
+    if dry_run:
+        return (
+            f"DRY RUN: Would apply {len(requests)} update request(s) to presentation "
+            f"'{presentation_id}' for {user_google_email}."
+        )
 
     body = {"requests": requests}
 

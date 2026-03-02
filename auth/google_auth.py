@@ -46,8 +46,9 @@ APP_NAME = GOOGLE_WORKSPACE_MCP_APP_NAME
 def get_default_credentials_dir():
     """Get the default credentials directory path for Google Workspace MCP."""
     # Check for explicit environment variable override
-    if os.getenv("GOOGLE_MCP_CREDENTIALS_DIR"):
-        return os.getenv("GOOGLE_MCP_CREDENTIALS_DIR")
+    override_dir = os.getenv("GOOGLE_MCP_CREDENTIALS_DIR")
+    if override_dir:
+        return override_dir
 
     # Use default config directory
     return os.path.join(get_credentials_directory(), "credentials")
@@ -67,6 +68,23 @@ else:
     )
 
 # --- Helper Functions ---
+
+DEFAULT_TOKEN_URI = "https://oauth2.googleapis.com/token"
+
+
+def _token_uri_or_default(credentials: Credentials) -> str:
+    token_uri = getattr(credentials, "token_uri", None)
+    return token_uri or DEFAULT_TOKEN_URI
+
+
+def _credential_scopes(credentials: Credentials) -> list[str]:
+    raw_scopes = credentials.scopes
+    return list(raw_scopes) if raw_scopes else []
+
+
+def _has_required_scopes(credentials: Credentials, required_scopes: list[str]) -> bool:
+    granted_scopes = _credential_scopes(credentials)
+    return all(scope in granted_scopes for scope in required_scopes)
 
 
 def _find_any_credentials(
@@ -115,14 +133,18 @@ def save_credentials_to_session(session_id: str, credentials: Credentials):
 
     if user_email:
         store = get_oauth21_session_store()
+        token = credentials.token
+        if not token:
+            logger.warning("Could not save credentials to session store - missing access token")
+            return
         store.store_session(
             user_email=user_email,
-            access_token=credentials.token,
+            access_token=token,
             refresh_token=credentials.refresh_token,
-            token_uri=credentials.token_uri,
+            token_uri=_token_uri_or_default(credentials),
             client_id=credentials.client_id,
             client_secret=credentials.client_secret,
-            scopes=credentials.scopes,
+            scopes=_credential_scopes(credentials),
             expiry=credentials.expiry,
             mcp_session_id=session_id,
         )
@@ -439,7 +461,10 @@ async def handle_auth_callback(
         # Exchange the authorization code for credentials
         # Note: fetch_token will use the redirect_uri configured in the flow
         flow.fetch_token(authorization_response=authorization_response)
-        credentials = flow.credentials
+        flow_credentials = flow.credentials
+        if not isinstance(flow_credentials, Credentials):
+            raise AuthenticationError("Unsupported credential type returned by OAuth flow")
+        credentials = flow_credentials
         logger.info("Successfully exchanged authorization code for tokens.")
 
         user_info = await get_user_info(credentials)
@@ -456,14 +481,17 @@ async def handle_auth_callback(
 
         # Always save to OAuth21SessionStore for centralized management
         store = get_oauth21_session_store()
+        access_token = credentials.token
+        if not access_token:
+            raise AuthenticationError("OAuth callback did not return an access token")
         store.store_session(
             user_email=user_google_email,
-            access_token=credentials.token,
+            access_token=access_token,
             refresh_token=credentials.refresh_token,
-            token_uri=credentials.token_uri,
+            token_uri=_token_uri_or_default(credentials),
             client_id=credentials.client_id,
             client_secret=credentials.client_secret,
-            scopes=credentials.scopes,
+            scopes=_credential_scopes(credentials),
             expiry=credentials.expiry,
             mcp_session_id=session_id,
             issuer="https://accounts.google.com",  # Add issuer for Google tokens
@@ -513,9 +541,9 @@ def get_credentials(
                 logger.info(f"[get_credentials] Found OAuth 2.1 credentials for MCP session {session_id}")
 
                 # Check scopes
-                if not all(scope in credentials.scopes for scope in required_scopes):
+                if not _has_required_scopes(credentials, required_scopes):
                     logger.warning(
-                        f"[get_credentials] OAuth 2.1 credentials lack required scopes. Need: {required_scopes}, Have: {credentials.scopes}"
+                        f"[get_credentials] OAuth 2.1 credentials lack required scopes. Need: {required_scopes}, Have: {_credential_scopes(credentials)}"
                     )
                     return None
 
@@ -530,11 +558,15 @@ def get_credentials(
                         # Update stored credentials
                         user_email = store.get_user_by_mcp_session(session_id)
                         if user_email:
+                            refreshed_token = credentials.token
+                            if not refreshed_token:
+                                logger.error("[get_credentials] Missing access token after OAuth 2.1 refresh")
+                                return None
                             store.store_session(
                                 user_email=user_email,
-                                access_token=credentials.token,
+                                access_token=refreshed_token,
                                 refresh_token=credentials.refresh_token,
-                                scopes=credentials.scopes,
+                                scopes=_credential_scopes(credentials),
                                 expiry=credentials.expiry,
                                 mcp_session_id=session_id,
                             )
@@ -564,24 +596,28 @@ def get_credentials(
 
                     file_credentials = cred_store.get_credential(single_user)
                     if file_credentials:
+                        file_token = file_credentials.token
+                        if not file_token:
+                            logger.warning("[get_credentials] Auto-recovered credentials missing access token")
+                            return None
                         try:
                             store.store_session(
                                 user_email=single_user,
-                                access_token=file_credentials.token,
+                                access_token=file_token,
                                 refresh_token=file_credentials.refresh_token,
-                                token_uri=file_credentials.token_uri,
+                                token_uri=_token_uri_or_default(file_credentials),
                                 client_id=file_credentials.client_id,
                                 client_secret=file_credentials.client_secret,
-                                scopes=file_credentials.scopes,
+                                scopes=_credential_scopes(file_credentials),
                                 expiry=file_credentials.expiry,
                                 mcp_session_id=session_id,
                                 issuer="https://accounts.google.com",
                             )
 
-                            if not all(scope in file_credentials.scopes for scope in required_scopes):
+                            if not _has_required_scopes(file_credentials, required_scopes):
                                 logger.warning(
                                     f"[get_credentials] Auto-recovered credentials lack required scopes. "
-                                    f"Need: {required_scopes}, Have: {file_credentials.scopes}"
+                                    f"Need: {required_scopes}, Have: {_credential_scopes(file_credentials)}"
                                 )
                             elif file_credentials.valid:
                                 return file_credentials
@@ -590,14 +626,20 @@ def get_credentials(
                                     file_credentials.refresh(Request())
                                     logger.info("[get_credentials] Refreshed auto-recovered credentials")
                                     cred_store.store_credential(single_user, file_credentials)
+                                    refreshed_file_token = file_credentials.token
+                                    if not refreshed_file_token:
+                                        logger.error(
+                                            "[get_credentials] Missing access token after auto-recovery refresh"
+                                        )
+                                        return None
                                     store.store_session(
                                         user_email=single_user,
-                                        access_token=file_credentials.token,
+                                        access_token=refreshed_file_token,
                                         refresh_token=file_credentials.refresh_token,
-                                        token_uri=file_credentials.token_uri,
+                                        token_uri=_token_uri_or_default(file_credentials),
                                         client_id=file_credentials.client_id,
                                         client_secret=file_credentials.client_secret,
-                                        scopes=file_credentials.scopes,
+                                        scopes=_credential_scopes(file_credentials),
                                         expiry=file_credentials.expiry,
                                         mcp_session_id=session_id,
                                         issuer="https://accounts.google.com",
@@ -672,9 +714,9 @@ def get_credentials(
         f"[get_credentials] Credentials found. Scopes: {credentials.scopes}, Valid: {credentials.valid}, Expired: {credentials.expired}"
     )
 
-    if not all(scope in credentials.scopes for scope in required_scopes):
+    if not _has_required_scopes(credentials, required_scopes):
         logger.warning(
-            f"[get_credentials] Credentials lack required scopes. Need: {required_scopes}, Have: {credentials.scopes}. User: '{user_google_email}', Session: '{session_id}'"
+            f"[get_credentials] Credentials lack required scopes. Need: {required_scopes}, Have: {_credential_scopes(credentials)}. User: '{user_google_email}', Session: '{session_id}'"
         )
         return None  # Re-authentication needed for scopes
 
@@ -707,14 +749,18 @@ def get_credentials(
 
                 # Also update OAuth21SessionStore
                 store = get_oauth21_session_store()
+                refreshed_token = credentials.token
+                if not refreshed_token:
+                    logger.error("[get_credentials] Missing access token after refresh")
+                    return None
                 store.store_session(
                     user_email=user_google_email,
-                    access_token=credentials.token,
+                    access_token=refreshed_token,
                     refresh_token=credentials.refresh_token,
-                    token_uri=credentials.token_uri,
+                    token_uri=_token_uri_or_default(credentials),
                     client_id=credentials.client_id,
                     client_secret=credentials.client_secret,
-                    scopes=credentials.scopes,
+                    scopes=_credential_scopes(credentials),
                     expiry=credentials.expiry,
                     mcp_session_id=session_id,
                     issuer="https://accounts.google.com",  # Add issuer for Google tokens

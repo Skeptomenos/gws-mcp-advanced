@@ -28,7 +28,7 @@ This creates a blank document without any markdown processing.
 
 Use `batch_update_doc` to send specific request patterns.
 
-**Note:** For Vertex AI / Gemini compatibility, the `operations` parameter must be passed as a JSON string (e.g., `'[{"type": "insert_text", ...}]'`) rather than a Python list. See [agent-docs/architecture/MCP_PATTERNS.md#parameter-type-constraints-vertex-ai--gemini-compatibility](MCP_PATTERNS.md#parameter-type-constraints-vertex-ai--gemini-compatibility) for details.
+**Note:** For Vertex AI / Gemini compatibility, the `operations` parameter must be passed as a JSON string (e.g., `'[{"type": "insert_text", ...}]'`) rather than a Python list. See [MCP_PATTERNS](../architecture/MCP_PATTERNS.md#parameter-type-constraints-vertex-ai--gemini-compatibility) for details.
 
 ```
 batch_update_doc(

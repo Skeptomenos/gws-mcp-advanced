@@ -237,6 +237,8 @@ class BatchOperationManager:
             if "request" not in op:
                 raise ValueError("raw_request operation must contain 'request' field")
             request = op["request"]
+            if not isinstance(request, dict):
+                raise ValueError("raw_request operation 'request' field must be an object")
             description = f"raw request: {list(request.keys())[0]}"
 
         else:

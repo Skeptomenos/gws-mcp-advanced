@@ -100,6 +100,7 @@ async def create_gmail_filter(
     user_google_email: str,
     criteria: dict[str, Any] = Body(..., description="Filter criteria object as defined in the Gmail API."),
     action: dict[str, Any] = Body(..., description="Filter action object as defined in the Gmail API."),
+    dry_run: bool = True,
 ) -> str:
     """
     Creates a Gmail filter using the users.settings.filters API.
@@ -108,11 +109,15 @@ async def create_gmail_filter(
         user_google_email (str): The user's Google email address. Required.
         criteria (Dict[str, Any]): Criteria for matching messages.
         action (Dict[str, Any]): Actions to apply to matched messages.
+        dry_run (bool): If True, returns a preview and does not create the filter. Defaults to True.
 
     Returns:
         str: Confirmation message with the created filter ID.
     """
     logger.info("[create_gmail_filter] Invoked")
+
+    if dry_run:
+        return f"DRY RUN: Would create Gmail filter for {user_google_email}.\nCriteria: {criteria}\nAction: {action}"
 
     filter_body = {"criteria": criteria, "action": action}
 
@@ -131,6 +136,7 @@ async def delete_gmail_filter(
     service,
     user_google_email: str,
     filter_id: str = Field(..., description="ID of the filter to delete."),
+    dry_run: bool = True,
 ) -> str:
     """
     Deletes a Gmail filter by ID.
@@ -138,11 +144,15 @@ async def delete_gmail_filter(
     Args:
         user_google_email (str): The user's Google email address. Required.
         filter_id (str): The ID of the filter to delete.
+        dry_run (bool): If True, returns a preview and does not delete the filter. Defaults to True.
 
     Returns:
         str: Confirmation message for the deletion.
     """
     logger.info(f"[delete_gmail_filter] Invoked. Filter ID: '{filter_id}'")
+
+    if dry_run:
+        return f"DRY RUN: Would delete Gmail filter for {user_google_email}.\nFilter ID: {filter_id}"
 
     filter_details = await asyncio.to_thread(
         service.users().settings().filters().get(userId="me", id=filter_id).execute

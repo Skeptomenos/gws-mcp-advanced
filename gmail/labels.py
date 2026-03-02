@@ -76,6 +76,7 @@ async def manage_gmail_label(
     label_id: str | None = None,
     label_list_visibility: Literal["labelShow", "labelHide"] = "labelShow",
     message_list_visibility: Literal["show", "hide"] = "show",
+    dry_run: bool = True,
 ) -> str:
     """
     Manages Gmail labels: create, update, or delete labels.
@@ -87,6 +88,7 @@ async def manage_gmail_label(
         label_id (Optional[str]): Label ID. Required for update and delete operations.
         label_list_visibility (Literal["labelShow", "labelHide"]): Whether the label is shown in the label list.
         message_list_visibility (Literal["show", "hide"]): Whether the label is shown in the message list.
+        dry_run (bool): If True, preview label changes without applying mutations.
 
     Returns:
         str: Confirmation message of the label operation.
@@ -98,6 +100,21 @@ async def manage_gmail_label(
 
     if action in ["update", "delete"] and not label_id:
         raise ValidationError("Label ID is required for update and delete actions.")
+
+    if dry_run:
+        if action == "create":
+            return (
+                f"DRY RUN: Would create Gmail label '{name}' for {user_google_email} "
+                f"(label_list_visibility={label_list_visibility}, message_list_visibility={message_list_visibility})."
+            )
+        if action == "update":
+            name_preview = name if name is not None else "<unchanged>"
+            return (
+                f"DRY RUN: Would update Gmail label '{label_id}' for {user_google_email} "
+                f"(name={name_preview}, label_list_visibility={label_list_visibility}, "
+                f"message_list_visibility={message_list_visibility})."
+            )
+        return f"DRY RUN: Would delete Gmail label '{label_id}' for {user_google_email}."
 
     if action == "create":
         label_object = {
@@ -142,6 +159,7 @@ async def modify_gmail_message_labels(
     message_id: str,
     add_label_ids: list[str] = Field(default=[], description="Label IDs to add to the message."),
     remove_label_ids: list[str] = Field(default=[], description="Label IDs to remove from the message."),
+    dry_run: bool = True,
 ) -> str:
     """
     Adds or removes labels from a Gmail message.
@@ -153,6 +171,7 @@ async def modify_gmail_message_labels(
         message_id (str): The ID of the message to modify.
         add_label_ids (Optional[List[str]]): List of label IDs to add to the message.
         remove_label_ids (Optional[List[str]]): List of label IDs to remove from the message.
+        dry_run (bool): If True, preview label changes without mutating the message.
 
     Returns:
         str: Confirmation message of the label changes applied to the message.
@@ -167,6 +186,17 @@ async def modify_gmail_message_labels(
         body["addLabelIds"] = add_label_ids
     if remove_label_ids:
         body["removeLabelIds"] = remove_label_ids
+
+    if dry_run:
+        actions = []
+        if add_label_ids:
+            actions.append(f"add=[{', '.join(add_label_ids)}]")
+        if remove_label_ids:
+            actions.append(f"remove=[{', '.join(remove_label_ids)}]")
+        return (
+            f"DRY RUN: Would modify Gmail labels for message '{message_id}' for {user_google_email} "
+            f"({'; '.join(actions)})."
+        )
 
     await asyncio.to_thread(service.users().messages().modify(userId="me", id=message_id, body=body).execute)
 
@@ -188,6 +218,7 @@ async def batch_modify_gmail_message_labels(
     message_ids: list[str],
     add_label_ids: list[str] = Field(default=[], description="Label IDs to add to messages."),
     remove_label_ids: list[str] = Field(default=[], description="Label IDs to remove from messages."),
+    dry_run: bool = True,
 ) -> str:
     """
     Adds or removes labels from multiple Gmail messages in a single batch request.
@@ -197,6 +228,7 @@ async def batch_modify_gmail_message_labels(
         message_ids (List[str]): A list of message IDs to modify.
         add_label_ids (Optional[List[str]]): List of label IDs to add to the messages.
         remove_label_ids (Optional[List[str]]): List of label IDs to remove from the messages.
+        dry_run (bool): If True, preview batch label changes without mutating messages.
 
     Returns:
         str: Confirmation message of the label changes applied to the messages.
@@ -213,6 +245,17 @@ async def batch_modify_gmail_message_labels(
         body["addLabelIds"] = add_label_ids
     if remove_label_ids:
         body["removeLabelIds"] = remove_label_ids
+
+    if dry_run:
+        actions = []
+        if add_label_ids:
+            actions.append(f"add=[{', '.join(add_label_ids)}]")
+        if remove_label_ids:
+            actions.append(f"remove=[{', '.join(remove_label_ids)}]")
+        return (
+            f"DRY RUN: Would batch modify Gmail labels for {len(message_ids)} message(s) for {user_google_email} "
+            f"({'; '.join(actions)})."
+        )
 
     await asyncio.to_thread(service.users().messages().batchModify(userId="me", body=body).execute)
 

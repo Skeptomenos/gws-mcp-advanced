@@ -13,6 +13,7 @@ from datetime import datetime
 
 from google.oauth2.credentials import Credentials
 
+from auth.config import get_credentials_directory
 from auth.security_io import atomic_write_json, ensure_secure_directory
 
 logger = logging.getLogger(__name__)
@@ -51,11 +52,9 @@ class LocalDirectoryCredentialStore(CredentialStore):
             if env_dir:
                 base_dir = env_dir
             else:
-                home_dir = os.path.expanduser("~")
-                if home_dir and home_dir != "~":
-                    base_dir = os.path.join(home_dir, ".config", "google-workspace-mcp", "credentials")
-                else:
-                    base_dir = os.path.join(os.getcwd(), ".credentials")
+                # Use centralized config directory from auth.config,
+                # which respects WORKSPACE_MCP_CONFIG_DIR env var.
+                base_dir = os.path.join(get_credentials_directory(), "credentials")
 
         self.base_dir: str = base_dir
         logger.info(f"LocalJsonCredentialStore initialized with base_dir: {base_dir}")

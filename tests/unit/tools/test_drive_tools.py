@@ -32,6 +32,15 @@ def _get_innermost_permission_tool_function(tool_name: str):
     return function
 
 
+def _get_innermost_sync_tool_function(tool_name: str):
+    from gdrive import sync_tools as drive_sync_tools
+
+    function = getattr(drive_sync_tools, tool_name).fn
+    while hasattr(function, "__wrapped__"):
+        function = function.__wrapped__
+    return function
+
+
 class TestValidateShareRole:
     """Tests for share role validation."""
 
@@ -712,6 +721,329 @@ class TestDrivePermissionMutatorDryRunBehavior:
 
         assert "Successfully transferred ownership" in result
         assert service.permissions.return_value.create.call_count == 1
+
+
+class TestDriveSyncMutatorDryRunBehavior:
+    """Tests for dry-run defaults on Drive sync mutating tools."""
+
+    @pytest.mark.asyncio
+    async def test_link_local_file_dry_run_skips_resolution_and_link(self, monkeypatch):
+        """Default dry-run should not resolve aliases or mutate sync map."""
+        link_impl = _get_innermost_sync_tool_function("link_local_file")
+        service = MagicMock()
+        resolve_called = False
+        link_mock = MagicMock()
+
+        def fake_resolve_file_id_or_alias(_file_id):
+            nonlocal resolve_called
+            resolve_called = True
+            return "resolved-id"
+
+        monkeypatch.setattr("gdrive.sync_tools.resolve_file_id_or_alias", fake_resolve_file_id_or_alias)
+        monkeypatch.setattr("gdrive.sync_tools.sync_manager.link_file", link_mock)
+
+        result = await link_impl(
+            service=service,
+            user_google_email="user@example.com",
+            local_path="docs/notes.md",
+            file_id="A",
+        )
+
+        assert result.startswith("DRY RUN:")
+        assert "Would link local path 'docs/notes.md'" in result
+        assert resolve_called is False
+        assert link_mock.call_count == 0
+        assert service.files.call_count == 0
+
+    @pytest.mark.asyncio
+    async def test_link_local_file_dry_run_false_executes_link(self, monkeypatch):
+        """Explicit dry_run=False should resolve file and update sync map."""
+        link_impl = _get_innermost_sync_tool_function("link_local_file")
+        service = MagicMock()
+        link_mock = MagicMock()
+
+        async def fake_get_file_version(_service, _file_id):
+            return 7
+
+        monkeypatch.setattr("gdrive.sync_tools.resolve_file_id_or_alias", lambda _file_id: "resolved-id")
+        monkeypatch.setattr("gdrive.sync_tools.get_file_version", fake_get_file_version)
+        monkeypatch.setattr("gdrive.sync_tools.sync_manager.link_file", link_mock)
+
+        result = await link_impl(
+            service=service,
+            user_google_email="user@example.com",
+            local_path="docs/notes.md",
+            file_id="A",
+            dry_run=False,
+        )
+
+        assert "Linked docs/notes.md to resolved-id (Version 7)" in result
+        link_mock.assert_called_once_with("docs/notes.md", "resolved-id", 7)
+
+    @pytest.mark.asyncio
+    async def test_upload_folder_dry_run_skips_mutation(self, tmp_path):
+        """Default dry-run should preview upload without touching Drive/sync links."""
+        upload_impl = _get_innermost_sync_tool_function("upload_folder")
+        service = MagicMock()
+        local_dir = tmp_path / "upload"
+        local_dir.mkdir()
+        (local_dir / "demo.txt").write_text("hello", encoding="utf-8")
+
+        result = await upload_impl(
+            service=service,
+            user_google_email="user@example.com",
+            local_path=str(local_dir),
+        )
+
+        assert result.startswith("DRY RUN:")
+        assert "Would upload folder" in result
+        assert service.files.call_count == 0
+
+    @pytest.mark.asyncio
+    async def test_upload_folder_dry_run_false_executes_mutation(self, tmp_path, monkeypatch):
+        """Explicit dry_run=False should create Drive folders/files and link uploads."""
+        upload_impl = _get_innermost_sync_tool_function("upload_folder")
+        service = MagicMock()
+        link_mock = MagicMock()
+        local_dir = tmp_path / "upload"
+        local_dir.mkdir()
+        (local_dir / "demo.txt").write_text("hello", encoding="utf-8")
+
+        service.files.return_value.create.return_value.execute.side_effect = [
+            {"id": "root-folder"},
+            {"id": "file-123"},
+        ]
+        service.files.return_value.get.return_value.execute.return_value = {"version": "5"}
+        monkeypatch.setattr("gdrive.sync_tools.sync_manager.link_file", link_mock)
+
+        result = await upload_impl(
+            service=service,
+            user_google_email="user@example.com",
+            local_path=str(local_dir),
+            dry_run=False,
+        )
+
+        assert "Created 1 folders and uploaded 1 files." in result
+        assert service.files.return_value.create.return_value.execute.call_count == 2
+        link_mock.assert_called_once_with(str(local_dir / "demo.txt"), "file-123", 5)
+
+    @pytest.mark.asyncio
+    async def test_mirror_drive_folder_dry_run_skips_mutation(self):
+        """Default dry-run should preview mirror operation without API/local writes."""
+        mirror_impl = _get_innermost_sync_tool_function("mirror_drive_folder")
+        service = MagicMock()
+
+        result = await mirror_impl(
+            service=service,
+            user_google_email="user@example.com",
+            local_parent_dir="downloads",
+            folder_query="A",
+        )
+
+        assert result.startswith("DRY RUN:")
+        assert "Would mirror Drive folder 'A'" in result
+        assert service.files.call_count == 0
+
+    @pytest.mark.asyncio
+    async def test_mirror_drive_folder_dry_run_false_executes_download(self, tmp_path, monkeypatch):
+        """Explicit dry_run=False should run folder metadata/list flow."""
+        mirror_impl = _get_innermost_sync_tool_function("mirror_drive_folder")
+        service = MagicMock()
+        link_mock = MagicMock()
+        monkeypatch.setattr("gdrive.sync_tools.resolve_file_id_or_alias", lambda _query: "folder-123")
+        monkeypatch.setattr("gdrive.sync_tools.sync_manager.link_file", link_mock)
+
+        service.files.return_value.get.return_value.execute.return_value = {"id": "folder-123", "name": "RootFolder"}
+        service.files.return_value.list.return_value.execute.return_value = {"files": []}
+
+        result = await mirror_impl(
+            service=service,
+            user_google_email="user@example.com",
+            local_parent_dir=str(tmp_path),
+            folder_query="A",
+            dry_run=False,
+        )
+
+        assert "Downloaded 0 files into 1 folders" in result
+        assert service.files.return_value.get.call_count == 1
+        assert service.files.return_value.list.call_count == 1
+        assert link_mock.call_count == 0
+
+    @pytest.mark.asyncio
+    async def test_download_doc_tabs_dry_run_skips_mutation(self):
+        """Default dry-run should preview tab download without writes."""
+        tabs_impl = _get_innermost_sync_tool_function("download_doc_tabs")
+        drive_service = MagicMock()
+        docs_service = MagicMock()
+
+        result = await tabs_impl(
+            drive_service=drive_service,
+            docs_service=docs_service,
+            user_google_email="user@example.com",
+            local_dir="downloads/tabs",
+            file_id="A",
+        )
+
+        assert result.startswith("DRY RUN:")
+        assert "Would download document tabs for 'A'" in result
+        assert drive_service.files.call_count == 0
+        assert docs_service.documents.call_count == 0
+
+    @pytest.mark.asyncio
+    async def test_download_doc_tabs_dry_run_false_executes_flow(self, tmp_path, monkeypatch):
+        """Explicit dry_run=False should execute export/docs fetch and write output files."""
+        tabs_impl = _get_innermost_sync_tool_function("download_doc_tabs")
+        drive_service = MagicMock()
+        docs_service = MagicMock()
+        link_mock = MagicMock()
+        local_dir = tmp_path / "tabs"
+
+        monkeypatch.setattr("gdrive.sync_tools.resolve_file_id_or_alias", lambda _file_id: "doc-123")
+        monkeypatch.setattr("gdrive.sync_tools.sync_manager.link_file", link_mock)
+
+        drive_service.files.return_value.export.return_value.execute.return_value = "full export"
+        drive_service.files.return_value.get.return_value.execute.return_value = {"version": "9"}
+        docs_service.documents.return_value.get.return_value.execute.return_value = {"tabs": []}
+
+        result = await tabs_impl(
+            drive_service=drive_service,
+            docs_service=docs_service,
+            user_google_email="user@example.com",
+            local_dir=str(local_dir),
+            file_id="A",
+            dry_run=False,
+        )
+
+        assert "Hybrid Sync Complete" in result
+        assert (local_dir / "_Full_Export.md").exists()
+        assert link_mock.call_count == 2
+
+    @pytest.mark.asyncio
+    async def test_update_google_doc_dry_run_skips_mutation(self, tmp_path, monkeypatch):
+        """Default dry-run should produce a diff without calling Drive update."""
+        update_impl = _get_innermost_sync_tool_function("update_google_doc")
+        service = MagicMock()
+        update_version_mock = MagicMock()
+        local_file = tmp_path / "sync.md"
+        local_file.write_text("local text\n", encoding="utf-8")
+
+        async def fake_get_file_version(_service, _file_id):
+            return 3
+
+        async def fake_download_doc_as_text(_service, _file_id, _mime):
+            return "remote text\n"
+
+        monkeypatch.setattr(
+            "gdrive.sync_tools.sync_manager.get_link",
+            lambda _path: {"id": "doc-123", "last_synced_version": 3},
+        )
+        monkeypatch.setattr("gdrive.sync_tools.get_file_version", fake_get_file_version)
+        monkeypatch.setattr("gdrive.sync_tools.download_doc_as_text", fake_download_doc_as_text)
+        monkeypatch.setattr("gdrive.sync_tools.sync_manager.update_version", update_version_mock)
+
+        result = await update_impl(
+            service=service,
+            user_google_email="user@example.com",
+            local_path=str(local_file),
+        )
+
+        assert result.startswith("DRY RUN")
+        assert "Remote (v3)" in result
+        assert "Local (Proposed)" in result
+        assert service.files.return_value.update.call_count == 0
+        assert update_version_mock.call_count == 0
+
+    @pytest.mark.asyncio
+    async def test_update_google_doc_dry_run_false_executes_mutation(self, tmp_path, monkeypatch):
+        """Explicit dry_run=False should call Drive update and sync version update."""
+        update_impl = _get_innermost_sync_tool_function("update_google_doc")
+        service = MagicMock()
+        update_version_mock = MagicMock()
+        local_file = tmp_path / "sync.md"
+        local_file.write_text("local text\n", encoding="utf-8")
+
+        versions = iter([3, 4])
+
+        async def fake_get_file_version(_service, _file_id):
+            return next(versions)
+
+        monkeypatch.setattr(
+            "gdrive.sync_tools.sync_manager.get_link",
+            lambda _path: {"id": "doc-123", "last_synced_version": 3},
+        )
+        monkeypatch.setattr("gdrive.sync_tools.get_file_version", fake_get_file_version)
+        monkeypatch.setattr("gdrive.sync_tools.sync_manager.update_version", update_version_mock)
+        service.files.return_value.update.return_value.execute.return_value = {}
+
+        result = await update_impl(
+            service=service,
+            user_google_email="user@example.com",
+            local_path=str(local_file),
+            dry_run=False,
+        )
+
+        assert "Successfully updated Google Doc (new version: 4)" in result
+        assert service.files.return_value.update.call_count == 1
+        update_version_mock.assert_called_once_with(str(local_file), 4)
+
+    @pytest.mark.asyncio
+    async def test_download_google_doc_dry_run_skips_file_write(self, tmp_path, monkeypatch):
+        """Default dry-run should preview content without writing local file."""
+        download_impl = _get_innermost_sync_tool_function("download_google_doc")
+        service = MagicMock()
+        target_file = tmp_path / "download.md"
+
+        async def fake_download_doc_as_text(_service, _file_id, _mime):
+            return "remote content\n"
+
+        monkeypatch.setattr(
+            "gdrive.sync_tools.sync_manager.get_link",
+            lambda _path: {"id": "doc-123", "last_synced_version": 1},
+        )
+        monkeypatch.setattr("gdrive.sync_tools.download_doc_as_text", fake_download_doc_as_text)
+
+        result = await download_impl(
+            service=service,
+            user_google_email="user@example.com",
+            local_path=str(target_file),
+        )
+
+        assert result.startswith("DRY RUN:")
+        assert "Would create new file with content" in result
+        assert not target_file.exists()
+
+    @pytest.mark.asyncio
+    async def test_download_google_doc_dry_run_false_writes_file_and_updates_version(self, tmp_path, monkeypatch):
+        """Explicit dry_run=False should persist file content and update sync version."""
+        download_impl = _get_innermost_sync_tool_function("download_google_doc")
+        service = MagicMock()
+        target_file = tmp_path / "download.md"
+        update_version_mock = MagicMock()
+
+        async def fake_download_doc_as_text(_service, _file_id, _mime):
+            return "remote content\n"
+
+        async def fake_get_file_version(_service, _file_id):
+            return 9
+
+        monkeypatch.setattr(
+            "gdrive.sync_tools.sync_manager.get_link",
+            lambda _path: {"id": "doc-123", "last_synced_version": 1},
+        )
+        monkeypatch.setattr("gdrive.sync_tools.download_doc_as_text", fake_download_doc_as_text)
+        monkeypatch.setattr("gdrive.sync_tools.get_file_version", fake_get_file_version)
+        monkeypatch.setattr("gdrive.sync_tools.sync_manager.update_version", update_version_mock)
+
+        result = await download_impl(
+            service=service,
+            user_google_email="user@example.com",
+            local_path=str(target_file),
+            dry_run=False,
+        )
+
+        assert result == f"Successfully downloaded to {target_file} (synced at version 9)"
+        assert target_file.read_text(encoding="utf-8") == "remote content\n"
+        update_version_mock.assert_called_once_with(str(target_file), 9)
 
 
 class TestToolRegistration:

@@ -204,10 +204,15 @@ class AuthInfoMiddleware(Middleware):
         logger.debug("Checking for stdio mode authentication")
 
         requested_user = None
-        if hasattr(context, "request") and hasattr(context.request, "params"):
-            requested_user = context.request.params.get("user_google_email")
-        elif hasattr(context, "arguments"):
-            requested_user = context.arguments.get("user_google_email")
+        request_obj = getattr(context, "request", None)
+        if request_obj is not None:
+            params = getattr(request_obj, "params", None)
+            if params is not None:
+                requested_user = params.get("user_google_email")
+        else:
+            arguments = getattr(context, "arguments", None)
+            if isinstance(arguments, dict):
+                requested_user = arguments.get("user_google_email")
 
         ctx = _get_context(context)
         if requested_user:

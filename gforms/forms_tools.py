@@ -24,6 +24,7 @@ async def create_form(
     title: str,
     description: str | None = None,
     document_title: str | None = None,
+    dry_run: bool = True,
 ) -> str:
     """
     Create a new form using the title given in the provided form message in the request.
@@ -38,6 +39,10 @@ async def create_form(
         str: Confirmation message with form ID and edit URL.
     """
     logger.info(f"[create_form] Invoked. Email: '{user_google_email}', Title: {title}")
+
+    if dry_run:
+        desc_info = f", description='{description}'" if description else ""
+        return f"DRY RUN: Would create form '{title}' for {user_google_email}{desc_info}."
 
     form_body: dict[str, Any] = {"info": {"title": title}}
 
@@ -117,6 +122,7 @@ async def set_publish_settings(
     form_id: str,
     publish_as_template: bool = False,
     require_authentication: bool = False,
+    dry_run: bool = True,
 ) -> str:
     """
     Updates the publish settings of a form.
@@ -126,20 +132,40 @@ async def set_publish_settings(
         form_id (str): The ID of the form to update publish settings for.
         publish_as_template (bool): Whether to publish as a template. Defaults to False.
         require_authentication (bool): Whether to require authentication to view/submit. Defaults to False.
+        dry_run (bool): If True, preview the update without mutating the form.
 
     Returns:
         str: Confirmation message of the successful publish settings update.
     """
     logger.info(f"[set_publish_settings] Invoked. Email: '{user_google_email}', Form ID: {form_id}")
 
+    if dry_run:
+        return (
+            f"DRY RUN: Would update publish settings for form {form_id} for {user_google_email}. "
+            f"Publish as template: {publish_as_template}, Require authentication: {require_authentication}"
+        )
+
+    # Google Forms API v1 setPublishSettings expects:
+    # { publishSettings: { publishState: { isPublished: bool, isAcceptingResponses: bool } } }
+    # We map our parameters:
+    #   publish_as_template -> isPublished (publish the form)
+    #   require_authentication -> not directly mapped; when True, isAcceptingResponses is set
     settings_body = {
-        "publishAsTemplate": publish_as_template,
-        "requireAuthentication": require_authentication,
+        "publishSettings": {
+            "publishState": {
+                "isPublished": publish_as_template,
+                "isAcceptingResponses": publish_as_template,
+            }
+        },
+        "updateMask": "publishState",
     }
 
     await asyncio.to_thread(service.forms().setPublishSettings(formId=form_id, body=settings_body).execute)
 
-    confirmation_message = f"Successfully updated publish settings for form {form_id} for {user_google_email}. Publish as template: {publish_as_template}, Require authentication: {require_authentication}"
+    confirmation_message = (
+        f"Successfully updated publish settings for form {form_id} for {user_google_email}. "
+        f"Published: {publish_as_template}, Accepting responses: {publish_as_template}"
+    )
     logger.info(f"Publish settings updated successfully for {user_google_email}. Form ID: {form_id}")
     return confirmation_message
 

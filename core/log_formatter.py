@@ -181,6 +181,7 @@ def configure_file_logging(logger_name: str | None = None) -> bool:
         return False
 
     # Configure file logging for normal mode
+    log_file_path = "<unknown>"
     try:
         target_logger = logging.getLogger(logger_name)
         log_file_dir = os.path.dirname(os.path.abspath(__file__))

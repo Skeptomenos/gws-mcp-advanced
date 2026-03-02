@@ -1,4 +1,4 @@
-# GWS MCP Advanced
+# Google Workspace MCP Advanced
 
 Advanced Model Context Protocol (MCP) server for Google Workspace integration.
 
@@ -26,7 +26,7 @@ This project is an advanced fork of [taylorwilsdon/google_workspace_mcp](https:/
 
 ```bash
 # Clone the repository
-cd gws-mcp-advanced
+cd google-workspace-mcp-advanced
 
 # Install with uv
 uv pip install -e .
@@ -39,35 +39,35 @@ pip install -e .
 
 ```bash
 # Stable channel (npm latest)
-npx -y @skeptomenos/gws-mcp-advanced --transport stdio
+npx -y google-workspace-mcp-advanced --transport stdio
 
 # Prerelease channel (npm next)
-npx -y @skeptomenos/gws-mcp-advanced@next --transport stdio
+npx -y google-workspace-mcp-advanced@next --transport stdio
 
 # Pinned deterministic version (recommended for production rollouts)
-npx -y @skeptomenos/gws-mcp-advanced@1.0.0 --transport stdio
+npx -y google-workspace-mcp-advanced@1.0.0 --transport stdio
 ```
 
 Notes:
 - The npm launcher executes the matching Python release through `uvx` (or `uv tool run` fallback).
 - Override Python package resolution with `GWS_MCP_PYPI_SPEC`, for example:
-  `GWS_MCP_PYPI_SPEC=gws-mcp-advanced==1.0.0 npx -y @skeptomenos/gws-mcp-advanced --transport stdio`
+  `GWS_MCP_PYPI_SPEC=google-workspace-mcp-advanced==1.0.0 npx -y google-workspace-mcp-advanced --transport stdio`
 - Release sequencing, provenance, and rollback guidance: `docs/DISTRIBUTION_RELEASE.md`.
 
 ### Running the Server
 
 ```bash
 # STDIO mode (default, for MCP clients)
-uv run gws-mcp-advanced --transport stdio
+uv run google-workspace-mcp-advanced --transport stdio
 
 # HTTP mode (for web-based clients)
-uv run gws-mcp-advanced --transport streamable-http
+uv run google-workspace-mcp-advanced --transport streamable-http
 
 # Single-user mode (bypasses session mapping)
-uv run gws-mcp-advanced --single-user
+uv run google-workspace-mcp-advanced --single-user
 
 # Load specific services only
-uv run gws-mcp-advanced --tools gmail drive calendar
+uv run google-workspace-mcp-advanced --tools gmail drive calendar
 ```
 
 ### MCP Client Configuration
@@ -77,16 +77,23 @@ Add to your MCP client configuration (e.g., Claude Desktop, OpenCode):
 ```json
 {
   "mcpServers": {
-    "gws-mcp-advanced-stable": {
+    "google-workspace": {
       "command": "npx",
-      "args": ["-y", "@skeptomenos/gws-mcp-advanced", "--transport", "stdio"],
+      "args": ["-y", "google-workspace-mcp-advanced", "--transport", "stdio"],
       "env": {
         "USER_GOOGLE_EMAIL": "your.email@gmail.com"
       }
     },
-    "gws-mcp-advanced": {
+    "google-workspace-dev": {
       "command": "uv",
-      "args": ["run", "--project", "/path/to/gws-mcp-advanced", "gws-mcp-advanced", "--transport", "stdio"],
+      "args": [
+        "run",
+        "--project",
+        "/path/to/google-workspace-mcp-advanced",
+        "google-workspace-mcp-advanced",
+        "--transport",
+        "stdio"
+      ],
       "env": {
         "USER_GOOGLE_EMAIL": "your.email@gmail.com"
       }
@@ -235,7 +242,7 @@ download_google_doc(local_path="docs/notes.md", dry_run=False)
 ### Project Structure
 
 ```
-google-workspace-mcp/
+google-workspace-mcp-advanced/
 ├── auth/                 # OAuth and authentication
 │   ├── google_auth.py    # Core auth logic
 │   ├── google_oauth_config.py  # Embedded credentials

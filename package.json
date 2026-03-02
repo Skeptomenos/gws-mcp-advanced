@@ -1,11 +1,11 @@
 {
-  "name": "@skeptomenos/gws-mcp-advanced",
+  "name": "google-workspace-mcp-advanced",
   "version": "1.0.0",
-  "description": "npm launcher for the gws-mcp-advanced Python MCP server",
+  "description": "npm launcher for the google-workspace-mcp-advanced Python MCP server",
   "license": "MIT",
   "type": "commonjs",
   "bin": {
-    "gws-mcp-advanced": "bin/gws-mcp-advanced.cjs"
+    "google-workspace-mcp-advanced": "bin/google-workspace-mcp-advanced.cjs"
   },
   "files": [
     "bin/"

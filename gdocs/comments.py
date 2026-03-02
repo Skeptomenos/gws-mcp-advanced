@@ -133,6 +133,11 @@ def create_comment_tools(app_name: str, file_id_param: str):
         async def resolve_comment(service, user_google_email: str, presentation_id: str, comment_id: str) -> str:
             """Resolve a comment in a Google Presentation."""
             return await _resolve_comment_impl(service, app_name, presentation_id, comment_id)
+    else:
+        raise ValueError(
+            f"Unsupported file_id_param '{file_id_param}'. "
+            "Expected one of: document_id, spreadsheet_id, presentation_id."
+        )
 
     # Set the proper function names and register with server
     read_comments.__name__ = read_func_name

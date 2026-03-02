@@ -2,7 +2,7 @@
 
 Audience: Users.
 
-This guide explains how to connect `gws-mcp-advanced` from common MCP clients.
+This guide explains how to connect `google-workspace-mcp-advanced` from common MCP clients.
 
 ## Stable Team Setup (Recommended)
 Use the published npm package with pinned versions for production teams.
@@ -10,9 +10,9 @@ Use the published npm package with pinned versions for production teams.
 ```json
 {
   "mcpServers": {
-    "gws-mcp-advanced": {
+    "google-workspace": {
       "command": "npx",
-      "args": ["-y", "@skeptomenos/gws-mcp-advanced@1.0.0", "--transport", "stdio"],
+      "args": ["-y", "google-workspace-mcp-advanced@1.0.0", "--transport", "stdio"],
       "env": {
         "USER_GOOGLE_EMAIL": "your.email@company.com"
       }
@@ -27,13 +27,13 @@ Use repository-local execution while developing or testing unreleased changes.
 ```json
 {
   "mcpServers": {
-    "gws-mcp-advanced-dev": {
+    "google-workspace-dev": {
       "command": "uv",
       "args": [
         "run",
         "--project",
-        "/Users/david.helmus/repos/ai-dev/_infra/gws-mcp-advanced/gws-mcp-advanced",
-        "gws-mcp-advanced",
+        "/path/to/google-workspace-mcp-advanced",
+        "google-workspace-mcp-advanced",
         "--transport",
         "stdio"
       ],
@@ -48,7 +48,7 @@ Use repository-local execution while developing or testing unreleased changes.
 ## OpenCode
 1. Configure an MCP server entry using one of the snippets above.
 2. Restart OpenCode after config or code changes.
-3. Ask OpenCode to list tools for `gws-mcp-advanced` to confirm registration.
+3. Ask OpenCode to list tools for `google-workspace` to confirm registration.
 
 ## Gemini CLI
 Gemini CLI can use MCP servers through your CLI/client MCP config. Use the same server entries above.

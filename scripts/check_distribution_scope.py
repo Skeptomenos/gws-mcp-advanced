@@ -5,11 +5,11 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-EXPECTED_SCOPE = "@skeptomenos/gws-mcp-advanced"
+EXPECTED_PACKAGE = "google-workspace-mcp-advanced"
 README_REQUIRED_SNIPPETS = (
-    "npx -y @skeptomenos/gws-mcp-advanced",
-    "npx -y @skeptomenos/gws-mcp-advanced@next",
-    "npx -y @skeptomenos/gws-mcp-advanced@1.0.0",
+    "npx -y google-workspace-mcp-advanced",
+    "npx -y google-workspace-mcp-advanced@next",
+    "npx -y google-workspace-mcp-advanced@1.0.0",
 )
 
 
@@ -21,9 +21,9 @@ def _check_package_name(package_json_path: Path) -> list[str]:
     errors: list[str] = []
     package_data = json.loads(_read_text(package_json_path))
     package_name = package_data.get("name")
-    if package_name != EXPECTED_SCOPE:
+    if package_name != EXPECTED_PACKAGE:
         errors.append(
-            f"{package_json_path}: expected name {EXPECTED_SCOPE!r}, found {package_name!r}",
+            f"{package_json_path}: expected name {EXPECTED_PACKAGE!r}, found {package_name!r}",
         )
     return errors
 
@@ -36,9 +36,9 @@ def _check_readme(readme_path: Path) -> list[str]:
         if snippet not in readme:
             errors.append(f"{readme_path}: missing required snippet: {snippet!r}")
 
-    disallowed_unscoped = "npx -y gws-mcp-advanced"
-    if disallowed_unscoped in readme:
-        errors.append(f"{readme_path}: found disallowed unscoped npx usage: {disallowed_unscoped!r}")
+    disallowed_scoped = "npx -y @skeptomenos/gws-mcp-advanced"
+    if disallowed_scoped in readme:
+        errors.append(f"{readme_path}: found disallowed deprecated npx usage: {disallowed_scoped!r}")
 
     return errors
 

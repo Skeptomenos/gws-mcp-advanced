@@ -229,6 +229,7 @@ async def modify_sheet_values(
     values: str | None = None,
     value_input_option: str = "USER_ENTERED",
     clear_values: bool = False,
+    dry_run: bool = True,
 ) -> str:
     """
     Modifies values in a specific range of a Google Sheet - can write, update, or clear values.
@@ -248,6 +249,12 @@ async def modify_sheet_values(
     logger.info(
         f"[modify_sheet_values] Invoked. Operation: {operation}, Email: '{user_google_email}', Spreadsheet: {spreadsheet_id}, Range: {range_name}"
     )
+
+    if dry_run:
+        return (
+            f"DRY RUN: Would {operation} values in range '{range_name}' of spreadsheet {spreadsheet_id} "
+            f"for {user_google_email}."
+        )
 
     # Parse values from JSON string (MCP passes parameters as JSON strings)
     parsed_values: list[list[str]] | None = None
@@ -340,6 +347,7 @@ async def format_sheet_range(
     text_color: str | None = None,
     number_format_type: str | None = None,
     number_format_pattern: str | None = None,
+    dry_run: bool = True,
 ) -> str:
     """
     Applies formatting to a range: background/text color and number/date formats.
@@ -357,6 +365,7 @@ async def format_sheet_range(
         text_color (Optional[str]): Hex text color (e.g., "#000000").
         number_format_type (Optional[str]): Sheets number format type (e.g., "DATE").
         number_format_pattern (Optional[str]): Optional custom pattern for the number format.
+        dry_run (bool): When True (default), return planned formatting without mutating the sheet.
 
     Returns:
         str: Confirmation of the applied formatting.
@@ -420,6 +429,25 @@ async def format_sheet_range(
     if not user_entered_format:
         raise UserInputError("No formatting applied. Verify provided colors or number format.")
 
+    applied_parts = []
+    if bg_color_parsed:
+        applied_parts.append(f"background {background_color}")
+    if text_color_parsed:
+        applied_parts.append(f"text {text_color}")
+    if number_format:
+        nf_desc = number_format["type"]
+        if number_format_pattern:
+            nf_desc += f" (pattern: {number_format_pattern})"
+        applied_parts.append(f"format {nf_desc}")
+
+    summary = ", ".join(applied_parts)
+
+    if dry_run:
+        return (
+            f"DRY RUN: Would apply formatting to range '{range_name}' in spreadsheet {spreadsheet_id} "
+            f"for {user_google_email}: {summary}."
+        )
+
     request_body = {
         "requests": [
             {
@@ -434,18 +462,6 @@ async def format_sheet_range(
 
     await asyncio.to_thread(service.spreadsheets().batchUpdate(spreadsheetId=spreadsheet_id, body=request_body).execute)
 
-    applied_parts = []
-    if bg_color_parsed:
-        applied_parts.append(f"background {background_color}")
-    if text_color_parsed:
-        applied_parts.append(f"text {text_color}")
-    if number_format:
-        nf_desc = number_format["type"]
-        if number_format_pattern:
-            nf_desc += f" (pattern: {number_format_pattern})"
-        applied_parts.append(f"format {nf_desc}")
-
-    summary = ", ".join(applied_parts)
     return (
         f"Applied formatting to range '{range_name}' in spreadsheet {spreadsheet_id} "
         f"for {user_google_email}: {summary}."
@@ -466,6 +482,7 @@ async def add_conditional_formatting(
     text_color: str | None = None,
     rule_index: int | None = None,
     gradient_points: str | None = None,
+    dry_run: bool = True,
 ) -> str:
     """
     Adds a conditional formatting rule to a range.
@@ -480,6 +497,7 @@ async def add_conditional_formatting(
         text_color (Optional[str]): Hex text color to apply when condition matches.
         rule_index (Optional[int]): Optional position to insert the rule (0-based) within the sheet's rules.
         gradient_points (Optional[Union[str, List[dict]]]): List (or JSON list) of gradient points for a color scale. If provided, a gradient rule is created and boolean parameters are ignored.
+        dry_run (bool): When True (default), return planned rule details without mutating the sheet.
 
     Returns:
         str: Confirmation of the added rule.
@@ -498,6 +516,30 @@ async def add_conditional_formatting(
 
     condition_values_list = _parse_condition_values(condition_values)
     gradient_points_list = _parse_gradient_points(gradient_points)
+
+    if dry_run:
+        if gradient_points_list:
+            rule_desc = "gradient"
+            values_desc = ""
+            format_desc = f"gradient points {len(gradient_points_list)}"
+        else:
+            cond_type_normalized = condition_type.upper()
+            if cond_type_normalized not in CONDITION_TYPES:
+                raise UserInputError(f"condition_type must be one of {sorted(CONDITION_TYPES)}.")
+
+            rule_desc = cond_type_normalized
+            values_desc = f" with values {condition_values_list}" if condition_values_list else ""
+            preview_parts = []
+            if background_color:
+                preview_parts.append(f"background {background_color}")
+            if text_color:
+                preview_parts.append(f"text {text_color}")
+            format_desc = ", ".join(preview_parts) if preview_parts else "format applied"
+
+        return (
+            f"DRY RUN: Would add conditional format on '{range_name}' in spreadsheet {spreadsheet_id} "
+            f"for {user_google_email}: {rule_desc}{values_desc}; format: {format_desc}."
+        )
 
     sheets, sheet_titles = await _fetch_sheets_with_rules(service, spreadsheet_id)
     grid_range = _parse_a1_range(range_name, sheets)
@@ -583,6 +625,7 @@ async def update_conditional_formatting(
     text_color: str | None = None,
     sheet_name: str | None = None,
     gradient_points: str | None = None,
+    dry_run: bool = True,
 ) -> str:
     """
     Updates an existing conditional formatting rule by index on a sheet.
@@ -598,6 +641,7 @@ async def update_conditional_formatting(
         text_color (Optional[str]): Hex text color when condition matches.
         sheet_name (Optional[str]): Sheet name to locate the rule when range_name is omitted. Defaults to first sheet.
         gradient_points (Optional[Union[str, List[dict]]]): If provided, updates the rule to a gradient color scale using these points.
+        dry_run (bool): When True (default), return planned update details without mutating the sheet.
 
     Returns:
         str: Confirmation of the updated rule and the current rule state.
@@ -615,6 +659,28 @@ async def update_conditional_formatting(
 
     condition_values_list = _parse_condition_values(condition_values)
     gradient_points_list = _parse_gradient_points(gradient_points)
+
+    if dry_run:
+        planned_changes = []
+        if range_name:
+            planned_changes.append(f"range='{range_name}'")
+        if sheet_name:
+            planned_changes.append(f"sheet='{sheet_name}'")
+        if condition_type:
+            planned_changes.append(f"condition_type={condition_type.upper()}")
+        if condition_values_list is not None:
+            planned_changes.append(f"condition_values={condition_values_list}")
+        if gradient_points_list is not None:
+            planned_changes.append(f"gradient_points={len(gradient_points_list)}")
+        if background_color is not None:
+            planned_changes.append(f"background_color={background_color}")
+        if text_color is not None:
+            planned_changes.append(f"text_color={text_color}")
+        change_summary = ", ".join(planned_changes) if planned_changes else "preserve current rule settings"
+        return (
+            f"DRY RUN: Would update conditional format at index {rule_index} in spreadsheet {spreadsheet_id} "
+            f"for {user_google_email}. Planned changes: {change_summary}."
+        )
 
     sheets, sheet_titles = await _fetch_sheets_with_rules(service, spreadsheet_id)
 
@@ -764,6 +830,7 @@ async def delete_conditional_formatting(
     spreadsheet_id: str,
     rule_index: int,
     sheet_name: str | None = None,
+    dry_run: bool = True,
 ) -> str:
     """
     Deletes an existing conditional formatting rule by index on a sheet.
@@ -773,6 +840,7 @@ async def delete_conditional_formatting(
         spreadsheet_id (str): The ID of the spreadsheet. Required.
         rule_index (int): Index of the rule to delete (0-based).
         sheet_name (Optional[str]): Name of the sheet that contains the rule. Defaults to the first sheet if not provided.
+        dry_run (bool): When True (default), return planned deletion without mutating the sheet.
 
     Returns:
         str: Confirmation of the deletion and the current rule state.
@@ -787,6 +855,13 @@ async def delete_conditional_formatting(
 
     if not isinstance(rule_index, int) or rule_index < 0:
         raise UserInputError("rule_index must be a non-negative integer.")
+
+    if dry_run:
+        sheet_fragment = f" on sheet '{sheet_name}'" if sheet_name else ""
+        return (
+            f"DRY RUN: Would delete conditional format at index {rule_index}{sheet_fragment} "
+            f"in spreadsheet {spreadsheet_id} for {user_google_email}."
+        )
 
     sheets, sheet_titles = await _fetch_sheets_with_rules(service, spreadsheet_id)
     target_sheet = _select_sheet(sheets, sheet_name)
@@ -834,6 +909,7 @@ async def create_spreadsheet(
     user_google_email: str,
     title: str,
     sheet_names: list[str] | None = None,
+    dry_run: bool = True,
 ) -> str:
     """
     Creates a new Google Spreadsheet.
@@ -847,6 +923,10 @@ async def create_spreadsheet(
         str: Information about the newly created spreadsheet including ID, URL, and locale.
     """
     logger.info(f"[create_spreadsheet] Invoked. Email: '{user_google_email}', Title: {title}")
+
+    if dry_run:
+        sheets_info = f", sheets={sheet_names}" if sheet_names else ""
+        return f"DRY RUN: Would create spreadsheet '{title}' for {user_google_email}{sheets_info}."
 
     spreadsheet_body: dict[str, dict[str, str] | list[dict[str, dict[str, str]]]] = {"properties": {"title": title}}
 
@@ -884,6 +964,7 @@ async def create_sheet(
     user_google_email: str,
     spreadsheet_id: str,
     sheet_name: str,
+    dry_run: bool = True,
 ) -> str:
     """
     Creates a new sheet within an existing spreadsheet.
@@ -892,6 +973,7 @@ async def create_sheet(
         user_google_email (str): The user's Google email address. Required.
         spreadsheet_id (str): The ID of the spreadsheet. Required.
         sheet_name (str): The name of the new sheet. Required.
+        dry_run (bool): When True (default), return planned sheet creation without mutating the spreadsheet.
 
     Returns:
         str: Confirmation message of the successful sheet creation.
@@ -899,6 +981,9 @@ async def create_sheet(
     logger.info(
         f"[create_sheet] Invoked. Email: '{user_google_email}', Spreadsheet: {spreadsheet_id}, Sheet: {sheet_name}"
     )
+
+    if dry_run:
+        return f"DRY RUN: Would create sheet '{sheet_name}' in spreadsheet {spreadsheet_id} for {user_google_email}."
 
     request_body = {"requests": [{"addSheet": {"properties": {"title": sheet_name}}}]}
 

@@ -215,6 +215,7 @@ async def get_gmail_messages_content_batch(
                             return mid, None, ssl_error
                     except Exception as e:
                         return mid, None, e
+                return mid, None, RuntimeError("Message fetch retries exhausted")
 
             for mid in chunk_ids:
                 mid_result, msg_data, error = await fetch_message_with_retry(mid)
@@ -414,6 +415,7 @@ async def send_gmail_message(
     thread_id: str | None = Body(None, description="Optional Gmail thread ID to reply within."),
     in_reply_to: str | None = Body(None, description="Optional Message-ID of the message being replied to."),
     references: str | None = Body(None, description="Optional chain of Message-IDs for proper threading."),
+    dry_run: bool = Body(True, description="If True, returns a preview and does not send the email. Defaults to True."),
 ) -> str:
     """
     Sends an email using the user's Gmail account. Supports both new emails and replies.
@@ -466,6 +468,16 @@ async def send_gmail_message(
     """
     logger.info(f"[send_gmail_message] Invoked. Email: '{user_google_email}', Subject: '{subject}'")
 
+    if dry_run:
+        to_display = to or "(none)"
+        cc_display = f", cc={cc}" if cc else ""
+        bcc_display = f", bcc={bcc}" if bcc else ""
+        thread_display = f", thread_id={thread_id}" if thread_id else ""
+        return (
+            f"DRY RUN: Would send email from {user_google_email} to {to_display} "
+            f"with subject '{subject}'{cc_display}{bcc_display}{thread_display}."
+        )
+
     raw_message, thread_id_final = _prepare_gmail_message(
         subject=subject,
         body=body,
@@ -507,6 +519,9 @@ async def draft_gmail_message(
     thread_id: str | None = Body(None, description="Optional Gmail thread ID to reply within."),
     in_reply_to: str | None = Body(None, description="Optional Message-ID of the message being replied to."),
     references: str | None = Body(None, description="Optional chain of Message-IDs for proper threading."),
+    dry_run: bool = Body(
+        True, description="If True, returns a preview and does not create the draft. Defaults to True."
+    ),
 ) -> str:
     """
     Creates a draft email in the user's Gmail account. Supports both new drafts and reply drafts.
@@ -571,6 +586,16 @@ async def draft_gmail_message(
         )
     """
     logger.info(f"[draft_gmail_message] Invoked. Email: '{user_google_email}', Subject: '{subject}'")
+
+    if dry_run:
+        to_display = to or "(none)"
+        cc_display = f", cc={cc}" if cc else ""
+        bcc_display = f", bcc={bcc}" if bcc else ""
+        thread_display = f", thread_id={thread_id}" if thread_id else ""
+        return (
+            f"DRY RUN: Would create draft from {user_google_email} to {to_display} "
+            f"with subject '{subject}'{cc_display}{bcc_display}{thread_display}."
+        )
 
     raw_message, thread_id_final = _prepare_gmail_message(
         subject=subject,

@@ -166,7 +166,7 @@ async def get_task_list(service: Any, user_google_email: str, task_list_id: str)
 @server.tool()
 @handle_http_errors("create_task_list", service_type="tasks")
 @require_google_service("tasks", "tasks")
-async def create_task_list(service: Any, user_google_email: str, title: str) -> str:
+async def create_task_list(service: Any, user_google_email: str, title: str, dry_run: bool = True) -> str:
     """
     Create a new task list.
 
@@ -178,6 +178,9 @@ async def create_task_list(service: Any, user_google_email: str, title: str) -> 
         str: Confirmation message with the new task list ID and details.
     """
     logger.info(f"[create_task_list] Invoked. Email: '{user_google_email}', Title: '{title}'")
+
+    if dry_run:
+        return f"DRY RUN: Would create task list '{title}' for {user_google_email}."
 
     try:
         body = {"title": title}
@@ -206,7 +209,13 @@ async def create_task_list(service: Any, user_google_email: str, title: str) -> 
 @server.tool()
 @handle_http_errors("update_task_list", service_type="tasks")
 @require_google_service("tasks", "tasks")
-async def update_task_list(service: Any, user_google_email: str, task_list_id: str, title: str) -> str:
+async def update_task_list(
+    service: Any,
+    user_google_email: str,
+    task_list_id: str,
+    title: str,
+    dry_run: bool = True,
+) -> str:
     """
     Update an existing task list.
 
@@ -214,6 +223,7 @@ async def update_task_list(service: Any, user_google_email: str, task_list_id: s
         user_google_email (str): The user's Google email address. Required.
         task_list_id (str): The ID of the task list to update.
         title (str): The new title for the task list.
+        dry_run (bool): If True, preview the update without mutating the task list.
 
     Returns:
         str: Confirmation message with updated task list details.
@@ -221,6 +231,9 @@ async def update_task_list(service: Any, user_google_email: str, task_list_id: s
     logger.info(
         f"[update_task_list] Invoked. Email: '{user_google_email}', Task List ID: {task_list_id}, New Title: '{title}'"
     )
+
+    if dry_run:
+        return f"DRY RUN: Would update task list {task_list_id} title to '{title}' for {user_google_email}."
 
     try:
         body = {"id": task_list_id, "title": title}
@@ -248,18 +261,27 @@ async def update_task_list(service: Any, user_google_email: str, task_list_id: s
 @server.tool()
 @handle_http_errors("delete_task_list", service_type="tasks")
 @require_google_service("tasks", "tasks")
-async def delete_task_list(service: Any, user_google_email: str, task_list_id: str) -> str:
+async def delete_task_list(
+    service: Any,
+    user_google_email: str,
+    task_list_id: str,
+    dry_run: bool = True,
+) -> str:
     """
     Delete a task list. Note: This will also delete all tasks in the list.
 
     Args:
         user_google_email (str): The user's Google email address. Required.
         task_list_id (str): The ID of the task list to delete.
+        dry_run (bool): When True (default), return planned mutation without executing.
 
     Returns:
         str: Confirmation message.
     """
     logger.info(f"[delete_task_list] Invoked. Email: '{user_google_email}', Task List ID: {task_list_id}")
+
+    if dry_run:
+        return f"DRY RUN: Would delete task list {task_list_id} for {user_google_email} (including all tasks in that list)."
 
     try:
         await asyncio.to_thread(service.tasklists().delete(tasklist=task_list_id).execute)
@@ -573,6 +595,7 @@ async def create_task(
     due: str | None = None,
     parent: str | None = None,
     previous: str | None = None,
+    dry_run: bool = True,
 ) -> str:
     """
     Create a new task in a task list.
@@ -590,6 +613,14 @@ async def create_task(
         str: Confirmation message with the new task ID and details.
     """
     logger.info(f"[create_task] Invoked. Email: '{user_google_email}', Task List ID: {task_list_id}, Title: '{title}'")
+
+    if dry_run:
+        extras = ""
+        if notes:
+            extras += f", notes='{notes[:50]}...'" if len(notes) > 50 else f", notes='{notes}'"
+        if due:
+            extras += f", due={due}"
+        return f"DRY RUN: Would create task '{title}' in list {task_list_id} for {user_google_email}{extras}."
 
     try:
         body = {"title": title}
@@ -644,6 +675,7 @@ async def update_task(
     notes: str | None = None,
     status: str | None = None,
     due: str | None = None,
+    dry_run: bool = True,
 ) -> str:
     """
     Update an existing task.
@@ -656,6 +688,7 @@ async def update_task(
         notes (Optional[str]): New notes/description for the task.
         status (Optional[str]): New status ("needsAction" or "completed").
         due (Optional[str]): New due date in RFC 3339 format.
+        dry_run (bool): When True (default), return planned mutation without executing.
 
     Returns:
         str: Confirmation message with updated task details.
@@ -663,6 +696,23 @@ async def update_task(
     logger.info(
         f"[update_task] Invoked. Email: '{user_google_email}', Task List ID: {task_list_id}, Task ID: {task_id}"
     )
+
+    if dry_run:
+        planned_changes = []
+        if title is not None:
+            planned_changes.append(f"title='{title}'")
+        if notes is not None:
+            planned_changes.append("notes=<provided>")
+        if status is not None:
+            planned_changes.append(f"status='{status}'")
+        if due is not None:
+            planned_changes.append(f"due='{due}'")
+        if not planned_changes:
+            planned_changes.append("no field overrides provided")
+        return (
+            f"DRY RUN: Would update task {task_id} in list {task_list_id} for {user_google_email}. "
+            f"Planned changes: {', '.join(planned_changes)}."
+        )
 
     try:
         # First get the current task to build the update body
@@ -715,7 +765,13 @@ async def update_task(
 @server.tool()
 @handle_http_errors("delete_task", service_type="tasks")
 @require_google_service("tasks", "tasks")
-async def delete_task(service: Any, user_google_email: str, task_list_id: str, task_id: str) -> str:
+async def delete_task(
+    service: Any,
+    user_google_email: str,
+    task_list_id: str,
+    task_id: str,
+    dry_run: bool = True,
+) -> str:
     """
     Delete a task from a task list.
 
@@ -723,6 +779,7 @@ async def delete_task(service: Any, user_google_email: str, task_list_id: str, t
         user_google_email (str): The user's Google email address. Required.
         task_list_id (str): The ID of the task list containing the task.
         task_id (str): The ID of the task to delete.
+        dry_run (bool): When True (default), return planned mutation without executing.
 
     Returns:
         str: Confirmation message.
@@ -730,6 +787,9 @@ async def delete_task(service: Any, user_google_email: str, task_list_id: str, t
     logger.info(
         f"[delete_task] Invoked. Email: '{user_google_email}', Task List ID: {task_list_id}, Task ID: {task_id}"
     )
+
+    if dry_run:
+        return f"DRY RUN: Would delete task {task_id} from task list {task_list_id} for {user_google_email}."
 
     try:
         await asyncio.to_thread(service.tasks().delete(tasklist=task_list_id, task=task_id).execute)
@@ -760,6 +820,7 @@ async def move_task(
     parent: str | None = None,
     previous: str | None = None,
     destination_task_list: str | None = None,
+    dry_run: bool = True,
 ) -> str:
     """
     Move a task to a different position or parent within the same list, or to a different list.
@@ -771,11 +832,27 @@ async def move_task(
         parent (Optional[str]): New parent task ID (for making it a subtask).
         previous (Optional[str]): Previous sibling task ID (for positioning).
         destination_task_list (Optional[str]): Destination task list ID (for moving between lists).
+        dry_run (bool): When True (default), return planned mutation without executing.
 
     Returns:
         str: Confirmation message with updated task details.
     """
     logger.info(f"[move_task] Invoked. Email: '{user_google_email}', Task List ID: {task_list_id}, Task ID: {task_id}")
+
+    if dry_run:
+        move_details = []
+        if destination_task_list:
+            move_details.append(f"destination_task_list={destination_task_list}")
+        if parent:
+            move_details.append(f"parent={parent}")
+        if previous:
+            move_details.append(f"previous={previous}")
+        if not move_details:
+            move_details.append("no move parameters provided")
+        return (
+            f"DRY RUN: Would move task {task_id} in list {task_list_id} for {user_google_email}. "
+            f"Planned move details: {', '.join(move_details)}."
+        )
 
     try:
         params = {"tasklist": task_list_id, "task": task_id}
@@ -826,18 +903,27 @@ async def move_task(
 @server.tool()
 @handle_http_errors("clear_completed_tasks", service_type="tasks")
 @require_google_service("tasks", "tasks")
-async def clear_completed_tasks(service: Any, user_google_email: str, task_list_id: str) -> str:
+async def clear_completed_tasks(
+    service: Any,
+    user_google_email: str,
+    task_list_id: str,
+    dry_run: bool = True,
+) -> str:
     """
     Clear all completed tasks from a task list. The tasks will be marked as hidden.
 
     Args:
         user_google_email (str): The user's Google email address. Required.
         task_list_id (str): The ID of the task list to clear completed tasks from.
+        dry_run (bool): When True (default), return planned mutation without executing.
 
     Returns:
         str: Confirmation message.
     """
     logger.info(f"[clear_completed_tasks] Invoked. Email: '{user_google_email}', Task List ID: {task_list_id}")
+
+    if dry_run:
+        return f"DRY RUN: Would clear completed tasks from task list {task_list_id} for {user_google_email}."
 
     try:
         await asyncio.to_thread(service.tasks().clear(tasklist=task_list_id).execute)

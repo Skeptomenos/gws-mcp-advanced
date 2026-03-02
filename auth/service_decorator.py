@@ -514,6 +514,7 @@ def require_google_service(
         async def wrapper(*args, **kwargs):
             # Note: `args` and `kwargs` are now the arguments for the *wrapper*,
             # which does not include 'service'.
+            tool_name = func.__name__
 
             # Get authentication context early to determine OAuth mode
             authenticated_user, auth_method, mcp_session_id = _get_auth_context(func.__name__)
@@ -536,8 +537,6 @@ def require_google_service(
             resolved_scopes = _resolve_scopes(scopes)
 
             try:
-                tool_name = func.__name__
-
                 # Log authentication status
                 logger.debug(
                     f"[{tool_name}] Auth: {authenticated_user or 'none'} via {auth_method or 'none'} (session: {mcp_session_id[:8] if mcp_session_id else 'none'})"

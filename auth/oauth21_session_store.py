@@ -1036,11 +1036,12 @@ def ensure_session_from_access_token(
     if email:
         try:
             store = get_oauth21_session_store()
+            token_uri = getattr(credentials, "token_uri", None) or "https://oauth2.googleapis.com/token"
             store.store_session(
                 user_email=email,
                 access_token=credentials.token,
                 refresh_token=credentials.refresh_token,
-                token_uri=credentials.token_uri,
+                token_uri=token_uri,
                 client_id=credentials.client_id,
                 client_secret=credentials.client_secret,
                 scopes=credentials.scopes,

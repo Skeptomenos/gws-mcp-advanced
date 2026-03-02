@@ -29,6 +29,7 @@ async def create_table_with_data(
     table_data: list[list[str]],
     index: int,
     bold_headers: bool = True,
+    dry_run: bool = True,
 ) -> str:
     """
     Creates a table and populates it with data in one reliable operation.
@@ -67,6 +68,7 @@ async def create_table_with_data(
         table_data: 2D list of strings - EXACT format: [["col1", "col2"], ["row1col1", "row1col2"]]
         index: Document position (MANDATORY: get from inspect_doc_structure 'total_length')
         bold_headers: Whether to make first row bold (default: true)
+        dry_run: When True (default), return planned mutation without executing it
 
     Returns:
         str: Confirmation with table details and link
@@ -90,6 +92,16 @@ async def create_table_with_data(
     if not is_valid:
         return f"ERROR: {error_msg}"
 
+    rows = len(table_data)
+    columns = len(table_data[0]) if table_data else 0
+    link = f"https://docs.google.com/document/d/{document_id}/edit"
+
+    if dry_run:
+        return (
+            f"DRY RUN: Would create and populate table in document {document_id} for {user_google_email}. "
+            f"Table: {rows}x{columns}, Index: {index}, bold_headers={bold_headers}. Link: {link}"
+        )
+
     table_manager = TableOperationManager(service)
 
     success, message, metadata = await table_manager.create_and_populate_table(
@@ -103,7 +115,6 @@ async def create_table_with_data(
         )
 
     if success:
-        link = f"https://docs.google.com/document/d/{document_id}/edit"
         rows = metadata.get("rows", 0)
         columns = metadata.get("columns", 0)
 

@@ -49,6 +49,10 @@ BULLET_PRESET_ORDERED = "NUMBERED_DECIMAL_ALPHA_ROMAN"
 # Code block styling constants
 CODE_FONT_FAMILY = "Consolas"
 CODE_BACKGROUND_COLOR = {"red": 0.96, "green": 0.96, "blue": 0.96}  # #f5f5f5
+CODE_BORDER_COLOR = {"red": 0.85, "green": 0.85, "blue": 0.85}
+CODE_BORDER_WIDTH_PT = 1.0
+CODE_BORDER_PADDING_PT = 6.0
+CODE_LABEL_COLOR = {"red": 0.45, "green": 0.45, "blue": 0.45}
 
 # Blockquote styling constants (specs/FIX_BLOCKQUOTES.md)
 BLOCKQUOTE_INDENT_PT = 36
@@ -65,6 +69,27 @@ HR_PADDING_BELOW_PT = 6
 # Task list checkbox characters (Unicode ballot box symbols)
 CHECKBOX_UNCHECKED = "☐"  # U+2610 BALLOT BOX
 CHECKBOX_CHECKED = "☑"  # U+2611 BALLOT BOX WITH CHECK
+
+# Inline image placeholder used during single-insert buffering. Each placeholder
+# is later replaced with an insertInlineImage request at the same index.
+IMAGE_PLACEHOLDER_CHAR = "\ufffc"
+# Table placeholder used during single-insert buffering. Each placeholder
+# is later replaced with a delete+insertTable request pair.
+TABLE_PLACEHOLDER_CHAR = "\ufffd"
+
+# Top-level block tokens whose source line maps are used to preserve explicit
+# blank lines from markdown input (e.g. spacing around headings/hr blocks).
+SOURCE_GAP_TRACKED_TOKEN_TYPES = {
+    "heading_open",
+    "paragraph_open",
+    "bullet_list_open",
+    "ordered_list_open",
+    "blockquote_open",
+    "table_open",
+    "fence",
+    "code_block",
+    "hr",
+}
 
 
 class MarkdownToDocsConverter:
@@ -126,6 +151,7 @@ class MarkdownToDocsConverter:
         # The API needs all paragraphs in a list processed together to interpret TAB nesting
         self._top_level_list_start_index: int | None = None
         self._top_level_list_type: str | None = None
+        self._top_level_list_has_task_items: bool = False
         # Blockquote nesting level (> vs >> vs >>>)
         self._blockquote_nesting_level: int = 0
         self._blockquote_paragraph_start_index: int | None = None
@@ -154,6 +180,18 @@ class MarkdownToDocsConverter:
         self._deferred_styles: list[tuple[int, int, dict]] = []  # (start, end, style)
         # Track where each style started (for when style_open happens)
         self._style_start_positions: list[tuple[int, dict]] = []  # (buffer_position, style)
+        # Table data for post-processing (populated during convert())
+        # Each entry is (table_data_2d, bold_headers) for one table found in the markdown
+        self.pending_tables: list[tuple[list[list[str]], bool]] = []
+        # Pending table placeholders captured during buffering as
+        # (buffer-relative index, rows, cols).
+        self._pending_table_insertions: list[tuple[int, int, int]] = []
+        # Pending inline images captured during buffering as
+        # (buffer-relative index, image_uri).
+        self._pending_inline_images: list[tuple[int, str]] = []
+        # Track top-level source block line boundaries to preserve explicit
+        # blank lines in the original markdown.
+        self._last_tracked_block_end_line: int | None = None
 
     def convert(self, markdown_text: str, start_index: int = 1) -> list[dict]:
         """
@@ -181,6 +219,7 @@ class MarkdownToDocsConverter:
         self._list_item_tabs_inserted = False
         self._top_level_list_start_index = None
         self._top_level_list_type = None
+        self._top_level_list_has_task_items = False
         self._blockquote_nesting_level = 0
         self._blockquote_paragraph_start_index = None
         self._paragraph_start_index = None
@@ -194,10 +233,15 @@ class MarkdownToDocsConverter:
         self._text_buffer = ""
         self._deferred_styles = []
         self._style_start_positions = []
+        self.pending_tables = []
+        self._pending_table_insertions = []
+        self._pending_inline_images = []
+        self._last_tracked_block_end_line = None
 
         tokens: list[Token] = self.md.parse(markdown_text)
 
         for token in tokens:
+            self._insert_source_blank_lines(token)
             self._handle_token(token)
 
         # Single-Insert Architecture (FIX_STYLE_BLEED.md v5):
@@ -234,22 +278,25 @@ class MarkdownToDocsConverter:
         # Collect other request types from self.requests (non-inline styles)
         other_style_requests = [r for r in self.requests if "updateTextStyle" in r]
         para_requests = [r for r in self.requests if "updateParagraphStyle" in r]
-        bullet_requests = [r for r in self.requests if "createParagraphBullets" in r or "deleteParagraphBullets" in r]
+        raw_bullet_requests = [
+            r for r in self.requests if "createParagraphBullets" in r or "deleteParagraphBullets" in r
+        ]
         # Adjust bullet indices to account for TAB removal by createParagraphBullets
-        bullet_requests = self._adjust_bullet_indices_for_tab_removal(bullet_requests, start_index)
-        table_requests = [r for r in self.requests if "insertTable" in r]
-        image_requests = [r for r in self.requests if "insertInlineImage" in r]
-        table_text_requests = [r for r in self.requests if "insertText" in r]
+        bullet_requests = self._adjust_bullet_indices_for_tab_removal(raw_bullet_requests, start_index)
+        table_requests = self._build_table_replacement_requests(start_index, raw_bullet_requests)
+        image_requests = self._build_inline_image_requests(start_index, raw_bullet_requests)
+        # NOTE: Table cell insertText requests are no longer included in output.
+        # Cell population requires inspecting the document after table creation
+        # to get actual cell paragraph indices. See create_doc in writing.py.
 
         return (
             insert_requests
-            + table_text_requests
             + deferred_style_requests
             + other_style_requests
             + para_requests
             + bullet_requests
-            + table_requests
             + image_requests
+            + table_requests
         )
 
     def _handle_token(self, token: Token) -> None:
@@ -308,6 +355,34 @@ class MarkdownToDocsConverter:
             self._handle_cell_close()
         elif token.type == "hr":
             self._handle_horizontal_rule()
+
+    def _insert_source_blank_lines(self, token: Token) -> None:
+        """
+        Preserve explicit blank lines from source markdown for top-level blocks.
+
+        markdown-it token maps expose source line ranges (`token.map=[start,end)`).
+        When there is a line gap between two top-level block starts, that gap
+        represents explicit blank lines in the source. We materialize those gaps
+        into the text buffer so Google Docs rendering keeps expected vertical
+        spacing (notably around heading->paragraph and horizontal-rule regions).
+        """
+        token_map = token.map
+        if (
+            token_map is None
+            or token.hidden
+            or token.level != 0
+            or token.nesting < 0
+            or token.type not in SOURCE_GAP_TRACKED_TOKEN_TYPES
+        ):
+            return
+
+        start_line, end_line = token_map
+        if self._last_tracked_block_end_line is not None:
+            blank_lines = max(0, start_line - self._last_tracked_block_end_line)
+            for _ in range(blank_lines):
+                self._insert_newline()
+
+        self._last_tracked_block_end_line = end_line
 
     def _handle_inline(self, token: Token) -> None:
         """
@@ -434,6 +509,7 @@ class MarkdownToDocsConverter:
         if not self._list_type_stack:
             self._top_level_list_start_index = self.cursor_index
             self._top_level_list_type = list_type
+            self._top_level_list_has_task_items = False
         self._list_type_stack.append(list_type)
         self._in_list_block = True
         self._just_exited_list = False
@@ -449,9 +525,9 @@ class MarkdownToDocsConverter:
         if self._list_type_stack:
             popped = self._list_type_stack.pop()
             if not self._list_type_stack:
-                self._apply_top_level_list_bullets()
+                emitted_bullets = self._apply_top_level_list_bullets()
                 self._in_list_block = False
-                self._just_exited_list = True
+                self._just_exited_list = emitted_bullets
             logger.debug(f"List close: type={popped}, nesting_level={len(self._list_type_stack)}")
         else:
             logger.warning("list_close without matching list_open")
@@ -497,7 +573,7 @@ class MarkdownToDocsConverter:
             self._just_exited_list = False
             logger.debug(f"Emitted deleteParagraphBullets for range [{start_index}, {end_index})")
 
-    def _apply_top_level_list_bullets(self) -> None:
+    def _apply_top_level_list_bullets(self) -> bool:
         """
         Apply bullets to the entire top-level list range.
 
@@ -507,18 +583,31 @@ class MarkdownToDocsConverter:
         """
         if self._top_level_list_start_index is None:
             logger.warning("_apply_top_level_list_bullets called without start index")
-            return
+            return False
+
+        if self._top_level_list_has_task_items:
+            logger.debug("Skipping createParagraphBullets for task-list block")
+            self._top_level_list_start_index = None
+            self._top_level_list_type = None
+            self._top_level_list_has_task_items = False
+            return False
 
         if self._top_level_list_type == "bullet":
             bullet_preset = BULLET_PRESET_UNORDERED
         else:
             bullet_preset = BULLET_PRESET_ORDERED
 
+        # Exclude the list-closing newline from the bullet range to avoid
+        # rendering an extra empty bullet paragraph after task/list blocks.
+        end_index = self.cursor_index
+        if self._text_buffer.endswith("\n"):
+            end_index = max(self._top_level_list_start_index + 1, self.cursor_index - 1)
+
         request = {
             "createParagraphBullets": {
                 "range": {
                     "startIndex": self._top_level_list_start_index,
-                    "endIndex": self.cursor_index,
+                    "endIndex": end_index,
                 },
                 "bulletPreset": bullet_preset,
             }
@@ -527,11 +616,13 @@ class MarkdownToDocsConverter:
 
         logger.debug(
             f"Applied bullets to entire list: preset={bullet_preset}, "
-            f"range=[{self._top_level_list_start_index}, {self.cursor_index})"
+            f"range=[{self._top_level_list_start_index}, {end_index})"
         )
 
         self._top_level_list_start_index = None
         self._top_level_list_type = None
+        self._top_level_list_has_task_items = False
+        return True
 
     def _handle_blockquote_open(self) -> None:
         """Increment blockquote nesting level."""
@@ -607,23 +698,12 @@ class MarkdownToDocsConverter:
 
     def _handle_table_close(self) -> None:
         """
-        End table buffering and generate insertTable + cell population requests.
+        End table buffering and register a placeholder replacement.
 
-        Generates an insertTable request with the dimensions derived from
-        the buffered table data, followed by insertText requests to populate
-        each cell with the buffered content.
-
-        Google Docs Table Index Math (specs/FIX_TABLE_MATH.md):
-        - Table starts at index `I`
-        - First cell (0,0) starts at: `I + 3` (empirically verified offset)
-        - Cell spacing: Each cell occupies 2 indices (content + cell boundary)
-        - Row spacing: Each row end adds 1 index
-
-        Formula for cell (r, c) in an RxC table:
-            cell_start = table_start + 3 + (r * (2 * cols + 1)) + (c * 2) + text_offset
-        where text_offset = cumulative length of text in previous cells of this table.
-
-        Since we insert text linearly, we track the running text_offset as we go.
+        Instead of predicting post-table cursor indices (fragile and drift-prone),
+        table blocks are represented by a one-character placeholder in the text
+        buffer. Later, the caller replaces that placeholder with insertTable in a
+        dedicated structural phase.
         """
         if not self._table_data:
             logger.warning("Table close with no buffered data")
@@ -643,68 +723,24 @@ class MarkdownToDocsConverter:
             while len(row) < cols:
                 row.append("")
 
-        table_start_index = self.cursor_index
-        logger.debug(f"Table close: generating {rows}x{cols} table at index {table_start_index}")
+        placeholder_pos = len(self._text_buffer)
+        self._insert_text(TABLE_PLACEHOLDER_CHAR)
+        self._pending_table_insertions.append((placeholder_pos, rows, cols))
+        logger.debug(
+            "Table close: buffered placeholder at buffer_pos=%d for %dx%d table",
+            placeholder_pos,
+            rows,
+            cols,
+        )
 
-        # Step 1: Insert the empty table structure
-        insert_table_request = {
-            "insertTable": {
-                "location": {"index": table_start_index},
-                "rows": rows,
-                "columns": cols,
-            }
-        }
-        self.requests.append(insert_table_request)
+        # Save table data for post-processing by the caller (e.g., create_doc).
+        # Cell population requires inspecting the document after table creation
+        # to get actual cell paragraph indices — the indices cannot be predicted
+        # in advance within a single batchUpdate call.
+        self.pending_tables.append((list(self._table_data), True))
 
-        # Step 2: Populate cells with buffered content
-        # We use the corrected formula from specs/FIX_TABLE_MATH.md
-        # Each cell (r, c) has its content insertion point calculated as:
-        #   base_cell_index = table_start + 3 + r * (2 * cols + 1) + c * 2
-        # The +3 offset was empirically verified (previous +4 caused HttpError 400)
-        # Each row adds (2 * cols + 1) indices: cells(2*cols) + row_end(1)
-        # Each column adds 2 indices: cell_content(1) + cell_boundary(1)
-        #
-        # CRITICAL: As we insert text, indices shift. We must add cumulative text length
-        # to the base formula. We insert in row-major order (row 0, then row 1, etc.)
-
-        text_offset = 0  # Cumulative text inserted so far
-        for r, row_data in enumerate(self._table_data):
-            for c, cell_text in enumerate(row_data):
-                if not cell_text:
-                    continue  # Skip empty cells
-
-                # Base cell index formula (before any text insertions)
-                base_cell_index = table_start_index + 3 + r * (2 * cols + 1) + c * 2
-
-                # Actual insertion point = base + all previous text
-                insertion_index = base_cell_index + text_offset
-
-                insert_text_request = {
-                    "insertText": {
-                        "text": cell_text,
-                        "location": {"index": insertion_index},
-                    }
-                }
-                self.requests.append(insert_text_request)
-
-                logger.debug(
-                    f"Table cell ({r},{c}): inserted '{cell_text}' at index {insertion_index} "
-                    f"(base={base_cell_index}, offset={text_offset})"
-                )
-
-                # Update offset for next cell
-                text_offset += len(cell_text)
-
-        self._apply_header_bold_style(table_start_index, cols)
-
-        # Table index consumption formula: 2 + rows * (2 * cols + 1) + total_text_length
-        # The base formula accounts for table structure; text adds to the total
-        base_table_consumption = 2 + rows * (2 * cols + 1)
-        total_table_consumption = base_table_consumption + text_offset
-        self.cursor_index = table_start_index + total_table_consumption
-
-        logger.debug(f"Table complete: {rows}x{cols}, {text_offset} chars inserted, cursor at {self.cursor_index}")
-
+        # Tables are block-level elements; terminate the placeholder paragraph so
+        # following blocks do not render in the same paragraph context.
         self._insert_newline()
 
         self._in_table = False
@@ -826,14 +862,8 @@ class MarkdownToDocsConverter:
 
         self._emit_delete_paragraph_bullets_if_needed(start_index, start_index + 1)
 
-        insert_request = {
-            "insertText": {
-                "text": "\n",
-                "location": {"index": start_index},
-            }
-        }
-        self.requests.append(insert_request)
-        self.cursor_index += 1
+        # Insert the HR newline into the buffer (keeps cursor_index consistent)
+        self._insert_text("\n")
 
         paragraph_style_request = {
             "updateParagraphStyle": {
@@ -860,94 +890,136 @@ class MarkdownToDocsConverter:
         """
         Handle fenced code blocks (```) and indented code blocks.
 
-        Inserts the code content with monospace font (Consolas) and light gray
-        background styling (#f5f5f5). Adds trailing newline after the block.
+        Inserts optional fenced-language labels and code content into the text
+        buffer, applies deferred monospace styling to code text, and applies
+        paragraph-level background + border styling for code block visual parity.
         """
-        content = token.content
-        if not content:
+        content = token.content or ""
+        language = self._extract_code_block_language(token)
+        if not content and not language:
             return
 
-        start_index = self.cursor_index
+        start_idx = self.cursor_index
+        label_range: tuple[int, int] | None = None
 
-        insert_request = {
-            "insertText": {
-                "text": content,
-                "location": {"index": start_index},
+        if language:
+            label_start = len(self._text_buffer)
+            self._insert_text(language)
+            label_end = len(self._text_buffer)
+            label_range = (label_start, label_end)
+            self._insert_newline()
+
+        code_buffer_start = len(self._text_buffer)
+        if content:
+            self._insert_text(content)
+        code_buffer_end = len(self._text_buffer)
+
+        self._emit_delete_paragraph_bullets_if_needed(start_idx, self.cursor_index)
+
+        if label_range is not None:
+            label_style = {
+                "bold": True,
+                "foregroundColor": {"color": {"rgbColor": CODE_LABEL_COLOR}},
             }
-        }
-        self.requests.append(insert_request)
+            self._deferred_styles.append((label_range[0], label_range[1], label_style))
 
-        self.cursor_index += len(content)
-        end_index = self.cursor_index
-
-        self._emit_delete_paragraph_bullets_if_needed(start_index, end_index)
-
-        style_request = {
-            "updateTextStyle": {
+        paragraph_style_request = {
+            "updateParagraphStyle": {
                 "range": {
-                    "startIndex": start_index,
-                    "endIndex": end_index,
+                    "startIndex": start_idx,
+                    "endIndex": self.cursor_index,
                 },
-                "textStyle": {
-                    "weightedFontFamily": {
-                        "fontFamily": CODE_FONT_FAMILY,
-                        "weight": 400,
+                "paragraphStyle": {
+                    "shading": {"backgroundColor": {"color": {"rgbColor": CODE_BACKGROUND_COLOR}}},
+                    "borderTop": {
+                        "color": {"color": {"rgbColor": CODE_BORDER_COLOR}},
+                        "width": {"magnitude": CODE_BORDER_WIDTH_PT, "unit": "PT"},
+                        "padding": {"magnitude": CODE_BORDER_PADDING_PT, "unit": "PT"},
+                        "dashStyle": "SOLID",
                     },
-                    "backgroundColor": {"color": {"rgbColor": CODE_BACKGROUND_COLOR}},
+                    "borderRight": {
+                        "color": {"color": {"rgbColor": CODE_BORDER_COLOR}},
+                        "width": {"magnitude": CODE_BORDER_WIDTH_PT, "unit": "PT"},
+                        "padding": {"magnitude": CODE_BORDER_PADDING_PT, "unit": "PT"},
+                        "dashStyle": "SOLID",
+                    },
+                    "borderBottom": {
+                        "color": {"color": {"rgbColor": CODE_BORDER_COLOR}},
+                        "width": {"magnitude": CODE_BORDER_WIDTH_PT, "unit": "PT"},
+                        "padding": {"magnitude": CODE_BORDER_PADDING_PT, "unit": "PT"},
+                        "dashStyle": "SOLID",
+                    },
+                    "borderLeft": {
+                        "color": {"color": {"rgbColor": CODE_BORDER_COLOR}},
+                        "width": {"magnitude": CODE_BORDER_WIDTH_PT, "unit": "PT"},
+                        "padding": {"magnitude": CODE_BORDER_PADDING_PT, "unit": "PT"},
+                        "dashStyle": "SOLID",
+                    },
                 },
-                "fields": "weightedFontFamily,backgroundColor",
+                "fields": "shading,borderTop,borderRight,borderBottom,borderLeft",
             }
         }
-        self.requests.append(style_request)
+        self.requests.append(paragraph_style_request)
 
-        logger.debug(f"Inserted code block: {len(content)} chars, range [{start_index}, {end_index})")
+        code_style = {
+            "weightedFontFamily": {
+                "fontFamily": CODE_FONT_FAMILY,
+                "weight": 400,
+            },
+            "backgroundColor": {"color": {"rgbColor": CODE_BACKGROUND_COLOR}},
+        }
+        if code_buffer_end > code_buffer_start:
+            self._deferred_styles.append((code_buffer_start, code_buffer_end, code_style))
+
+        logger.debug(
+            "Buffered code block: language=%r, content_chars=%d, code_range=[%d, %d), abs_range=[%d, %d)",
+            language,
+            len(content),
+            code_buffer_start,
+            code_buffer_end,
+            start_idx,
+            self.cursor_index,
+        )
 
         self._insert_newline()
+
+    def _extract_code_block_language(self, token: Token) -> str:
+        """
+        Extract optional fenced code language from token metadata.
+
+        markdown-it stores fenced info (e.g. "python", "js title=...") in
+        token.info. We use the first segment as the display label.
+        """
+        info = (token.info or "").strip()
+        if not info:
+            return ""
+        return info.split()[0]
 
     def _handle_code_inline(self, token: Token) -> None:
         """
         Handle inline code spans (`code`).
 
-        Applies monospace font styling to the inline code content.
-        Unlike code blocks, inline code does not get a background color
-        to keep it visually lighter in running text.
+        Inserts the code content into the text buffer with deferred monospace
+        font and background styling.
         """
         content = token.content
         if not content:
             return
 
-        start_index = self.cursor_index
+        buffer_start = len(self._text_buffer)
+        self._insert_text(content)
+        buffer_end = len(self._text_buffer)
 
-        insert_request = {
-            "insertText": {
-                "text": content,
-                "location": {"index": start_index},
-            }
+        code_style = {
+            "weightedFontFamily": {
+                "fontFamily": CODE_FONT_FAMILY,
+                "weight": 400,
+            },
+            "backgroundColor": {"color": {"rgbColor": CODE_BACKGROUND_COLOR}},
         }
-        self.requests.append(insert_request)
+        self._deferred_styles.append((buffer_start, buffer_end, code_style))
 
-        self.cursor_index += len(content)
-        end_index = self.cursor_index
-
-        style_request = {
-            "updateTextStyle": {
-                "range": {
-                    "startIndex": start_index,
-                    "endIndex": end_index,
-                },
-                "textStyle": {
-                    "weightedFontFamily": {
-                        "fontFamily": CODE_FONT_FAMILY,
-                        "weight": 400,
-                    },
-                    "backgroundColor": {"color": {"rgbColor": CODE_BACKGROUND_COLOR}},
-                },
-                "fields": "weightedFontFamily,backgroundColor",
-            }
-        }
-        self.requests.append(style_request)
-
-        logger.debug(f"Inserted inline code: {content!r}, range [{start_index}, {end_index})")
+        logger.debug(f"Buffered inline code: {content!r}, buffer range [{buffer_start}, {buffer_end})")
 
     def _handle_image(self, token: Token) -> None:
         """
@@ -966,31 +1038,33 @@ class MarkdownToDocsConverter:
             token: An image token containing src in attrs and alt text in children.
         """
         # Extract src from token.attrs (can be dict or list of tuples)
-        src = ""
+        src: str = ""
         if isinstance(token.attrs, dict):
-            src = token.attrs.get("src", "")
+            src_value = token.attrs.get("src", "")
+            if isinstance(src_value, str):
+                src = src_value
         elif token.attrs:
             # markdown-it-py sometimes uses list of [key, value] pairs
             attrs_dict = dict(token.attrs)
-            src = attrs_dict.get("src", "")
+            src_value = attrs_dict.get("src", "")
+            if isinstance(src_value, str):
+                src = src_value
 
         if not src:
             logger.warning("Image token missing 'src' attribute, skipping")
             return
 
-        # Generate insertInlineImage request
-        # Images consume 1 index position in Google Docs
-        request = {
-            "insertInlineImage": {
-                "location": {"index": self.cursor_index},
-                "uri": src,
-            }
-        }
-        self.requests.append(request)
-
-        # Advance cursor by 1 (images occupy a single index position)
-        self.cursor_index += 1
-        logger.debug(f"Inserted image: {src!r}, cursor now at {self.cursor_index}")
+        # Buffer a placeholder char and register deferred image insertion.
+        # This guarantees the target paragraph/index exists after the single
+        # insertText request, then we replace placeholder -> image deterministically.
+        placeholder_pos = len(self._text_buffer)
+        self._insert_text(IMAGE_PLACEHOLDER_CHAR)
+        self._pending_inline_images.append((placeholder_pos, src))
+        logger.debug(
+            "Buffered inline image placeholder at buffer_pos=%d for uri=%r",
+            placeholder_pos,
+            src,
+        )
 
     def _handle_html_inline(self, token: Token) -> None:
         """
@@ -1013,6 +1087,8 @@ class MarkdownToDocsConverter:
         if 'class="task-list-item-checkbox"' in content:
             checkbox_char = CHECKBOX_CHECKED if 'checked="checked"' in content else CHECKBOX_UNCHECKED
             self._insert_text(checkbox_char)
+            if self._list_type_stack:
+                self._top_level_list_has_task_items = True
             logger.debug(f"Inserted task list checkbox: {checkbox_char!r}")
         else:
             # For other HTML inline elements, insert as plain text
@@ -1093,6 +1169,107 @@ class MarkdownToDocsConverter:
                 range_to_style[key] = dict(style)
 
         return [(start, end, style) for (start, end), style in range_to_style.items()]
+
+    def _build_inline_image_requests(self, start_index: int, raw_bullet_requests: list[dict]) -> list[dict]:
+        """
+        Build deferred inline-image replacement requests.
+
+        For each buffered image placeholder, emit:
+        1) deleteContentRange for the placeholder character
+        2) insertInlineImage at the same index
+
+        This keeps index math stable under the single-insert architecture and
+        avoids fragile direct image placement against non-materialized text.
+        """
+        requests: list[dict] = []
+        for rel_index, uri in self._pending_inline_images:
+            abs_index = start_index + rel_index
+            abs_index -= self._tabs_removed_before_index(abs_index, start_index, raw_bullet_requests)
+            requests.append(
+                {
+                    "deleteContentRange": {
+                        "range": {
+                            "startIndex": abs_index,
+                            "endIndex": abs_index + 1,
+                        }
+                    }
+                }
+            )
+            requests.append(
+                {
+                    "insertInlineImage": {
+                        "location": {"index": abs_index},
+                        "uri": uri,
+                    }
+                }
+            )
+        return requests
+
+    def _build_table_replacement_requests(self, start_index: int, raw_bullet_requests: list[dict]) -> list[dict]:
+        """
+        Build deferred table replacement requests.
+
+        For each buffered table placeholder, emit:
+        1) deleteContentRange for the placeholder character
+        2) insertTable at the same index
+
+        Requests are emitted in descending index order to prevent index-shift
+        invalidation when multiple tables exist in a single markdown payload.
+        """
+        requests: list[dict] = []
+        for rel_index, rows, cols in sorted(self._pending_table_insertions, key=lambda item: item[0], reverse=True):
+            abs_index = start_index + rel_index
+            abs_index -= self._tabs_removed_before_index(abs_index, start_index, raw_bullet_requests)
+            requests.append(
+                {
+                    "deleteContentRange": {
+                        "range": {
+                            "startIndex": abs_index,
+                            "endIndex": abs_index + 1,
+                        }
+                    }
+                }
+            )
+            requests.append(
+                {
+                    "insertTable": {
+                        "location": {"index": abs_index},
+                        "rows": rows,
+                        "columns": cols,
+                    }
+                }
+            )
+        return requests
+
+    def _tabs_removed_before_index(self, abs_index: int, start_index: int, raw_bullet_requests: list[dict]) -> int:
+        """
+        Return the cumulative TAB count removed by createParagraphBullets before abs_index.
+
+        Google Docs removes leading TAB characters when paragraph bullets are created.
+        Placeholder-based structural requests (images/tables) must subtract this shift
+        to target the correct post-bullet indices.
+        """
+        removed_tabs = 0
+        for req in raw_bullet_requests:
+            if "createParagraphBullets" not in req:
+                continue
+
+            bullet_range = req["createParagraphBullets"]["range"]
+            range_start = bullet_range["startIndex"]
+            range_end = bullet_range["endIndex"]
+
+            if abs_index <= range_start:
+                continue
+
+            capped_end = min(abs_index, range_end)
+            if capped_end <= range_start:
+                continue
+
+            buffer_start = max(0, range_start - start_index)
+            buffer_end = max(buffer_start, capped_end - start_index)
+            removed_tabs += self._text_buffer[buffer_start:buffer_end].count("\t")
+
+        return removed_tabs
 
     def _adjust_bullet_indices_for_tab_removal(self, bullet_requests: list[dict], start_index: int) -> list[dict]:
         """

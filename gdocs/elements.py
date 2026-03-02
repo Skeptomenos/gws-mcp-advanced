@@ -36,6 +36,7 @@ async def insert_doc_elements(
     columns: int | None = None,
     list_type: str | None = None,
     text: str | None = None,
+    dry_run: bool = True,
 ) -> str:
     """
     Inserts structural elements like tables, lists, or page breaks into a Google Doc.
@@ -49,6 +50,7 @@ async def insert_doc_elements(
         columns: Number of columns for table (required for table)
         list_type: Type of list ("UNORDERED", "ORDERED") (required for list)
         text: Initial text content for list items
+        dry_run: When True (default), return planned mutation without executing it
 
     Returns:
         str: Confirmation message with insertion details
@@ -93,11 +95,17 @@ async def insert_doc_elements(
     else:
         return f"Error: Unsupported element type '{element_type}'. Supported types: 'table', 'list', 'page_break'."
 
+    link = f"https://docs.google.com/document/d/{document_id}/edit"
+    if dry_run:
+        return (
+            f"DRY RUN: Would insert {description} at index {index} in document {document_id} "
+            f"for {user_google_email}. Planned request count: {len(requests)}. Link: {link}"
+        )
+
     await asyncio.to_thread(
         service.documents().batchUpdate(documentId=document_id, body={"requests": requests}).execute
     )
 
-    link = f"https://docs.google.com/document/d/{document_id}/edit"
     return f"Inserted {description} at index {index} in document {document_id}. Link: {link}"
 
 
@@ -120,8 +128,9 @@ async def insert_doc_image(
     document_id: str,
     image_source: str,
     index: int,
-    width: int = 0,
-    height: int = 0,
+    width: int | None = None,
+    height: int | None = None,
+    dry_run: bool = True,
 ) -> str:
     """
     Inserts an image into a Google Doc from Drive or a URL.
@@ -133,6 +142,7 @@ async def insert_doc_image(
         index: Position to insert image (0-based)
         width: Image width in points (optional)
         height: Image height in points (optional)
+        dry_run: When True (default), return planned mutation without executing it
 
     Returns:
         str: Confirmation message with insertion details
@@ -147,6 +157,17 @@ async def insert_doc_image(
         index = 1
 
     is_drive_file = not (image_source.startswith("http://") or image_source.startswith("https://"))
+    link = f"https://docs.google.com/document/d/{document_id}/edit"
+    size_info = ""
+    if width or height:
+        size_info = f" (size: {width or 'auto'}x{height or 'auto'} points)"
+
+    if dry_run:
+        source_type = "Drive file" if is_drive_file else "URL image"
+        return (
+            f"DRY RUN: Would insert {source_type}{size_info} at index {index} in document {document_id} "
+            f"for {user_google_email}. Source: {image_source}. Link: {link}"
+        )
 
     if is_drive_file:
         try:
@@ -177,9 +198,4 @@ async def insert_doc_image(
         docs_service.documents().batchUpdate(documentId=document_id, body={"requests": requests}).execute
     )
 
-    size_info = ""
-    if width or height:
-        size_info = f" (size: {width or 'auto'}x{height or 'auto'} points)"
-
-    link = f"https://docs.google.com/document/d/{document_id}/edit"
     return f"Inserted {source_description}{size_info} at index {index} in document {document_id}. Link: {link}"

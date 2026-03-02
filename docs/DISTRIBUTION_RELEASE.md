@@ -2,8 +2,8 @@
 
 ## Metadata
 - Last Updated (UTC): 2026-03-01T21:00:38Z
-- npm Package: `@skeptomenos/gws-mcp-advanced`
-- Python Package: `gws-mcp-advanced`
+- npm Package: `google-workspace-mcp-advanced`
+- Python Package: `google-workspace-mcp-advanced`
 
 ## Channels
 1. Stable: `latest`
@@ -13,13 +13,13 @@
 ## Consumer Install Paths
 ```bash
 # Stable
-npx -y @skeptomenos/gws-mcp-advanced --transport stdio
+npx -y google-workspace-mcp-advanced --transport stdio
 
 # Prerelease
-npx -y @skeptomenos/gws-mcp-advanced@next --transport stdio
+npx -y google-workspace-mcp-advanced@next --transport stdio
 
 # Deterministic pinned
-npx -y @skeptomenos/gws-mcp-advanced@1.0.0 --transport stdio
+npx -y google-workspace-mcp-advanced@1.0.0 --transport stdio
 ```
 
 ## Release Order (Required)
@@ -36,7 +36,7 @@ This ordering is enforced by:
 
 ### Trusted Publishing Requirements
 1. Configure PyPI trusted publisher for this repository and target project.
-2. Configure npm trusted publisher for this repository and package scope.
+2. Configure npm trusted publisher for this repository and package.
 3. Keep workflow permissions:
    - `id-token: write`
    - `contents: read`
@@ -51,28 +51,28 @@ If the latest npm release is bad:
 
 1. Identify previous good version:
 ```bash
-npm view @skeptomenos/gws-mcp-advanced versions --json
+npm view google-workspace-mcp-advanced versions --json
 ```
 
 2. Repoint `latest` dist-tag to known-good:
 ```bash
-npm dist-tag add @skeptomenos/gws-mcp-advanced@<good_version> latest
+npm dist-tag add google-workspace-mcp-advanced@<good_version> latest
 ```
 
 3. Optionally remove bad `latest` tag association:
 ```bash
-npm dist-tag rm @skeptomenos/gws-mcp-advanced latest
-npm dist-tag add @skeptomenos/gws-mcp-advanced@<good_version> latest
+npm dist-tag rm google-workspace-mcp-advanced latest
+npm dist-tag add google-workspace-mcp-advanced@<good_version> latest
 ```
 
 4. Keep pinned consumer fallback:
 ```bash
-npx -y @skeptomenos/gws-mcp-advanced@<good_version> --transport stdio
+npx -y google-workspace-mcp-advanced@<good_version> --transport stdio
 ```
 
 ## Pre-Release Validation Checklist
 1. `uv run python scripts/check_distribution_scope.py`
 2. `uv run python scripts/check_release_version_match.py`
 3. `uv run pytest -q tests/unit/core/test_npm_launcher.py tests/unit/core/test_distribution_checks.py`
-4. `node --check bin/gws-mcp-advanced.cjs`
+4. `node --check bin/google-workspace-mcp-advanced.cjs`
 5. `npm pack --dry-run`

@@ -104,6 +104,7 @@ async def link_local_file(
     user_google_email: str,
     local_path: str,
     file_id: str,
+    dry_run: bool = True,
 ) -> str:
     """
     Link a local file to a Google Drive file ID for synchronization.
@@ -112,8 +113,15 @@ async def link_local_file(
         user_google_email: The user's Google email address. Required.
         local_path: The relative path to the local file (e.g. "docs/notes.md").
         file_id: The Google Drive file ID or its search alias (e.g. "A").
+        dry_run: If True (default), preview link operation without updating local sync metadata.
     """
     try:
+        if dry_run:
+            return (
+                f"DRY RUN: Would link local path '{local_path}' to Drive file reference '{file_id}' "
+                f"for {user_google_email}."
+            )
+
         real_id = resolve_file_id_or_alias(file_id)
         version = await get_file_version(service, real_id)
         sync_manager.link_file(local_path, real_id, version)
@@ -128,7 +136,7 @@ async def link_local_file(
 
 @server.tool()
 @handle_http_errors("update_google_doc", is_read_only=False, service_type="drive")
-@require_google_service("drive", "drive_write")
+@require_google_service("drive", "drive_file")
 async def update_google_doc(
     service,
     user_google_email: str,
@@ -357,12 +365,13 @@ async def download_google_doc(
 
 @server.tool()
 @handle_http_errors("upload_folder", is_read_only=False, service_type="drive")
-@require_google_service("drive", "drive_write")
+@require_google_service("drive", "drive_file")
 async def upload_folder(
     service,
     user_google_email: str,
     local_path: str,
     parent_folder_id: str | None = None,
+    dry_run: bool = True,
 ) -> str:
     """
     Recursively upload a local folder to Google Drive using BFS traversal.
@@ -372,10 +381,25 @@ async def upload_folder(
         user_google_email: The user's Google email address. Required.
         local_path: Path to the local folder to upload.
         parent_folder_id: Optional parent folder ID in Drive. If None, uploads to root.
+        dry_run: If True (default), return planned upload summary without mutating Drive or sync metadata.
     """
     try:
         if not os.path.exists(local_path) or not os.path.isdir(local_path):
             return f"Upload folder failed: {local_path} is not a directory."
+
+        if dry_run:
+            planned_folders = 0
+            planned_files = 0
+            for _root, dirs, files in os.walk(local_path):
+                planned_folders += len(dirs)
+                planned_files += len(files)
+
+            parent_label = parent_folder_id or "root"
+            return (
+                f"DRY RUN: Would upload folder '{local_path}' to Drive parent '{parent_label}' for "
+                f"{user_google_email}. Planned operations: create {planned_folders + 1} folder(s) "
+                f"and upload {planned_files} file(s)."
+            )
 
         dir_name = os.path.basename(os.path.normpath(local_path))
         folder_metadata: dict[str, str | list[str]] = {
@@ -473,6 +497,7 @@ async def mirror_drive_folder(
     local_parent_dir: str,
     folder_query: str,
     recursive: bool = True,
+    dry_run: bool = True,
 ) -> str:
     """
     Recursively download a Google Drive folder to a local directory.
@@ -483,14 +508,40 @@ async def mirror_drive_folder(
         local_parent_dir: The local directory to download into. Created if missing.
         folder_query: The Name or ID of the Drive folder.
         recursive: Whether to download subfolders.
+        dry_run: If True (default), return planned mirror operation without writing local files.
     """
     try:
+        if dry_run:
+            return (
+                f"DRY RUN: Would mirror Drive folder '{folder_query}' into local directory "
+                f"'{local_parent_dir}' for {user_google_email} (recursive={recursive})."
+            )
+
         folder_id = resolve_file_id_or_alias(folder_query)
 
-        # Get folder metadata
-        folder_meta = await asyncio.to_thread(
-            service.files().get(fileId=folder_id, fields="id, name", supportsAllDrives=True).execute
-        )
+        # If folder_query looks like a name (not an ID), search for it by name
+        try:
+            folder_meta = await asyncio.to_thread(
+                service.files().get(fileId=folder_id, fields="id, name", supportsAllDrives=True).execute
+            )
+        except Exception:
+            # folder_id might be a name, not an ID — search Drive for it
+            search_results = await asyncio.to_thread(
+                service.files()
+                .list(
+                    q=f"name='{folder_query}' and mimeType='application/vnd.google-apps.folder' and trashed=false",
+                    fields="files(id, name)",
+                    pageSize=1,
+                    supportsAllDrives=True,
+                    includeItemsFromAllDrives=True,
+                )
+                .execute
+            )
+            found = search_results.get("files", [])
+            if not found:
+                return f"Mirror folder failed: No folder found matching '{folder_query}'."
+            folder_id = found[0]["id"]
+            folder_meta = found[0]
         folder_name = folder_meta.get("name", "Downloaded")
 
         local_base = os.path.join(local_parent_dir, folder_name)
@@ -580,6 +631,7 @@ async def download_doc_tabs(
     user_google_email: str,
     local_dir: str,
     file_id: str,
+    dry_run: bool = True,
 ) -> str:
     """
     Download a Google Doc using "Hybrid Split-Sync".
@@ -591,8 +643,12 @@ async def download_doc_tabs(
         user_google_email: The user's Google email address. Required.
         local_dir: Local directory to save files into.
         file_id: The Google Drive file ID or its search alias (e.g. "A").
+        dry_run: If True (default), return planned tab-download operation without local writes.
     """
     try:
+        if dry_run:
+            return f"DRY RUN: Would download document tabs for '{file_id}' into '{local_dir}' for {user_google_email}."
+
         real_id = resolve_file_id_or_alias(file_id)
 
         os.makedirs(local_dir, exist_ok=True)

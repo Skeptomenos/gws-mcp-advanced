@@ -42,7 +42,12 @@ class ToolTierLoader:
 
         try:
             with open(self.config_path, encoding="utf-8") as f:
-                self._tiers_config = yaml.safe_load(f)
+                loaded = yaml.safe_load(f)
+            if loaded is None:
+                raise ValueError(f"Tool tiers configuration is empty: {self.config_path}")
+            if not isinstance(loaded, dict):
+                raise ValueError(f"Tool tiers configuration must be a mapping: {self.config_path}")
+            self._tiers_config = cast(dict, loaded)
             logger.info(f"Loaded tool tiers configuration from {self.config_path}")
             return self._tiers_config
         except yaml.YAMLError as e:

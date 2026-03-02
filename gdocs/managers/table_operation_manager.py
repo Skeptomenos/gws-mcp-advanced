@@ -15,6 +15,8 @@ from gdocs.docs_tables import validate_table_data
 
 logger = logging.getLogger(__name__)
 
+TABLE_CELL_FONT_SIZE_PT = 11
+
 
 class TableOperationManager:
     """
@@ -115,7 +117,13 @@ class TableOperationManager:
         doc = await asyncio.to_thread(self.service.documents().get(documentId=document_id).execute)
         return find_tables(doc)
 
-    async def _populate_table_cells(self, document_id: str, table_data: list[list[str]], bold_headers: bool) -> int:
+    async def _populate_table_cells(
+        self,
+        document_id: str,
+        table_data: list[list[str]],
+        bold_headers: bool,
+        table_index: int | None = None,
+    ) -> int:
         """
         Populate table cells with data, refreshing structure after each insertion.
 
@@ -139,6 +147,7 @@ class TableOperationManager:
                         col_idx,
                         cell_text,
                         bold_headers and row_idx == 0,
+                        table_index=table_index,
                     )
 
                     if success:
@@ -159,6 +168,7 @@ class TableOperationManager:
         col_idx: int,
         cell_text: str,
         apply_bold: bool = False,
+        table_index: int | None = None,
     ) -> bool:
         """
         Populate a single cell with text, with optional bold formatting.
@@ -171,7 +181,12 @@ class TableOperationManager:
             if not tables:
                 return False
 
-            table = tables[-1]  # Use the last table (newly created one)
+            target_table_index = table_index if table_index is not None else len(tables) - 1
+            if target_table_index < 0 or target_table_index >= len(tables):
+                logger.error(f"Table index {target_table_index} out of bounds (document has {len(tables)} tables)")
+                return False
+
+            table = tables[target_table_index]
             cells = table.get("cells", [])
 
             # Bounds checking
@@ -187,6 +202,8 @@ class TableOperationManager:
                 return False
 
             # Insert text
+            # Apply an explicit baseline style immediately so table cell content
+            # never inherits preceding heading font sizes from surrounding blocks.
             await asyncio.to_thread(
                 self.service.documents()
                 .batchUpdate(
@@ -198,46 +215,34 @@ class TableOperationManager:
                                     "location": {"index": insertion_index},
                                     "text": cell_text,
                                 }
-                            }
+                            },
+                            {
+                                "updateTextStyle": {
+                                    "range": {
+                                        "startIndex": insertion_index,
+                                        "endIndex": insertion_index + len(cell_text),
+                                    },
+                                    "textStyle": {
+                                        "fontSize": {
+                                            "magnitude": TABLE_CELL_FONT_SIZE_PT,
+                                            "unit": "PT",
+                                        },
+                                        "bold": apply_bold,
+                                    },
+                                    "fields": "fontSize,bold",
+                                }
+                            },
                         ]
                     },
                 )
                 .execute
             )
 
-            # Apply bold formatting if requested
-            if apply_bold:
-                await self._apply_bold_formatting(document_id, insertion_index, insertion_index + len(cell_text))
-
             return True
 
         except Exception as e:
             logger.error(f"Failed to populate single cell: {str(e)}")
             return False
-
-    async def _apply_bold_formatting(self, document_id: str, start_index: int, end_index: int) -> None:
-        """Apply bold formatting to a text range."""
-        await asyncio.to_thread(
-            self.service.documents()
-            .batchUpdate(
-                documentId=document_id,
-                body={
-                    "requests": [
-                        {
-                            "updateTextStyle": {
-                                "range": {
-                                    "startIndex": start_index,
-                                    "endIndex": end_index,
-                                },
-                                "textStyle": {"bold": True},
-                                "fields": "bold",
-                            }
-                        }
-                    ]
-                },
-            )
-            .execute
-        )
 
     async def populate_existing_table(
         self,

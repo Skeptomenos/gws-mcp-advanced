@@ -115,14 +115,23 @@ async def send_message(
     space_id: str,
     message_text: str,
     thread_key: str | None = None,
+    dry_run: bool = True,
 ) -> str:
     """
     Sends a message to a Google Chat space.
+
+    Args:
+        dry_run (bool): If True, preview the message send without mutating Chat.
 
     Returns:
         str: Confirmation message with sent message details.
     """
     logger.info(f"[send_message] Email: '{user_google_email}', Space: '{space_id}'")
+
+    if dry_run:
+        preview = message_text if len(message_text) <= 80 else f"{message_text[:80]}..."
+        thread_part = f" (thread_key={thread_key})" if thread_key else ""
+        return f"DRY RUN: Would send message to space '{space_id}' by {user_google_email}{thread_part}: '{preview}'"
 
     message_body = {"text": message_text}
 

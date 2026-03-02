@@ -43,12 +43,18 @@ BULLET_PRESET_UNORDERED = _mp.BULLET_PRESET_UNORDERED
 BULLET_PRESET_ORDERED = _mp.BULLET_PRESET_ORDERED
 CODE_FONT_FAMILY = _mp.CODE_FONT_FAMILY
 CODE_BACKGROUND_COLOR = _mp.CODE_BACKGROUND_COLOR
+CODE_BORDER_COLOR = _mp.CODE_BORDER_COLOR
+CODE_BORDER_WIDTH_PT = _mp.CODE_BORDER_WIDTH_PT
+CODE_BORDER_PADDING_PT = _mp.CODE_BORDER_PADDING_PT
+CODE_LABEL_COLOR = _mp.CODE_LABEL_COLOR
 BLOCKQUOTE_INDENT_PT = _mp.BLOCKQUOTE_INDENT_PT
 HR_BORDER_WIDTH_PT = _mp.HR_BORDER_WIDTH_PT
 HR_BORDER_COLOR = _mp.HR_BORDER_COLOR
 HR_PADDING_BELOW_PT = _mp.HR_PADDING_BELOW_PT
 CHECKBOX_UNCHECKED = _mp.CHECKBOX_UNCHECKED
 CHECKBOX_CHECKED = _mp.CHECKBOX_CHECKED
+IMAGE_PLACEHOLDER_CHAR = _mp.IMAGE_PLACEHOLDER_CHAR
+TABLE_PLACEHOLDER_CHAR = _mp.TABLE_PLACEHOLDER_CHAR
 
 
 @pytest.fixture
@@ -276,7 +282,8 @@ class TestLists:
         # Range should cover both items
         range_info = bullet_requests[0]["createParagraphBullets"]["range"]
         assert range_info["startIndex"] == 1
-        assert range_info["endIndex"] == 15  # "Item 1\nItem 2\n" = 14 chars + start at 1
+        # Excludes the trailing list-closing newline to avoid empty bullet paragraph.
+        assert range_info["endIndex"] == 14  # "Item 1\nItem 2" = 13 chars, range [1,14)
 
     def test_bullet_list_uses_unordered_preset(self, converter):
         result = converter.convert("* Item")
@@ -308,14 +315,14 @@ class TestLists:
         assert inserted_text.startswith("Level 0")
 
     def test_list_bullet_range_covers_item(self, converter):
-        """Range includes trailing newline for proper API nesting interpretation."""
+        """Range covers list text and excludes trailing list-closing newline."""
         result = converter.convert("* Item")
 
         bullet_request = next(r for r in result if "createParagraphBullets" in r)
         range_info = bullet_request["createParagraphBullets"]["range"]
 
         assert range_info["startIndex"] == 1
-        assert range_info["endIndex"] == 6  # "Item\n" = 5 chars, range [1,6)
+        assert range_info["endIndex"] == 5  # "Item" = 4 chars, range [1,5)
 
 
 class TestCodeBlocks:
@@ -324,14 +331,21 @@ class TestCodeBlocks:
 
         insert_requests = [r for r in result if "insertText" in r]
         style_requests = [r for r in result if "updateTextStyle" in r]
+        paragraph_requests = [r for r in result if "updateParagraphStyle" in r]
 
         assert len(insert_requests) >= 1
         assert len(style_requests) >= 1
+        assert len(paragraph_requests) >= 1
 
     def test_code_block_uses_monospace_font(self, converter):
         result = converter.convert("```\ncode\n```")
 
-        style_request = next(r for r in result if "updateTextStyle" in r)
+        style_request = next(
+            r
+            for r in result
+            if "updateTextStyle" in r
+            and r["updateTextStyle"]["textStyle"].get("weightedFontFamily", {}).get("fontFamily") == CODE_FONT_FAMILY
+        )
         text_style = style_request["updateTextStyle"]["textStyle"]
 
         assert text_style["weightedFontFamily"]["fontFamily"] == CODE_FONT_FAMILY
@@ -339,12 +353,63 @@ class TestCodeBlocks:
     def test_code_block_has_background_color(self, converter):
         result = converter.convert("```\ncode\n```")
 
-        style_request = next(r for r in result if "updateTextStyle" in r)
+        style_request = next(
+            r
+            for r in result
+            if "updateTextStyle" in r
+            and r["updateTextStyle"]["textStyle"].get("weightedFontFamily", {}).get("fontFamily") == CODE_FONT_FAMILY
+        )
         text_style = style_request["updateTextStyle"]["textStyle"]
 
         assert "backgroundColor" in text_style
         bg_color = text_style["backgroundColor"]["color"]["rgbColor"]
         assert bg_color == CODE_BACKGROUND_COLOR
+
+    def test_code_block_has_paragraph_shading_and_borders(self, converter):
+        result = converter.convert("```\ncode\n```")
+
+        paragraph_style_request = next(r for r in result if "updateParagraphStyle" in r)
+        paragraph_style = paragraph_style_request["updateParagraphStyle"]["paragraphStyle"]
+
+        assert paragraph_style["shading"]["backgroundColor"]["color"]["rgbColor"] == CODE_BACKGROUND_COLOR
+        for side in ("borderTop", "borderRight", "borderBottom", "borderLeft"):
+            border = paragraph_style[side]
+            assert border["color"]["color"]["rgbColor"] == CODE_BORDER_COLOR
+            assert border["width"]["magnitude"] == CODE_BORDER_WIDTH_PT
+            assert border["padding"]["magnitude"] == CODE_BORDER_PADDING_PT
+            assert border["dashStyle"] == "SOLID"
+
+        fields = paragraph_style_request["updateParagraphStyle"]["fields"]
+        for field in ("shading", "borderTop", "borderRight", "borderBottom", "borderLeft"):
+            assert field in fields
+
+    def test_fenced_code_block_language_label_is_inserted_and_styled(self, converter):
+        result = converter.convert("```python\nprint('x')\n```")
+
+        insert_request = next(r for r in result if "insertText" in r)
+        inserted_text = insert_request["insertText"]["text"]
+        assert "python\nprint('x')" in inserted_text
+
+        label_style = next(
+            r
+            for r in result
+            if "updateTextStyle" in r
+            and r["updateTextStyle"]["textStyle"].get("bold") is True
+            and r["updateTextStyle"]["textStyle"].get("foregroundColor", {}).get("color", {}).get("rgbColor")
+            == CODE_LABEL_COLOR
+        )
+        assert label_style["updateTextStyle"]["range"]["startIndex"] == 1
+        assert label_style["updateTextStyle"]["range"]["endIndex"] == 7  # "python"
+
+        code_style = next(
+            r
+            for r in result
+            if "updateTextStyle" in r
+            and r["updateTextStyle"]["textStyle"].get("weightedFontFamily", {}).get("fontFamily") == CODE_FONT_FAMILY
+        )
+        assert (
+            code_style["updateTextStyle"]["range"]["startIndex"] > label_style["updateTextStyle"]["range"]["endIndex"]
+        )
 
     def test_inline_code_generates_style(self, converter):
         result = converter.convert("This is `code` here")
@@ -566,86 +631,69 @@ class TestTables:
         assert converter.cursor_index > initial_cursor
 
     def test_table_cells_are_populated_with_content(self, converter):
-        result = converter.convert("| Header1 | Header2 |\n|---|---|\n| Data1 | Data2 |")
+        converter.convert("| Header1 | Header2 |\n|---|---|\n| Data1 | Data2 |")
 
-        insert_text_requests = [r for r in result if "insertText" in r]
-        inserted_texts = [r["insertText"]["text"] for r in insert_text_requests]
-
-        assert "Header1" in inserted_texts
-        assert "Header2" in inserted_texts
-        assert "Data1" in inserted_texts
-        assert "Data2" in inserted_texts
+        # Cell content is now in pending_tables for post-processing
+        assert len(converter.pending_tables) == 1
+        table_data, bold = converter.pending_tables[0]
+        all_cells = [cell for row in table_data for cell in row]
+        assert "Header1" in all_cells
+        assert "Header2" in all_cells
+        assert "Data1" in all_cells
+        assert "Data2" in all_cells
 
     def test_table_header_row_gets_bold_style(self, converter):
-        result = converter.convert("| H1 | H2 |\n|---|---|\n| D1 | D2 |")
+        converter.convert("| H1 | H2 |\n|---|---|\n| D1 | D2 |")
 
-        bold_requests = [r for r in result if "updateTextStyle" in r and r["updateTextStyle"]["textStyle"].get("bold")]
-
-        assert len(bold_requests) >= 2
+        # Bold headers flag is stored in pending_tables
+        assert len(converter.pending_tables) == 1
+        table_data, bold_headers = converter.pending_tables[0]
+        assert bold_headers is True
+        assert table_data[0] == ["H1", "H2"]
 
     def test_table_cell_indices_are_calculated_correctly(self, converter):
         """
-        Verify the +3 offset formula for table cell indices.
+        Verify table data is captured correctly for post-processing.
 
-        For a 2x2 table at table_start=1, the BASE formula is:
-            base_cell_index = table_start + 3 + r * (2 * cols + 1) + c * 2
-
-        But as text is inserted, indices shift by cumulative text length:
-            actual_index = base_cell_index + text_offset
-
-        For cells A(0,0), B(0,1), C(1,0), D(1,1) each with 1 char:
-            - A (0,0): base=1+3+0+0=4, offset=0 → 4
-            - B (0,1): base=1+3+0+2=6, offset=1 → 7
-            - C (1,0): base=1+3+5+0=9, offset=2 → 11
-            - D (1,1): base=1+3+5+2=11, offset=3 → 14
-
-        Spec Reference: specs/FIX_TABLE_MATH.md
+        Cell population now happens in a separate API call after table creation,
+        since cell indices cannot be predicted within a single batchUpdate.
         """
         result = converter.convert("| A | B |\n|---|---|\n| C | D |", start_index=1)
 
         insert_table = next(r for r in result if "insertTable" in r)
         assert insert_table["insertTable"]["location"]["index"] == 1
 
-        # Extract insertText requests for table cells (A, B, C, D)
-        insert_text_requests = [r for r in result if "insertText" in r]
-        cell_data = [
-            (r["insertText"]["text"], r["insertText"]["location"]["index"])
-            for r in insert_text_requests
-            if r["insertText"]["text"] in ["A", "B", "C", "D"]
-        ]
-
-        cell_indices = dict(cell_data)
-
-        assert len(cell_indices) == 4, f"Expected 4 cells, got {len(cell_indices)}"
-
-        # Verify +3 offset formula produces correct indices
-        # Row 0: base offset = 1 + 3 = 4, cols step = 2
-        # Row 1: base offset = 1 + 3 + (2*2+1) = 9, cols step = 2
-        # Text offset accumulates: A(0) → B(1) → C(2) → D(3)
-        expected_indices = {
-            "A": 4,  # base=4, text_offset=0
-            "B": 7,  # base=6, text_offset=1
-            "C": 11,  # base=9, text_offset=2
-            "D": 14,  # base=11, text_offset=3
-        }
-
-        for cell_text, expected_idx in expected_indices.items():
-            actual_idx = cell_indices.get(cell_text)
-            assert actual_idx == expected_idx, (
-                f"Cell '{cell_text}': expected index {expected_idx}, got {actual_idx}. All cells: {cell_indices}"
-            )
+        # Verify table data is stored for post-processing
+        assert len(converter.pending_tables) == 1
+        table_data, _ = converter.pending_tables[0]
+        assert table_data == [["A", "B"], ["C", "D"]]
 
     def test_empty_cells_are_skipped(self, converter):
-        result = converter.convert("| A |  |\n|---|---|\n| C | D |")
+        converter.convert("| A |  |\n|---|---|\n| C | D |")
 
-        insert_text_requests = [r for r in result if "insertText" in r]
-        inserted_texts = [r["insertText"]["text"] for r in insert_text_requests]
+        assert len(converter.pending_tables) == 1
+        table_data, _ = converter.pending_tables[0]
+        assert table_data[0][0] == "A"
+        assert table_data[0][1] == ""  # empty cell preserved
+        assert table_data[1][0] == "C"
+        assert table_data[1][1] == "D"
 
-        assert "A" in inserted_texts
-        assert "C" in inserted_texts
-        assert "D" in inserted_texts
-        non_newline_texts = [t for t in inserted_texts if t != "\n"]
-        assert len(non_newline_texts) == 3
+    def test_multiple_tables_preserve_pending_table_order(self, converter):
+        markdown = "| H1 |\n|---|\n| A |\n\n| H2 |\n|---|\n| B |"
+        converter.convert(markdown)
+
+        assert len(converter.pending_tables) == 2
+        first_table, _ = converter.pending_tables[0]
+        second_table, _ = converter.pending_tables[1]
+        assert first_table == [["H1"], ["A"]]
+        assert second_table == [["H2"], ["B"]]
+
+    def test_multiple_table_replacements_are_emitted_in_descending_index_order(self, converter):
+        markdown = "| H1 |\n|---|\n| A |\n\n| H2 |\n|---|\n| B |"
+        result = converter.convert(markdown)
+
+        table_indices = [r["insertTable"]["location"]["index"] for r in result if "insertTable" in r]
+        assert table_indices == sorted(table_indices, reverse=True)
 
 
 class TestHorizontalRules:
@@ -714,6 +762,23 @@ class TestImages:
         inline_image_requests = [r for r in result if "insertInlineImage" in r]
         assert len(inline_image_requests) == 1
 
+        delete_requests = [r for r in result if "deleteContentRange" in r]
+        assert len(delete_requests) == 1
+
+    def test_image_placeholder_is_replaced_by_delete_and_inline_image(self, converter):
+        result = converter.convert("Before ![alt](https://example.com/img.png) After")
+
+        insert_request = next(r for r in result if "insertText" in r)
+        assert IMAGE_PLACEHOLDER_CHAR in insert_request["insertText"]["text"]
+
+        delete_request = next(r for r in result if "deleteContentRange" in r)
+        image_request = next(r for r in result if "insertInlineImage" in r)
+
+        delete_range = delete_request["deleteContentRange"]["range"]
+        image_index = image_request["insertInlineImage"]["location"]["index"]
+        assert delete_range["endIndex"] - delete_range["startIndex"] == 1
+        assert image_index == delete_range["startIndex"]
+
     def test_image_uses_correct_uri(self, converter):
         result = converter.convert("![](https://example.com/photo.jpg)")
 
@@ -754,6 +819,9 @@ class TestImages:
 
         inline_images = [r for r in result if "insertInlineImage" in r]
         assert len(inline_images) == 2
+
+        delete_requests = [r for r in result if "deleteContentRange" in r]
+        assert len(delete_requests) == 2
 
         uris = [r["insertInlineImage"]["uri"] for r in inline_images]
         assert "https://a.com/1.png" in uris
@@ -798,12 +866,11 @@ class TestTaskLists:
         assert combined.count(CHECKBOX_UNCHECKED) == 2
         assert combined.count(CHECKBOX_CHECKED) == 1
 
-    def test_task_list_items_get_bullet_style(self, converter):
+    def test_task_list_items_do_not_get_bullet_style(self, converter):
         result = converter.convert("- [ ] task item")
 
         bullet_requests = [r for r in result if "createParagraphBullets" in r]
-        assert len(bullet_requests) == 1
-        assert bullet_requests[0]["createParagraphBullets"]["bulletPreset"] == BULLET_PRESET_UNORDERED
+        assert len(bullet_requests) == 0
 
     def test_uppercase_x_is_also_checked(self, converter):
         result = converter.convert("- [X] uppercase check")
@@ -831,6 +898,122 @@ class TestTaskLists:
 
         style_requests = [r for r in result if "updateTextStyle" in r and r["updateTextStyle"]["textStyle"].get("bold")]
         assert len(style_requests) >= 1
+
+    def test_task_list_does_not_emit_bullet_ranges(self, converter):
+        result = converter.convert("- [ ] one\n- [x] two")
+
+        bullet_requests = [r for r in result if "createParagraphBullets" in r]
+        assert len(bullet_requests) == 0
+
+    def test_task_list_then_paragraph_emits_no_bullet_cleanup(self, converter):
+        result = converter.convert("- [ ] one\n- [x] two\n\nafter")
+
+        bullet_requests = [r for r in result if "createParagraphBullets" in r]
+        delete_requests = [r for r in result if "deleteParagraphBullets" in r]
+        assert len(bullet_requests) == 0
+        assert len(delete_requests) == 0
+
+
+class TestKitchenSinkRegression:
+    def test_kitchen_sink_ranges_stay_within_inserted_text(self, converter):
+        markdown = Path(__file__).resolve().parents[2] / "manual" / "kitchen_sink.md"
+        content = markdown.read_text(encoding="utf-8")
+
+        result = converter.convert(content, start_index=1)
+        insert_text = next(r for r in result if "insertText" in r)["insertText"]["text"]
+        max_allowed_end = 1 + len(insert_text)
+
+        for req in result:
+            if "updateTextStyle" in req:
+                assert req["updateTextStyle"]["range"]["endIndex"] <= max_allowed_end
+            elif "updateParagraphStyle" in req:
+                assert req["updateParagraphStyle"]["range"]["endIndex"] <= max_allowed_end
+            elif "createParagraphBullets" in req:
+                assert req["createParagraphBullets"]["range"]["endIndex"] <= max_allowed_end
+            elif "deleteParagraphBullets" in req:
+                assert req["deleteParagraphBullets"]["range"]["endIndex"] <= max_allowed_end
+
+    def test_tables_use_placeholder_replacement_pairs(self, converter):
+        result = converter.convert("| A | B |\n|---|---|\n| C | D |")
+
+        insert_text = next(r for r in result if "insertText" in r)["insertText"]["text"]
+        assert TABLE_PLACEHOLDER_CHAR in insert_text
+
+        table_requests = [r for r in result if "insertTable" in r]
+        delete_requests = [r for r in result if "deleteContentRange" in r]
+        assert len(table_requests) == 1
+        assert len(delete_requests) == 1
+
+    def test_image_placeholder_indices_account_for_tab_removal(self, converter):
+        markdown = "- root\n  - nested\n    - deep\n\n![logo](https://example.com/logo.png)"
+        result = converter.convert(markdown, start_index=1)
+
+        insert_text = next(r for r in result if "insertText" in r)["insertText"]["text"]
+        placeholder_pos = insert_text.index(IMAGE_PLACEHOLDER_CHAR)
+        tabs_before_placeholder = insert_text[:placeholder_pos].count("\t")
+        expected_index = 1 + placeholder_pos - tabs_before_placeholder
+
+        delete_request = next(
+            r
+            for r in result
+            if "deleteContentRange" in r
+            and r["deleteContentRange"]["range"]["endIndex"] - r["deleteContentRange"]["range"]["startIndex"] == 1
+        )
+        image_request = next(r for r in result if "insertInlineImage" in r)
+
+        assert delete_request["deleteContentRange"]["range"]["startIndex"] == expected_index
+        assert image_request["insertInlineImage"]["location"]["index"] == expected_index
+
+    def test_table_placeholder_indices_account_for_tab_removal(self, converter):
+        markdown = "- root\n  - nested\n\n| A | B |\n|---|---|\n| C | D |"
+        result = converter.convert(markdown, start_index=1)
+
+        insert_text = next(r for r in result if "insertText" in r)["insertText"]["text"]
+        table_placeholder_pos = insert_text.index(TABLE_PLACEHOLDER_CHAR)
+        tabs_before_placeholder = insert_text[:table_placeholder_pos].count("\t")
+        expected_index = 1 + table_placeholder_pos - tabs_before_placeholder
+
+        table_request = next(r for r in result if "insertTable" in r)
+        table_delete = next(
+            r
+            for r in result
+            if "deleteContentRange" in r
+            and r["deleteContentRange"]["range"]["startIndex"] == table_request["insertTable"]["location"]["index"]
+        )
+
+        assert table_delete["deleteContentRange"]["range"]["startIndex"] == expected_index
+        assert table_request["insertTable"]["location"]["index"] == expected_index
+
+    def test_preserves_blank_line_between_heading_and_paragraph(self, converter):
+        result = converter.convert("### Heading\n\nParagraph")
+
+        insert_text = next(r for r in result if "insertText" in r)["insertText"]["text"]
+        assert "Heading\n\nParagraph" in insert_text
+
+    def test_preserves_blank_lines_around_horizontal_rule(self, converter):
+        result = converter.convert("Above\n\n---\n\nBelow")
+
+        insert_text = next(r for r in result if "insertText" in r)["insertText"]["text"]
+        assert "Above\n\n\n\nBelow" in insert_text
+
+    def test_table_placeholder_is_separated_from_following_block(self, converter):
+        markdown = "| A |\n|---|\n| B |\n\nAfter"
+        result = converter.convert(markdown)
+
+        insert_text = next(r for r in result if "insertText" in r)["insertText"]["text"]
+        assert f"{TABLE_PLACEHOLDER_CHAR}\n\nAfter" in insert_text
+
+    def test_strikethrough_range_remains_exact_after_table_block(self, converter):
+        markdown = "| A |\n|---|\n| B |\n\nThis text is ~~crossed out~~ and this is normal."
+        result = converter.convert(markdown, start_index=1)
+
+        insert_text = next(r for r in result if "insertText" in r)["insertText"]["text"]
+        strikethrough_request = next(
+            r for r in result if "updateTextStyle" in r and r["updateTextStyle"]["textStyle"].get("strikethrough")
+        )
+        range_info = strikethrough_request["updateTextStyle"]["range"]
+
+        assert insert_text[range_info["startIndex"] - 1 : range_info["endIndex"] - 1] == "crossed out"
 
 
 class TestTwoPhaseRequestOrdering:

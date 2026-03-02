@@ -114,6 +114,7 @@ async def get_gmail_threads_content_batch(
                             return tid, None, ssl_error
                     except Exception as e:
                         return tid, None, e
+                return tid, None, RuntimeError("Thread fetch retries exhausted")
 
             for tid in chunk_ids:
                 tid_result, thread_data, error = await fetch_thread_with_retry(tid)

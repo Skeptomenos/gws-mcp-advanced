@@ -48,7 +48,7 @@ def test_check_pypi_main_success(monkeypatch, pypi_check_module):
     monkeypatch.setattr(
         pypi_check_module.argparse.ArgumentParser,
         "parse_args",
-        lambda self: SimpleNamespace(package="gws-mcp-advanced", version="1.0.0"),
+        lambda self: SimpleNamespace(package="google-workspace-mcp-advanced", version="1.0.0"),
     )
     assert pypi_check_module.main() == 0
 
@@ -62,6 +62,6 @@ def test_check_pypi_main_missing_version(monkeypatch, pypi_check_module):
     monkeypatch.setattr(
         pypi_check_module.argparse.ArgumentParser,
         "parse_args",
-        lambda self: SimpleNamespace(package="gws-mcp-advanced", version="1.0.0"),
+        lambda self: SimpleNamespace(package="google-workspace-mcp-advanced", version="1.0.0"),
     )
     assert pypi_check_module.main() == 1

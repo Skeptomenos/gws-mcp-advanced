@@ -28,6 +28,51 @@ from gdrive.drive_helpers import resolve_file_id_or_alias
 logger = logging.getLogger(__name__)
 
 
+def _partition_markdown_requests(
+    requests: list[dict[str, Any]],
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]]]:
+    """
+    Partition markdown conversion requests into three execution phases:
+    1) base text/style/bullet requests
+    2) inline image placeholder replacements (delete+insertInlineImage)
+    3) table placeholder replacements (delete+insertTable)
+
+    This keeps structural placeholder replacement logic centralized so
+    `create_doc` and `insert_markdown` stay behaviorally aligned.
+    """
+    base_requests: list[dict[str, Any]] = []
+    image_phase_requests: list[dict[str, Any]] = []
+    table_phase_requests: list[dict[str, Any]] = []
+
+    index = 0
+    while index < len(requests):
+        request = requests[index]
+
+        # Keep delete+image pairs together for phase 2.
+        if "deleteContentRange" in request and index + 1 < len(requests):
+            next_request = requests[index + 1]
+            if "insertInlineImage" in next_request:
+                image_phase_requests.append(request)
+                image_phase_requests.append(next_request)
+                index += 2
+                continue
+            if "insertTable" in next_request:
+                table_phase_requests.append(request)
+                table_phase_requests.append(next_request)
+                index += 2
+                continue
+
+        if "insertInlineImage" in request:
+            image_phase_requests.append(request)
+        elif "insertTable" in request:
+            table_phase_requests.append(request)
+        else:
+            base_requests.append(request)
+        index += 1
+
+    return base_requests, image_phase_requests, table_phase_requests
+
+
 @server.tool()
 @handle_http_errors("create_doc", service_type="docs")
 @require_google_service("docs", "docs_write")
@@ -37,6 +82,7 @@ async def create_doc(
     title: str,
     content: str = "",
     parse_markdown: bool = True,
+    dry_run: bool = True,
 ) -> str:
     """
     Creates a new Google Doc and optionally inserts initial content.
@@ -52,6 +98,7 @@ async def create_doc(
         content: Optional initial content. Interpreted as Markdown by default.
         parse_markdown: If True (default), parse content as Markdown and apply
                         formatting. If False, insert content as plain text.
+        dry_run: When True (default), preview create/update actions without executing them.
 
     Returns:
         str: Confirmation message with document ID and link.
@@ -65,8 +112,26 @@ async def create_doc(
     """
     logger.info(
         f"[create_doc] Invoked. Email: '{user_google_email}', Title='{title}', "
-        f"parse_markdown={parse_markdown}, content_len={len(content)}"
+        f"parse_markdown={parse_markdown}, dry_run={dry_run}, content_len={len(content)}"
     )
+
+    if dry_run:
+        if not content:
+            return f"DRY RUN: Would create empty Google Doc '{title}' for {user_google_email}."
+
+        if parse_markdown:
+            converter = MarkdownToDocsConverter()
+            requests = converter.convert(content, start_index=1)
+            return (
+                f"DRY RUN: Would create Google Doc '{title}' for {user_google_email} with Markdown content "
+                f"({len(content)} characters), apply {len(requests)} request(s), and populate "
+                f"{len(converter.pending_tables)} table(s)."
+            )
+
+        return (
+            f"DRY RUN: Would create Google Doc '{title}' for {user_google_email} with plain-text content "
+            f"({len(content)} characters)."
+        )
 
     doc = await asyncio.to_thread(service.documents().create(body={"title": title}).execute)
     doc_id = doc.get("documentId")
@@ -76,16 +141,61 @@ async def create_doc(
             converter = MarkdownToDocsConverter()
             requests = converter.convert(content, start_index=1)
             logger.debug(f"[create_doc] Markdown converter generated {len(requests)} request(s)")
+            base_requests, image_phase_requests, table_phase_requests = _partition_markdown_requests(requests)
 
-            # CRITICAL: Send ALL requests in a SINGLE batchUpdate call.
+            # Phase 1: send base text/style requests in a single batch.
             # The createParagraphBullets request uses leading TAB characters to determine
             # nesting levels. If we split into multiple calls, the TABs are inserted first,
             # then the bullet request runs with stale indices after TABs have shifted positions.
             # See: specs/FIX_LIST_NESTING.md for details on the TAB-based nesting approach.
-            if requests:
+            if base_requests:
                 await asyncio.to_thread(
-                    service.documents().batchUpdate(documentId=doc_id, body={"requests": requests}).execute
+                    service.documents().batchUpdate(documentId=doc_id, body={"requests": base_requests}).execute
                 )
+
+            # Phase 2: Inline image replacement.
+            # Image requests are emitted from markdown conversion as placeholder delete+insert
+            # operations. Running them in a dedicated batchUpdate avoids API drops observed
+            # when image operations are mixed with large structural batches.
+            if image_phase_requests:
+                await asyncio.to_thread(
+                    service.documents().batchUpdate(documentId=doc_id, body={"requests": image_phase_requests}).execute
+                )
+
+            # Phase 3: Table placeholder replacement.
+            # Table insertions expand document indices, so we apply them only after
+            # text/style/image phases complete.
+            if table_phase_requests:
+                await asyncio.to_thread(
+                    service.documents().batchUpdate(documentId=doc_id, body={"requests": table_phase_requests}).execute
+                )
+
+            # Phase 4: Populate table cells (requires document inspection for actual indices).
+            # Tables are created empty in Phase 3. Cell population needs a fresh read of the
+            # document to find actual cell paragraph positions.
+            if converter.pending_tables:
+                from gdocs.managers.table_operation_manager import TableOperationManager
+
+                table_mgr = TableOperationManager(service)
+                population_failures: list[str] = []
+                for table_index, (table_data, bold_headers) in enumerate(converter.pending_tables):
+                    expected_cells = sum(1 for row in table_data for cell in row if cell)
+                    populated_cells = await table_mgr._populate_table_cells(
+                        doc_id,
+                        table_data,
+                        bold_headers,
+                        table_index=table_index,
+                    )
+                    if populated_cells != expected_cells:
+                        population_failures.append(
+                            f"table {table_index}: populated {populated_cells}/{expected_cells} non-empty cells"
+                        )
+
+                if population_failures:
+                    failure_msg = "; ".join(population_failures)
+                    raise RuntimeError(
+                        f"Document '{doc_id}' created but markdown table population was incomplete ({failure_msg})."
+                    )
         else:
             requests = [{"insertText": {"location": {"index": 1}, "text": content}}]
             await asyncio.to_thread(
@@ -116,6 +226,7 @@ async def modify_doc_text(
     font_family: str | None = None,
     text_color: str | None = None,
     background_color: str | None = None,
+    dry_run: bool = True,
 ) -> str:
     """
     Modifies text in a Google Doc - can insert/replace text and/or apply formatting in a single operation.
@@ -133,6 +244,7 @@ async def modify_doc_text(
         font_family: Font family name (e.g., "Arial", "Times New Roman")
         text_color: Foreground text color (#RRGGBB)
         background_color: Background/highlight color (#RRGGBB)
+        dry_run: When True (default), return planned mutations without executing them
 
     Returns:
         str: Confirmation message with operation details
@@ -276,12 +388,19 @@ async def modify_doc_text(
 
         operations.append(f"Applied formatting ({', '.join(format_details)}) to range {format_start}-{format_end}")
 
+    operation_summary = "; ".join(operations)
+    link = f"https://docs.google.com/document/d/{document_id}/edit"
+
+    if dry_run:
+        return (
+            f"DRY RUN: Would apply {len(requests)} request(s) to document {document_id} "
+            f"for {user_google_email}. Planned changes: {operation_summary}. Link: {link}"
+        )
+
     await asyncio.to_thread(
         service.documents().batchUpdate(documentId=document_id, body={"requests": requests}).execute
     )
 
-    link = f"https://docs.google.com/document/d/{document_id}/edit"
-    operation_summary = "; ".join(operations)
     text_info = f" Text length: {len(text)} characters." if text else ""
     return f"{operation_summary} in document {document_id}.{text_info} Link: {link}"
 
@@ -296,6 +415,7 @@ async def find_and_replace_doc(
     find_text: str,
     replace_text: str,
     match_case: bool = False,
+    dry_run: bool = True,
 ) -> str:
     """
     Finds and replaces text throughout a Google Doc.
@@ -306,6 +426,7 @@ async def find_and_replace_doc(
         find_text: Text to search for
         replace_text: Text to replace with
         match_case: Whether to match case exactly
+        dry_run: When True (default), return planned mutation without executing it
 
     Returns:
         str: Confirmation message with replacement count
@@ -316,6 +437,12 @@ async def find_and_replace_doc(
     document_id = resolve_file_id_or_alias(document_id)
 
     requests = [create_find_replace_request(find_text, replace_text, match_case)]
+
+    if dry_run:
+        return (
+            f"DRY RUN: Would replace occurrences of '{find_text}' with '{replace_text}' in document {document_id} "
+            f"for {user_google_email} (match_case={match_case})."
+        )
 
     result = await asyncio.to_thread(
         service.documents().batchUpdate(documentId=document_id, body={"requests": requests}).execute
@@ -341,6 +468,7 @@ async def update_doc_headers_footers(
     section_type: str,
     content: str,
     header_footer_type: str = "DEFAULT",
+    dry_run: bool = True,
 ) -> str:
     """
     Updates headers or footers in a Google Doc.
@@ -351,6 +479,7 @@ async def update_doc_headers_footers(
         section_type: Type of section to update ("header" or "footer")
         content: Text content for the header/footer
         header_footer_type: Type of header/footer ("DEFAULT", "FIRST_PAGE_ONLY", "EVEN_PAGE")
+        dry_run: When True (default), return planned mutation without executing it
 
     Returns:
         str: Confirmation message with update details
@@ -374,6 +503,12 @@ async def update_doc_headers_footers(
     if not is_valid:
         return f"Error: {error_msg}"
 
+    if dry_run:
+        return (
+            f"DRY RUN: Would update {section_type} ({header_footer_type}) for document {document_id} "
+            f"for {user_google_email}. Content length: {len(content)}."
+        )
+
     header_footer_manager = HeaderFooterManager(service)
 
     success, message = await header_footer_manager.update_header_footer_content(
@@ -395,6 +530,7 @@ async def batch_update_doc(
     user_google_email: str,
     document_id: str,
     operations: list[dict[str, Any]],
+    dry_run: bool = True,
 ) -> str:
     """
     Executes multiple document operations in a single atomic batch update.
@@ -406,6 +542,7 @@ async def batch_update_doc(
                    - type: Operation type ('insert_text', 'delete_text', 'replace_text',
                      'format_text', 'insert_table', 'insert_page_break', 'insert_markdown')
                    - Additional parameters specific to each operation type
+        dry_run: When True (default), return planned batch summary without executing it
 
     Example operations:
         [
@@ -433,6 +570,12 @@ async def batch_update_doc(
     if not is_valid:
         return f"Error: {error_msg}"
 
+    if dry_run:
+        return (
+            f"DRY RUN: Would execute {len(operations)} batch operation(s) on document {document_id} "
+            f"for {user_google_email}."
+        )
+
     batch_manager = BatchOperationManager(service)
 
     success, message, metadata = await batch_manager.execute_batch_operations(document_id, operations)
@@ -454,6 +597,7 @@ async def insert_markdown(
     document_id: str,
     markdown_text: str,
     index: int = 1,
+    dry_run: bool = True,
 ) -> str:
     """
     Insert Markdown-formatted content into a Google Doc.
@@ -467,6 +611,7 @@ async def insert_markdown(
         markdown_text: Markdown string to convert and insert.
         index: Document index to start insertion at (1-based, default: 1).
                Index 1 is the start of the document body.
+        dry_run: When True (default), return planned mutation without executing it
 
     Returns:
         str: Confirmation message with document link and request count.
@@ -497,14 +642,33 @@ async def insert_markdown(
     # Convert Markdown to Google Docs API requests
     converter = MarkdownToDocsConverter()
     requests = converter.convert(markdown_text, start_index=index)
+    base_requests, image_phase_requests, table_phase_requests = _partition_markdown_requests(requests)
 
     if not requests:
         return "Error: Markdown conversion produced no requests. Check markdown_text content."
 
-    # Execute batchUpdate with converted requests
-    await asyncio.to_thread(
-        service.documents().batchUpdate(documentId=document_id, body={"requests": requests}).execute
-    )
+    if dry_run:
+        return (
+            f"DRY RUN: Would insert Markdown into document {document_id} for {user_google_email} at index {index}. "
+            f"Generated {len(requests)} API request(s)."
+        )
+
+    # Execute markdown requests in shared phases to keep index behavior
+    # consistent with create_doc.
+    if base_requests:
+        await asyncio.to_thread(
+            service.documents().batchUpdate(documentId=document_id, body={"requests": base_requests}).execute
+        )
+
+    if image_phase_requests:
+        await asyncio.to_thread(
+            service.documents().batchUpdate(documentId=document_id, body={"requests": image_phase_requests}).execute
+        )
+
+    if table_phase_requests:
+        await asyncio.to_thread(
+            service.documents().batchUpdate(documentId=document_id, body={"requests": table_phase_requests}).execute
+        )
 
     link = f"https://docs.google.com/document/d/{document_id}/edit"
     return (

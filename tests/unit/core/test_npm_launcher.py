@@ -24,7 +24,7 @@ def _node_bin() -> str:
 
 
 def _launcher_path() -> Path:
-    return Path(__file__).resolve().parents[3] / "bin" / "gws-mcp-advanced.cjs"
+    return Path(__file__).resolve().parents[3] / "bin" / "google-workspace-mcp-advanced.cjs"
 
 
 def test_launcher_uses_uvx_when_available(tmp_path: Path) -> None:
@@ -54,7 +54,7 @@ exit 0
 
     assert result.returncode == 0, result.stderr
     args = log_path.read_text(encoding="utf-8")
-    assert "--from gws-mcp-advanced==1.0.0 gws-mcp-advanced --transport stdio" in args
+    assert "--from google-workspace-mcp-advanced==1.0.0 google-workspace-mcp-advanced --transport stdio" in args
 
 
 def test_launcher_falls_back_to_uv_tool_run(tmp_path: Path) -> None:
@@ -84,7 +84,9 @@ exit 0
 
     assert result.returncode == 0, result.stderr
     args = log_path.read_text(encoding="utf-8")
-    assert "tool run --from gws-mcp-advanced==1.0.0 gws-mcp-advanced --transport stdio" in args
+    assert (
+        "tool run --from google-workspace-mcp-advanced==1.0.0 google-workspace-mcp-advanced --transport stdio"
+    ) in args
 
 
 def test_launcher_fails_without_uv_runtime(tmp_path: Path) -> None:
