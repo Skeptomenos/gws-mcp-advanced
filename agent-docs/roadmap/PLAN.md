@@ -2,7 +2,7 @@
 
 ## Living Document Controls
 1. Status: `IN_IMPLEMENTATION`
-2. Last Updated (UTC): `2026-03-03T09:26:47Z`
+2. Last Updated (UTC): `2026-03-03T10:40:00Z`
 3. Canonical Path: `/Users/david.helmus/repos/ai-dev/_infra/gws-mcp-advanced/gws-mcp-advanced/agent-docs/roadmap/PLAN.md`
 4. Active Branch: `main`
 5. Local Task Board: `/Users/david.helmus/repos/ai-dev/_infra/gws-mcp-advanced/gws-mcp-advanced/agent-docs/roadmap/TASKS.md`
@@ -17,11 +17,11 @@
 ## Active Hotfix Track
 1. Authentication stabilization is now tracked in a dedicated living plan:
    `/Users/david.helmus/repos/ai-dev/_infra/gws-mcp-advanced/gws-mcp-advanced/agent-docs/roadmap/AUTH_STABILIZATION_PLAN.md`
-2. Issue ID for this track: `AUTH-01` (P0, in progress).
-3. Single-MCP multi-client tenant support is tracked as `AUTH-02` (P0, in progress).
+2. Issue ID for this track: `AUTH-01` (P0, done).
+3. Single-MCP multi-client tenant support is tracked as `AUTH-02` (P0, done).
 
 ## Enterprise/Private Single-MCP Multi-Client Authentication (Primary Strategy)
-1. Status: `IN_DESIGN_TO_IMPLEMENTATION_HANDOFF`
+1. Status: `DONE`
 2. Priority: `P0` (required for enterprise + private coexistence in one MCP entry)
 3. Objective:
    1. keep one MCP server config in OpenCode/Claude Code,
@@ -89,7 +89,7 @@
 | RM-06 | Not Started | Codex | codex/run-01-fastmcp-import-smoke | - | Future extension: markdown mention-to-chip support using Docs `InsertPersonRequest` with graceful fallback for unresolved mentions. | 2026-03-02 |
 | RM-07 | Not Started | Codex | codex/run-01-fastmcp-import-smoke | - | Future extension: evaluate/add Google Workspace Add-ons path for third-party smart chips (`workspace.linkpreview` / `workspace.linkcreate`) where Docs API direct writes are not available. | 2026-03-02 |
 | DIST-00 | Done | Codex | codex/run-01-fastmcp-import-smoke | - | Canonical package identity is standardized (`google-workspace-mcp-advanced`) across npm metadata/docs, and distribution guard checks are enforced in CI + release workflows. | 2026-03-01 |
-| DIST-01 | Done | Codex | codex/run-01-fastmcp-import-smoke | - | PyPI release workflow is operational and published `google-workspace-mcp-advanced==1.0.0` (run `22577853068`) with verified uvx startup path. | 2026-03-02 |
+| DIST-01 | Done | Codex | main | - | PyPI release workflow is operational and verified on current `main`: baseline publish run `22577853068` (`1.0.0`) plus post-fix revalidation run `22618871138` (`1.0.2`) after Pyright gate repair. | 2026-03-03 |
 | DIST-02 | Done | Codex | codex/run-01-fastmcp-import-smoke | - | npm launcher preflight/remediation path is implemented and automated smoke tests are in place (`tests/unit/core/test_npm_launcher.py`) and wired into CI. | 2026-03-01 |
 | DIST-03 | Done | Codex | codex/run-01-fastmcp-import-smoke | - | Deterministic pinned install and rollback guidance is documented in README + `docs/DISTRIBUTION_RELEASE.md`. | 2026-03-01 |
 | DIST-04 | Done | Codex | codex/run-01-fastmcp-import-smoke | - | npm provenance/auth path is de-scoped by product decision because npm/npx distribution is no longer in the release-critical path. | 2026-03-02 |
@@ -127,7 +127,7 @@ The plan resolves:
 ## Baseline (Current Reality to Plan Against)
 1. Lint: `ruff check` passes.
 2. Formatter is enforced in CI with `--check`, and local verification is now green.
-3. Tests: `pytest` passes (631 collected; `628 passed`, `3 skipped`), coverage ~45%.
+3. Tests: `pytest` passes (`648 passed`, `3 skipped`), coverage remains in the same approximate range.
 4. Runtime regression in `fastmcp_server.py` import path has been fixed in `RUN-01`.
 5. `SEC-01` implemented: unverified JWT identity extraction is denied by default; break-glass override is explicit and logged.
 6. `SEC-02` implemented: credential and session JSON persistence now use centralized secure atomic writes with restrictive permissions.
@@ -443,6 +443,8 @@ The plan resolves:
 
 | Date (UTC) | Scope | Commands | Result | Notes |
 |---|---|---|---|---|
+| 2026-03-03 | DIST-01 release gate recovery | `uv run ruff check . && uv run ruff format --check . && uv run pyright --project pyrightconfig.json && uv run pytest -q` | Pass | Fixed release-blocking Pyright/type issues (`648 passed`, `3 skipped`; `0` pyright errors) |
+| 2026-03-03 | DIST-01 publish verification (`main`) | `gh workflow run release-pypi.yml -f version=1.0.2` + `gh run watch 22618871138 --exit-status` | Pass | `verify`, `build`, and `publish` jobs all green on run `22618871138` (head `28509fc`) |
 | 2026-03-03 | AUTH-01 release installability (`WS-06.5`) | `uvx --from google-workspace-mcp-advanced==1.0.1 google-workspace-mcp-advanced --help` | Pass | Published package resolves and launches via `uvx` |
 | 2026-03-03 | AUTH-01 parity/env-path/refresh/diagnostics closure | `uv run pytest tests/unit/auth/test_google_auth_flow_modes.py tests/unit/auth/test_auth_runtime_paths.py tests/integration/test_auth_flow.py -q` | Pass | Added WS-01.5 + WS-04.1/2/3 coverage (`29 passed`) |
 | 2026-03-03 | AUTH-01 full verification rerun | `uv run ruff check . && uv run ruff format --check . && uv run pytest` | Pass | Full suite remains green after auth updates (`633 passed`, `3 skipped`) |
@@ -654,3 +656,5 @@ The plan resolves:
 82. 2026-03-03: Resolved `AUTH-R9` by re-importing `private` mapping with valid local MCP client credentials (`684416...`), then re-ran runtime probes to confirm both tenant lanes now route to distinct client IDs (`private` -> `684416...`, `enterprise` -> `499833...`) with `auto+stdio` fallback active; remaining closeout is manual callback completion evidence (OP-76).
 83. 2026-03-03: Performed final runtime config sanity check and living-doc sync: `auth_clients.json` now has `selection_mode=mapped_only`, clients `{private, enterprise}`, account/domain mappings for `david@helmus.me` and `david.helmus@hellofresh.com`, and all auth trackers (`PLAN.md`, `STATUS.md`, `TASKS.md`, `AUTH_STABILIZATION_PLAN.md`, `OPENCODE_MCP_MANUAL_TESTING.md`) are aligned to one remaining gate (`OP-74/OP-76` callback completion in OpenCode).
 84. 2026-03-03: Ingested OpenCode runtime matrix closeout: OP-74 PASS (private+enterprise routed in one MCP entry with distinct client behavior) and OP-76 PASS (persistence proven by `list_calendars` success without re-auth prompts: private `8` calendars, enterprise `15` calendars). Auth tracks `AUTH-01` and `AUTH-02` are now closed.
+85. 2026-03-03: Reproduced `Release PyPI` failure (`22617048674`) and fixed two release-gate type defects in `auth/oauth21_session_store.py` (protocol-compatible `store_session` signature and typed stats aggregation), then revalidated local release gate (`ruff`, `format --check`, `pyright`, `pytest`: `648 passed`, `3 skipped`).
+86. 2026-03-03: Dispatched and watched `release-pypi.yml` from `main` after fix (`22618871138`, head `28509fc`); all jobs passed (`verify`, `build`, `publish`), confirming PyPI release lane is healthy on current mainline.

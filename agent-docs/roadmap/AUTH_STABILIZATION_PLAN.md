@@ -2,7 +2,7 @@
 
 ## Living Document Controls
 - Status: `DONE_AUTH_STABILIZATION_SCOPE`
-- Last Updated (UTC): `2026-03-03T09:26:47Z`
+- Last Updated (UTC): `2026-03-03T10:40:00Z`
 - Canonical Path: `/Users/david.helmus/repos/ai-dev/_infra/gws-mcp-advanced/gws-mcp-advanced/agent-docs/roadmap/AUTH_STABILIZATION_PLAN.md`
 - Parent Plan: `/Users/david.helmus/repos/ai-dev/_infra/gws-mcp-advanced/gws-mcp-advanced/agent-docs/roadmap/PLAN.md`
 - Active Branch: `main`
@@ -174,10 +174,12 @@ Observed failure themes:
 - 2026-03-03T09:09:39Z: Final sanity check confirms `~/.config/google-workspace-mcp-advanced/auth_clients.json` is consistent (`selection_mode=mapped_only`, clients `private`/`enterprise`, account + domain mappings persisted) and runtime/docs are aligned to a single remaining closeout step: OP-74/OP-76 manual callback completion evidence in OpenCode.
 - 2026-03-03T10:24:00Z: OpenCode runtime closeout completed: OP-74 PASS (single MCP entry authenticated both tenants with distinct clients and callback flow where needed) and OP-76 PASS (credentials persisted; `list_calendars` succeeded with no re-auth prompts for both tenants).
 - 2026-03-03T10:24:00Z: Observed expected callback-state behavior: for enterprise lane, `complete_google_auth` returned `Invalid or expired OAuth state parameter` after browser redirect because callback server already consumed the state and persisted tokens. This is valid callback-server auto-completion behavior, not a regression.
+- 2026-03-03T10:35:00Z: Recovered distribution gate after `release-pypi.yml` type-check failure (`22617048674`) by fixing `OAuth21SessionStore` typing/protocol mismatches; local quality gate revalidated (`ruff`, `format --check`, `pyright`, `pytest` => `648 passed`, `3 skipped`).
+- 2026-03-03T10:36:00Z: Re-dispatched `Release PyPI` workflow from `main` (`22618871138`, head `28509fc`) and confirmed full success (`verify`, `build`, `publish`).
 
 ## Open External Dependencies
 1. None for auth stabilization scope.
 
 ## Next Execution Slice
-1. **Release readiness (P1)**: prepare version bump + release notes for auth stabilization and single-MCP multi-client rollout.
-2. **Operational hardening (P2)**: optionally add a clearer user-facing note when manual `complete_google_auth` is called after callback-server auto-consumption.
+1. **Operational hardening (P2)**: optionally add a clearer user-facing note when manual `complete_google_auth` is called after callback-server auto-consumption.
+2. **Roadmap handoff (P3)**: continue with post-auth backlog (`RM-05`..`RM-07`) under the main execution plan.

@@ -5,9 +5,9 @@ Detailed implementation scope and issue-level tracking live in:
 `/Users/david.helmus/repos/ai-dev/_infra/gws-mcp-advanced/gws-mcp-advanced/agent-docs/roadmap/PLAN.md`
 
 ## Metadata
-- Last Updated (UTC): 2026-03-03T09:26:47Z
+- Last Updated (UTC): 2026-03-03T10:40:00Z
 - Active Branch: `main`
-- Overall Status: Rename/migration hardening `DIST-05` is complete and verified. Authentication stabilization is now closed: `AUTH-01` and `AUTH-02` are done with OpenCode runtime evidence (OP-74/OP-76 PASS, persisted credentials for both tenants). Canonical execution plan: `/Users/david.helmus/repos/ai-dev/_infra/gws-mcp-advanced/gws-mcp-advanced/agent-docs/roadmap/AUTH_STABILIZATION_PLAN.md`.
+- Overall Status: Rename/migration hardening `DIST-05` is complete and verified. Authentication stabilization is closed: `AUTH-01` and `AUTH-02` are done with OpenCode runtime evidence (OP-74/OP-76 PASS, persisted credentials for both tenants). Release gate recovery is complete: `release-pypi.yml` failure on tag run `22617048674` was fixed via Pyright/type signature corrections and revalidated with successful publish run `22618871138` on `main` (`28509fc`).
 - Implementation Readiness: `YES`
 
 ## Baseline Verification Snapshot
@@ -15,7 +15,7 @@ Detailed implementation scope and issue-level tracking live in:
 | Command | Result | Notes |
 |---|---|---|
 | `uv run ruff check .` | Pass | No lint violations |
-| `uv run ruff format --check .` | Pass | `151` files unchanged |
+| `uv run ruff format --check .` | Pass | `153` files unchanged |
 | `uv run pyright --project pyrightconfig.json` | Pass | Blocking source-scoped type gate is green (0 errors) |
 | `uv run pytest` | Pass | 648 passed, 3 skipped |
 | `uv run python scripts/check_dry_run_defaults.py` | Pass | Dry-run default static guard is green |
@@ -36,9 +36,9 @@ Detailed implementation scope and issue-level tracking live in:
 | Wave 6 | Distribution validation and rollout | Done | uvx stable/pinned validation is complete (`DT-01`..`DT-03`, `DT-08`) |
 
 ## Current Focus
-1. Prepare release notes/version bump for auth stabilization + single-MCP multi-client rollout.
+1. Archive release evidence for run `22618871138` and keep distribution docs synchronized.
 2. Optionally harden `complete_google_auth` user messaging for already-consumed callback state.
-3. Run post-release pinned-package smoke and archive evidence.
+3. Start Wave 7 smart-chip roadmap (`RM-05`..`RM-07`) when product priorities allow.
 
 ## Open Blockers
 1. None for auth track closure.

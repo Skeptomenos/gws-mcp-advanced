@@ -2,9 +2,14 @@
 
 ## Metadata
 
-- Last Updated (UTC): 2026-03-02T15:04:43Z
+- Last Updated (UTC): 2026-03-03T10:40:00Z
 - Primary Runtime: `uvx`
 - Python Package: `google-workspace-mcp-advanced`
+
+## Latest Verification
+
+- Current verified release run: `22618871138` (workflow: `Release PyPI`, event: `workflow_dispatch`, head: `28509fc` on `main`)
+- Result: `verify`, `build`, and `publish` all passed.
 
 ## Distribution Model
 

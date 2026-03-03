@@ -8,7 +8,7 @@ Status dashboard: `/Users/david.helmus/repos/ai-dev/_infra/gws-mcp-advanced/gws-
 Dry-run tracker: `/Users/david.helmus/repos/ai-dev/_infra/gws-mcp-advanced/gws-mcp-advanced/agent-docs/roadmap/DRY_RUN_MATRIX.md`
 
 ## Metadata
-- Last Updated (UTC): 2026-03-03T09:26:47Z
+- Last Updated (UTC): 2026-03-03T10:40:00Z
 - Active Branch: `main`
 - Owner: Codex
 
@@ -45,7 +45,7 @@ Dry-run tracker: `/Users/david.helmus/repos/ai-dev/_infra/gws-mcp-advanced/gws-m
 | DOC-01 | 0/3 | Done | Completed: roadmap/testing docs reconciled; historical reports marked archived snapshots |
 | OPC-01 | 4 | Done | Completed: real OpenCode lifecycle smoke is operational (`serve` spawn, health check, attached prompt, deterministic teardown) |
 | DIST-00 | 5 | Done | Completed: canonical npm identity standardized; distribution guard enforced in CI + release workflows |
-| DIST-01 | 5 | Done | PyPI `1.0.0` successfully published (`Release PyPI` run `22577853068`); uvx stable/pinned lanes validated |
+| DIST-01 | 5 | Done | PyPI lane verified and operational: baseline publish run `22577853068` (`1.0.0`) plus post-fix revalidation run `22618871138` (`1.0.2`) after Pyright gate repair |
 | DIST-02 | 5 | Done | Completed: launcher preflight/remediation and automated launcher smoke tests added |
 | DIST-03 | 6 | Done | Completed: pinned install and rollback runbook documented |
 | DIST-04 | 5 | Done | npm/npx lane is de-scoped by product decision and no longer blocks distribution readiness |
@@ -250,6 +250,7 @@ Dry-run tracker: `/Users/david.helmus/repos/ai-dev/_infra/gws-mcp-advanced/gws-m
 - [x] Ensure `.github/workflows/release-pypi.yml` is committed and present on `main` (required for `workflow_dispatch`)
 - [x] Ensure `.github/workflows/release-npm.yml` is committed and present on `main` (required for `workflow_dispatch`)
 - [x] Validate uvx distribution baseline (`DT-01`..`DT-03`)
+- [x] Re-validate `release-pypi.yml` after auth-track merge by fixing pyright gate failures and confirming successful dispatch on `main` (`22618871138`)
 
 ### DIST-02
 - [x] Implement npm launcher preflight for `uvx`/`uv`
@@ -343,3 +344,5 @@ Dry-run tracker: `/Users/david.helmus/repos/ai-dev/_infra/gws-mcp-advanced/gws-m
 - 2026-03-02: `Release npm` auto-run (`22577900946`) passed verification and provenance signing but failed publish with npm auth error (`Access token expired or revoked`, `E404`), indicating npm auth/trusted-publisher configuration is now the sole distribution blocker.
 - 2026-03-02: Product decision updated to uvx-only distribution for current release. npm/npx lane is explicitly de-scoped and no longer tracked as a blocker.
 - 2026-03-02: Completed uvx-only user-doc cleanup (`README.md`, setup/distribution guides), reconciled roadmap/testing status docs, and re-ran verification protocol (`uv run ruff check .`, `uv run ruff format --check .`, `uv run pytest`) with green results (`615 passed`, `3 skipped`).
+- 2026-03-03: Reproduced `release-pypi.yml` failure from run `22617048674`, fixed two Pyright blockers in `auth/oauth21_session_store.py`, and revalidated the full quality gate locally (`ruff`, `format --check`, `pyright`, `pytest` => `648 passed`, `3 skipped`).
+- 2026-03-03: Dispatched `Release PyPI` workflow on `main` after fix (`22618871138`, head `28509fc`) and confirmed end-to-end success across `verify`, `build`, and `publish` jobs.
