@@ -12,6 +12,12 @@ Install `uv` first because this project is distributed through `uvx`.
 # macOS (Homebrew)
 brew install uv
 
+# Windows (winget)
+winget install --id=astral-sh.uv -e
+
+# Windows (PowerShell installer)
+powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
+
 # Linux/macOS (official installer)
 curl -LsSf https://astral.sh/uv/install.sh | sh
 
