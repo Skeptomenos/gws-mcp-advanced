@@ -45,8 +45,8 @@ We need production-grade Apps Script support that matches our repo standards:
 ## 5. Functional Scope (v1)
 
 ### 5.1 Read tools
-1. `list_script_projects`
-2. `get_script_project`
+1. `get_script_project`
+2. `list_script_projects` (Drive-backed standalone listing)
 3. `get_script_content`
 4. `list_deployments`
 5. `list_versions`
@@ -54,6 +54,7 @@ We need production-grade Apps Script support that matches our repo standards:
 7. `list_script_processes`
 8. `get_script_metrics`
 9. `generate_trigger_code` (read-only utility)
+10. `generate_clasp_helper` (read-only utility)
 
 ### 5.2 Mutating tools (all must default `dry_run=True`)
 1. `create_script_project`
@@ -234,15 +235,18 @@ Notes:
 ## 8. Scope and Permission Model
 
 Add scopes in `auth/scopes.py` and aliases in `auth/service_decorator.py`:
-- `script_readonly`
 - `script_projects`
+- `script_projects_read`
 - `script_deployments`
-- `script_deployments_readonly`
-- `script_processes_readonly`
+- `script_deployments_read`
+- `script_processes`
 - `script_metrics`
+- `drive_read` (Drive-backed standalone list)
+- `drive_file` (Drive-backed standalone delete)
 
 Mutating tools must request least-necessary write scope.
-Read tools must use readonly scope where available.
+Read tools must use read aliases where available.
+Drive-backed list/delete tools must use Drive aliases rather than Script aliases.
 
 ## 9. Safety and Security Requirements
 
@@ -280,14 +284,15 @@ Future (v2 optional):
 
 Proposed `core/tool_tiers.yaml` entries:
 - `appscript.core`:
-  - `list_script_projects`
   - `get_script_project`
+  - `list_script_projects`
   - `get_script_content`
   - `create_script_project`
   - `update_script_content`
-  - `run_script_function`
   - `generate_trigger_code`
+  - `generate_clasp_helper`
 - `appscript.extended`:
+  - `run_script_function`
   - `create_deployment`
   - `update_deployment`
   - `delete_deployment`
@@ -307,31 +312,35 @@ Proposed `core/tool_tiers.yaml` entries:
 2. Add scopes and service aliases.
 3. Add `appscript` service option in `main.py`.
 4. Add empty tier config.
+5. Implement first read tool: `get_script_project`.
 
-### Phase 1: Read Surface
-1. `list_script_projects`
-2. `get_script_project`
-3. `get_script_content`
-4. `list_deployments`
-5. `list_versions`
-6. `get_version`
-7. `list_script_processes`
-8. `get_script_metrics`
-9. `generate_trigger_code`
+### Phase 1: Drive-Backed Standalone Boundary
+1. `list_script_projects` (Drive-backed standalone listing).
+2. `delete_script_project` (Drive-backed standalone delete, `dry_run=True`).
+3. Explicit limitation messaging for container-bound exclusion.
+4. Enforce least-privilege scope-lock and mixed-service auth tests before broadening surface.
 
-### Phase 2: Write Surface (safe by default)
+### Phase 2: Read Surface Expansion
+1. `get_script_content`
+2. `list_deployments`
+3. `list_versions`
+4. `get_version`
+5. `list_script_processes`
+6. `get_script_metrics`
+7. `generate_trigger_code`
+
+### Phase 3: Write Surface (safe by default)
 1. `create_script_project`
 2. `update_script_content`
-3. `delete_script_project`
-4. `create_version`
-5. `create_deployment`
-6. `update_deployment`
-7. `delete_deployment`
-8. `run_script_function`
+3. `create_version`
+4. `create_deployment`
+5. `update_deployment`
+6. `delete_deployment`
+7. `run_script_function`
 
-### Phase 3: Docs and Examples
+### Phase 4: Docs and Examples
 1. README tools table and examples.
-2. `clasp` usage guidance section.
+2. `clasp` usage guidance section, including `generate_clasp_helper`.
 
 ## 14. Test Strategy
 
@@ -391,15 +400,11 @@ Operational:
 
 ## 18. Open Questions
 
-1. Should `run_script_function` remain in core tier or move to extended due to side effects?
-2. Should `generate_trigger_code` include templates for webapp deployment setup?
-3. Do we want v1 to include optional `clasp` helper outputs (for example, generated `.clasp.json` stub)?
+1. Should `generate_trigger_code` include templates for webapp deployment setup?
 
 ## 19. Immediate Next Step
 
-Start Phase 0 with a single PR:
-1. add scope aliases
-2. add `appscript` service routing
-3. add empty tool module + minimal read tool (`list_script_projects`)
-4. add tests and pass all quality gates
-
+Execute in canonical order:
+1. `APPS-01`: scope aliases + `appscript` service routing + scaffold + first read tool (`get_script_project`) + tests.
+2. `APPS-02`: Drive-backed standalone list/delete with explicit container-bound limitations + tests.
+3. `APPS-05` policy gate: least-privilege mapping + mixed-service auth/tier tests before broader tool expansion.

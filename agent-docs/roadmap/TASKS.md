@@ -8,8 +8,8 @@ Status dashboard: `/Users/david.helmus/repos/ai-dev/_infra/gws-mcp-advanced/gws-
 Dry-run tracker: `/Users/david.helmus/repos/ai-dev/_infra/gws-mcp-advanced/gws-mcp-advanced/agent-docs/roadmap/DRY_RUN_MATRIX.md`
 
 ## Metadata
-- Last Updated (UTC): 2026-03-03T10:40:00Z
-- Active Branch: `main`
+- Last Updated (UTC): 2026-03-04T18:51:41Z
+- Active Branch: `codex/apps-script-support-v1`
 - Owner: Codex
 
 ## Status Legend
@@ -38,9 +38,9 @@ Dry-run tracker: `/Users/david.helmus/repos/ai-dev/_infra/gws-mcp-advanced/gws-m
 | RM-02 | 3 | Done | Completed: parser/table manager reliability fixes validated by deterministic integration tests + OpenCode matrix; roadmap/testing docs reconciled |
 | RM-03 | 3 | Done | Completed: list bullet range excludes trailing list-closing newline; regression tests added to prevent empty post-list bullet artifacts |
 | RM-04 | 3 | Done | Completed: OP-69 PASS in OpenCode run 4; DEF-012 fixed and closed |
-| RM-05 | 7 | Not Started | Future extension: add native checklist bullet mode for markdown task lists (`BULLET_CHECKBOX`) with Unicode fallback |
-| RM-06 | 7 | Not Started | Future extension: add markdown mention-to-person-chip mapping (`InsertPersonRequest`) with graceful fallback |
-| RM-07 | 7 | Not Started | Future extension: evaluate/add Workspace Add-ons smart-chip path (`workspace.linkpreview` / `workspace.linkcreate`) |
+| RM-05 | 8 | Not Started | Future extension: add native checklist bullet mode for markdown task lists (`BULLET_CHECKBOX`) with Unicode fallback |
+| RM-06 | 8 | Not Started | Future extension: add markdown mention-to-person-chip mapping (`InsertPersonRequest`) with graceful fallback |
+| RM-07 | 8 | Not Started | Future extension: evaluate/add Workspace Add-ons smart-chip path (`workspace.linkpreview` / `workspace.linkcreate`) |
 | GATE-01 | 3/6 | Done | Completed: OP-70 PASS (Attempt 5), kitchen-sink rendering gate cleared, merge/push no longer blocked by markdown rendering |
 | DOC-01 | 0/3 | Done | Completed: roadmap/testing docs reconciled; historical reports marked archived snapshots |
 | OPC-01 | 4 | Done | Completed: real OpenCode lifecycle smoke is operational (`serve` spawn, health check, attached prompt, deterministic teardown) |
@@ -50,6 +50,13 @@ Dry-run tracker: `/Users/david.helmus/repos/ai-dev/_infra/gws-mcp-advanced/gws-m
 | DIST-03 | 6 | Done | Completed: pinned install and rollback runbook documented |
 | DIST-04 | 5 | Done | npm/npx lane is de-scoped by product decision and no longer blocks distribution readiness |
 | DIST-05 | 6 | Done | Completed: canonical rename/migration hardening (runtime/config naming cleanup, legacy fallback support, migration guide, docs/tests alignment) with green verification (`628 passed`, `3 skipped`) |
+| APPS-01 | 7 | Done | Completed: Apps Script foundation shipped (`gappsscript` package, `get_script_project`, runtime/auth wiring) with APPS-01 tests and full verification gates green |
+| APPS-02 | 7 | Done | Completed: Drive-backed `list_script_projects` + `delete_script_project` (`dry_run=True`) with standalone-only limitation messaging, targeted tests, full gates, and Convex live validation |
+| APPS-03 | 7 | Done | Completed: read surface (`get_script_content`, deployments/versions/processes/metrics) + strict DTO filter contracts with unknown-key/enum rejection + targeted/full gates + live Script API manager probes |
+| APPS-04 | 7 | Done | Completed: mutating Script surface shipped (`create_script_project`, `update_script_content`, `create_version`, `create_deployment`, `update_deployment`, `delete_deployment`, `run_script_function`) with default-safe dry-run behavior, request-shape API fixes from live Convex probes, targeted APPS tests, static dry-run checker update, full verification gates, and live mutation-path evidence with cleanup |
+| APPS-05 | 7 | Done | Completed: least-privilege scope lock + tier mappings + targeted/full gates + Wave-7 regression smoke |
+| APPS-06 | 7 | Done | Completed: Apps Script rollout docs published (`README`, `docs/setup/APPS_SCRIPT_SETUP.md`, `docs/RELEASE_NOTES.md`, docs index/setup links), manual matrix extended with Convex-executed Apps Script rows (`AS-01`..`AS-07`), full verification gates green, and Wave-7 regression smoke evidence recorded |
+| APPS-07 | 7 | Not Started | Deferred by product decision (non-blocking): cross-project `run_script_function` UX hardening (preflight diagnostics + scalable mapping onboarding) resumes only on explicit pull-forward |
 
 ## Wave 0 Tasks
 
@@ -198,7 +205,88 @@ Dry-run tracker: `/Users/david.helmus/repos/ai-dev/_infra/gws-mcp-advanced/gws-m
 - [x] Confirm cleanup (kitchen-sink artifact trashed) and update runbook counters/status
 - [x] Keep merge/push blocked until `OP-70` is marked `PASS`
 
-## Wave 7 Tasks (Smart-Chip Extensions)
+## Wave 7 Tasks (Apps Script v1)
+
+### APPS-01
+- [x] Add `gappsscript/__init__.py`, `gappsscript/models.py`, `gappsscript/apps_script_manager.py`, `gappsscript/apps_script_tools.py`
+- [x] Register `appscript` in `main.py` tool loader and `--tools` choices
+- [x] Add Script service config and scope aliases in auth/decorator wiring
+- [x] Implement first read tool (`get_script_project`) with unit tests
+
+### APPS-01 Test Gate (required before APPS-02)
+- [x] Run targeted APPS-01 tests (foundation + first read tool)
+- [x] Run full verification protocol (`ruff`, `format --check`, `pyright`, `pytest`)
+- [x] Run APPS regression gate checklist and record evidence
+
+### APPS-02
+- [x] Implement `list_script_projects` as Drive-backed standalone script listing (`application/vnd.google-apps.script`)
+- [x] Implement `delete_script_project` as Drive-backed standalone delete with `dry_run=True` default
+- [x] Add explicit user-facing limitation text for container-bound script exclusion
+- [x] Add negative/behavior tests for list/delete limitation and dry-run semantics
+
+### APPS-02 Test Gate (required before APPS-05)
+- [x] Run targeted APPS-02 tests (Drive-backed list/delete + limitation behavior)
+- [x] Run full verification protocol (`ruff`, `format --check`, `pyright`, `pytest`)
+- [x] Run APPS regression gate checklist and record evidence
+
+### APPS-05
+- [x] Enforce per-tool least-privilege scope lock matrix in decorators/tool wiring
+- [x] Add mixed-service auth tests for Drive-backed vs Script-backed tool access
+- [x] Add tier entries in `core/tool_tiers.yaml` and verify tier filtering behavior
+
+### APPS-05 Test Gate (required before APPS-03)
+- [x] Run targeted APPS-05 tests (scope lock + mixed-service auth + tier filtering)
+- [x] Run full verification protocol (`ruff`, `format --check`, `pyright`, `pytest`)
+- [x] Run APPS regression gate checklist and record evidence
+
+### APPS-03
+- [x] Implement read tools: `get_script_content`, `list_deployments`, `list_versions`, `get_version`, `list_script_processes`, `get_script_metrics`
+- [x] Add strict DTO parsing/validation for `script_process_filter_json`, `user_process_filter_json`, `metrics_filter_json`
+- [x] Add tests for unknown-key/invalid-enum rejection and pagination pass-through
+
+### APPS-03 Test Gate (required before APPS-04)
+- [x] Run targeted APPS-03 tests (read surface + filter DTO validation + pagination)
+- [x] Run full verification protocol (`ruff`, `format --check`, `pyright`, `pytest`)
+- [x] Run APPS regression gate checklist and record evidence
+
+### APPS-04
+- [x] Implement mutating tools: `create_script_project`, `update_script_content`, `create_deployment`, `update_deployment`, `delete_deployment`, `create_version`, `run_script_function`
+- [x] Ensure all mutators default to `dry_run=True` and provide deterministic preview responses
+- [x] Add runtime tests proving no mutation on default calls and mutation on explicit `dry_run=False`
+
+### APPS-04 Test Gate (required before APPS-06)
+- [x] Run targeted APPS-04 tests (mutator dry-run defaults + explicit mutate paths)
+- [x] Run full verification protocol (`ruff`, `format --check`, `pyright`, `pytest`)
+- [x] Run APPS regression gate checklist and record evidence
+
+### APPS-06
+- [x] Update `README.md` and add `docs/setup/APPS_SCRIPT_SETUP.md`
+- [x] Add/extend OpenCode manual rows for Apps Script tools in `agent-docs/testing/OPENCODE_MCP_MANUAL_TESTING.md`
+- [x] Add release-note entry summarizing Apps Script support, limitations, and auth/scope requirements
+
+### APPS-06 Final Test Gate (required before closing Wave 7)
+- [x] Validate docs/manual matrix updates are complete and consistent
+- [x] Run full verification protocol (`ruff`, `format --check`, `pyright`, `pytest`)
+- [x] Run APPS regression gate checklist and record evidence
+- [x] Confirm `APPS-01`..`APPS-06` are all evidence-backed before marking them done
+
+### APPS-07 (Deferred Backlog: Cross-Project Execution UX Hardening)
+- [ ] Deferred: add explicit execution preflight diagnostics for `run_script_function` (deployment type/access + likely project-alignment failure hints)
+- [ ] Deferred: add optional `deployment_id` override input for operator-directed execution targeting
+- [ ] Deferred: define scalable onboarding for multi-script OAuth routing that avoids per-script manual churn
+- [ ] Resume only on explicit product pull-forward; keep non-blocking for current roadmap scope
+
+### APPS Regression Gate (Run after every APPS slice before marking slice done)
+- [x] Calendar read smoke (`list_calendars`) passes
+- [x] Drive read smoke (`list_drive_items`) passes without new scope drift
+- [x] Gmail read smoke (`search_gmail_messages`) passes
+- [x] Docs markdown smoke (minimal markdown create/render) passes
+- [x] Dry-run default smoke (representative non-AppScript mutator) passes
+- [x] Dual-tenant auth routing smoke (private + enterprise mapping) passes
+- [x] Dual-tenant routing evidence can be carried forward from AUTH-02 runtime matrix when Convex session identity is single-principal
+- [ ] If any check fails: keep slice status non-done and log defect + mitigation evidence
+
+## Wave 8 Tasks (Smart-Chip Extensions)
 
 ### RM-05
 - [ ] Add parser/tool mode for native checklist bullets using `createParagraphBullets` + `BULLET_CHECKBOX`
@@ -346,3 +434,4 @@ Dry-run tracker: `/Users/david.helmus/repos/ai-dev/_infra/gws-mcp-advanced/gws-m
 - 2026-03-02: Completed uvx-only user-doc cleanup (`README.md`, setup/distribution guides), reconciled roadmap/testing status docs, and re-ran verification protocol (`uv run ruff check .`, `uv run ruff format --check .`, `uv run pytest`) with green results (`615 passed`, `3 skipped`).
 - 2026-03-03: Reproduced `release-pypi.yml` failure from run `22617048674`, fixed two Pyright blockers in `auth/oauth21_session_store.py`, and revalidated the full quality gate locally (`ruff`, `format --check`, `pyright`, `pytest` => `648 passed`, `3 skipped`).
 - 2026-03-03: Dispatched `Release PyPI` workflow on `main` after fix (`22618871138`, head `28509fc`) and confirmed end-to-end success across `verify`, `build`, and `publish` jobs.
+- 2026-03-04: Formalized deferment of cross-project Apps Script execution UX hardening as `APPS-07` (non-blocking). Added explicit deferred backlog items and pull-forward-only resume criteria.

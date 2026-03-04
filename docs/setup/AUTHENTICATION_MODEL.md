@@ -74,6 +74,7 @@ For most users, this is enough. You do not need to call auth tools manually.
   - `<config_dir>/credentials/`
 - Session/auth state is also persisted so sessions can recover after restart.
 - Multi-client setup additionally persists:
+  - script OAuth client mappings (`script_clients`),
   - account/domain OAuth client mappings (`auth_clients.json`),
   - client-bound OAuth states,
   - client-aware pending device flow state.
@@ -91,9 +92,10 @@ Operationally, this means a restart usually does not require re-auth unless toke
 
 When configured, auth client selection uses:
 1. internal/admin override,
-2. account mapping (`account_clients`),
-3. domain mapping (`domain_clients`),
-4. default client only in non-`mapped_only` modes.
+2. script mapping (`script_clients`),
+3. account mapping (`account_clients`),
+4. domain mapping (`domain_clients`),
+5. default client only in non-`mapped_only` modes.
 
 `mapped_only` hard-fails if no mapping exists or if domain/client policy mismatches.
 No cross-client fallback is attempted.
@@ -154,7 +156,7 @@ Practical recovery sequence:
 ### Multi-client mapping/domain mismatch errors
 
 - Check `auth_clients.json` under your config dir.
-- Verify `account_clients` and `domain_clients` map the requested email/domain to the intended client.
+- Verify `script_clients`, `account_clients`, and `domain_clients` map the request to the intended client.
 - Verify client `allowed_domains` includes the account domain.
 - Use `import_google_auth_client` and re-run auth if mappings are incomplete.
 

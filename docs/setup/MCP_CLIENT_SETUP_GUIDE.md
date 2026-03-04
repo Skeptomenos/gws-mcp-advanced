@@ -58,6 +58,10 @@ If one MCP instance must route two tenants to different OAuth clients, follow:
 
 - [Single-MCP Multi-Client Auth Setup](MULTI_CLIENT_AUTH_SETUP.md)
 
+## Service-Specific Setup
+
+- [Apps Script Setup](APPS_SCRIPT_SETUP.md) for Script API enablement, tool coverage, and runtime limitations.
+
 This flow uses `auth_clients.json` plus admin setup tools:
 1. `setup_google_auth_clients`
 2. `import_google_auth_client`

@@ -11,6 +11,7 @@ API_ENABLEMENT_LINKS: dict[str, str] = {
     "tasks.googleapis.com": "https://console.cloud.google.com/flows/enableapi?apiid=tasks.googleapis.com",
     "chat.googleapis.com": "https://console.cloud.google.com/flows/enableapi?apiid=chat.googleapis.com",
     "customsearch.googleapis.com": "https://console.cloud.google.com/flows/enableapi?apiid=customsearch.googleapis.com",
+    "script.googleapis.com": "https://console.cloud.google.com/flows/enableapi?apiid=script.googleapis.com",
 }
 
 
@@ -25,6 +26,7 @@ SERVICE_NAME_TO_API: dict[str, str] = {
     "Google Tasks": "tasks.googleapis.com",
     "Google Chat": "chat.googleapis.com",
     "Google Custom Search": "customsearch.googleapis.com",
+    "Google Apps Script": "script.googleapis.com",
 }
 
 
@@ -40,6 +42,8 @@ INTERNAL_SERVICE_TO_API: dict[str, str] = {
     "chat": "chat.googleapis.com",
     "customsearch": "customsearch.googleapis.com",
     "search": "customsearch.googleapis.com",
+    "appscript": "script.googleapis.com",
+    "script": "script.googleapis.com",
 }
 
 

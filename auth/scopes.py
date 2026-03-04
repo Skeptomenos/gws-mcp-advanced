@@ -62,6 +62,14 @@ TASKS_READONLY_SCOPE = "https://www.googleapis.com/auth/tasks.readonly"
 # Google Custom Search API scope
 CUSTOM_SEARCH_SCOPE = "https://www.googleapis.com/auth/cse"
 
+# Google Apps Script API scopes
+SCRIPT_PROJECTS_SCOPE = "https://www.googleapis.com/auth/script.projects"
+SCRIPT_PROJECTS_READONLY_SCOPE = "https://www.googleapis.com/auth/script.projects.readonly"
+SCRIPT_DEPLOYMENTS_SCOPE = "https://www.googleapis.com/auth/script.deployments"
+SCRIPT_DEPLOYMENTS_READONLY_SCOPE = "https://www.googleapis.com/auth/script.deployments.readonly"
+SCRIPT_PROCESSES_SCOPE = "https://www.googleapis.com/auth/script.processes"
+SCRIPT_METRICS_SCOPE = "https://www.googleapis.com/auth/script.metrics"
+
 # Base OAuth scopes required for user identification
 BASE_SCOPES = [USERINFO_EMAIL_SCOPE, USERINFO_PROFILE_SCOPE, OPENID_SCOPE]
 
@@ -97,6 +105,25 @@ TASKS_SCOPES = [TASKS_SCOPE, TASKS_READONLY_SCOPE]
 
 CUSTOM_SEARCH_SCOPES = [CUSTOM_SEARCH_SCOPE]
 
+APPS_SCRIPT_SCOPES = [
+    # APPS-04/05 least-privilege lock for Apps Script tool surface:
+    # - read project/content/version tools -> script.projects.readonly
+    # - mutating project/content/version/run tools -> script.projects
+    # - read deployments -> script.deployments.readonly
+    # - mutating deployments -> script.deployments
+    # - process listing -> script.processes
+    # - metrics -> script.metrics
+    # - Drive-backed standalone list/delete -> drive.readonly/drive.file
+    SCRIPT_PROJECTS_SCOPE,
+    SCRIPT_PROJECTS_READONLY_SCOPE,
+    SCRIPT_DEPLOYMENTS_SCOPE,
+    SCRIPT_DEPLOYMENTS_READONLY_SCOPE,
+    SCRIPT_PROCESSES_SCOPE,
+    SCRIPT_METRICS_SCOPE,
+    DRIVE_READONLY_SCOPE,
+    DRIVE_FILE_SCOPE,
+]
+
 # Tool-to-scopes mapping
 TOOL_SCOPES_MAP = {
     "gmail": GMAIL_SCOPES,
@@ -109,6 +136,7 @@ TOOL_SCOPES_MAP = {
     "slides": SLIDES_SCOPES,
     "tasks": TASKS_SCOPES,
     "search": CUSTOM_SEARCH_SCOPES,
+    "appscript": APPS_SCRIPT_SCOPES,
 }
 
 

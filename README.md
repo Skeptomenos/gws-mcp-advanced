@@ -6,7 +6,7 @@ Production-ready MCP server for Google Workspace.
 
 ## Why This Project
 
-- 10 service domains: Gmail, Drive, Calendar, Docs, Sheets, Chat, Forms, Slides, Tasks, Search
+- 11 service domains: Gmail, Drive, Calendar, Docs, Sheets, Chat, Forms, Slides, Tasks, Search, Apps Script
 - 100+ tools for read and write operations
 - Dry-run defaults for mutating operations
 - Strong Markdown rendering for Google Docs (kitchen-sink validated)
@@ -85,6 +85,7 @@ uvx google-workspace-mcp-advanced==1.0.2 --transport stdio
 Use one MCP entry with multiple OAuth clients (for example private + enterprise tenants) via:
 
 - `auth_clients.json` under `WORKSPACE_MCP_CONFIG_DIR`
+- deterministic routing by `script_clients`, `account_clients`, and `domain_clients`
 - setup tools: `setup_google_auth_clients`, `import_google_auth_client`
 - completion tool: `complete_google_auth`
 
@@ -130,6 +131,7 @@ Use repository-local execution when building or testing unreleased changes.
 | Slides | create presentations, batch updates |
 | Tasks | task lists and task lifecycle management |
 | Search | programmable search endpoint support |
+| Apps Script | project metadata/content, versions, deployments, processes, metrics, and safe-by-default mutators |
 
 ## Safety Model
 
@@ -176,11 +178,13 @@ If you previously ran the project as `gws-mcp-advanced`, follow:
 - Migration guide: [docs/setup/MIGRATING_FROM_GWS_MCP_ADVANCED.md](docs/setup/MIGRATING_FROM_GWS_MCP_ADVANCED.md)
 - Authentication model: [docs/setup/AUTHENTICATION_MODEL.md](docs/setup/AUTHENTICATION_MODEL.md)
 - Single-MCP multi-client auth setup: [docs/setup/MULTI_CLIENT_AUTH_SETUP.md](docs/setup/MULTI_CLIENT_AUTH_SETUP.md)
+- Apps Script setup and limitations: [docs/setup/APPS_SCRIPT_SETUP.md](docs/setup/APPS_SCRIPT_SETUP.md)
 - Claude Code setup: [docs/setup/CLAUDE_CODE_MCP_SETUP.md](docs/setup/CLAUDE_CODE_MCP_SETUP.md)
 - Cursor setup: [docs/setup/CURSOR_MCP_SETUP.md](docs/setup/CURSOR_MCP_SETUP.md)
 - OpenCode setup: [docs/setup/OPENCODE_MCP_SETUP.md](docs/setup/OPENCODE_MCP_SETUP.md)
 - Gemini CLI setup: [docs/setup/GEMINI_CLI_MCP_SETUP.md](docs/setup/GEMINI_CLI_MCP_SETUP.md)
 - Distribution/release guide: [docs/DISTRIBUTION_RELEASE.md](docs/DISTRIBUTION_RELEASE.md)
+- Release notes: [docs/RELEASE_NOTES.md](docs/RELEASE_NOTES.md)
 - Comparison with upstream: [docs/COMPARISON.md](docs/COMPARISON.md)
 
 Contributor docs live in `AGENTS.md` and `agent-docs/`.

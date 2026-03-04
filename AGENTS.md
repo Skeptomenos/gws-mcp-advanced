@@ -47,7 +47,7 @@ Before marking a task as complete, run these commands in order:
 2. `uv run ruff format .` - Must not modify files.
 3. `uv run pytest` - Must pass all tests.
 
-> ⚠️ **MCP TESTING REMINDER:** Before testing any MCP tool changes via OpenCode, remind the user to restart OpenCode. The MCP server runs as a subprocess and won't pick up code changes until OpenCode is restarted.
+> ⚠️ **MCP TESTING REMINDER:** Canonical MCP validation is performed in Convex (Codex-integrated runtime). Run tests directly in this environment; do not require OpenCode restart instructions for standard validation flow.
 
 ## 4. QUICK REFERENCE
 

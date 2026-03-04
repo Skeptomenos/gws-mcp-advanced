@@ -43,6 +43,7 @@ def _default_auth_clients_config() -> dict[str, Any]:
         "selection_mode": SELECTION_MODE_MAPPED_ONLY,
         "default_client": None,
         "oauth_clients": {},
+        "script_clients": {},
         "account_clients": {},
         "domain_clients": {},
     }
@@ -110,6 +111,22 @@ def _normalize_domain_map(domain_clients: dict[str, Any]) -> dict[str, str]:
     return normalized
 
 
+def _normalize_script_id(script_id: str) -> str:
+    normalized = (script_id or "").strip()
+    if not normalized:
+        raise AuthenticationError("script_id must be a non-empty string")
+    return normalized
+
+
+def _normalize_script_map(script_clients: dict[str, Any]) -> dict[str, str]:
+    normalized: dict[str, str] = {}
+    for script_id, client_key in script_clients.items():
+        if not isinstance(script_id, str) or not isinstance(client_key, str):
+            continue
+        normalized[_normalize_script_id(script_id)] = _normalize_client_key(client_key)
+    return normalized
+
+
 def _normalize_clients_map(oauth_clients: dict[str, Any]) -> dict[str, dict[str, Any]]:
     normalized: dict[str, dict[str, Any]] = {}
     for client_key, payload in oauth_clients.items():
@@ -148,22 +165,25 @@ def resolve_oauth_client_for_user(
     user_google_email: str | None,
     *,
     override_client_key: str | None = None,
+    script_id: str | None = None,
 ) -> OAuthClientSelection:
     """
     Resolve OAuth client for a user with deterministic precedence.
 
     Precedence:
     1. internal/admin override
-    2. account mapping
-    3. domain mapping
-    4. default client (only in non-mapped_only mode)
-    5. legacy env fallback (only when config is effectively unconfigured)
+    2. script mapping
+    3. account mapping
+    4. domain mapping
+    5. default client (only in non-mapped_only mode)
+    6. legacy env fallback (only when config is effectively unconfigured)
     """
     user_email: str | None = None
     user_domain: str | None = None
     if user_google_email:
         user_email = _normalized_email(user_google_email)
         user_domain = _extract_domain(user_email)
+    normalized_script_id = _normalize_script_id(script_id) if isinstance(script_id, str) and script_id.strip() else None
 
     raw_config, _ = ensure_auth_clients_config()
     selection_mode = str(raw_config.get("selection_mode", SELECTION_MODE_MAPPED_ONLY)).strip().lower()
@@ -174,6 +194,7 @@ def resolve_oauth_client_for_user(
         )
 
     oauth_clients = _normalize_clients_map(raw_config.get("oauth_clients", {}))
+    script_clients = _normalize_script_map(raw_config.get("script_clients", {}))
     account_clients = _normalize_email_map(raw_config.get("account_clients", {}))
     domain_clients = _normalize_domain_map(raw_config.get("domain_clients", {}))
     default_client = raw_config.get("default_client")
@@ -184,6 +205,9 @@ def resolve_oauth_client_for_user(
     if override_client_key:
         resolved_key = _normalize_client_key(override_client_key)
         source = "override"
+    elif normalized_script_id and normalized_script_id in script_clients:
+        resolved_key = script_clients[normalized_script_id]
+        source = "script_map"
     elif user_email and user_email in account_clients:
         resolved_key = account_clients[user_email]
         source = "account_map"
@@ -194,7 +218,7 @@ def resolve_oauth_client_for_user(
         resolved_key = default_client_key
         source = "default_client"
 
-    configured = bool(account_clients or domain_clients or _config_has_usable_profiles(oauth_clients))
+    configured = bool(script_clients or account_clients or domain_clients or _config_has_usable_profiles(oauth_clients))
 
     if resolved_key == "legacy-env":
         return _resolve_legacy_env_client()
@@ -204,7 +228,7 @@ def resolve_oauth_client_for_user(
             raise AuthenticationError(
                 "No OAuth client mapping found for this account and selection_mode=mapped_only is enforced. "
                 f"Add mapping for '{user_google_email}' in {get_auth_clients_config_path()} "
-                "(account_clients or domain_clients)."
+                "(script_clients, account_clients, or domain_clients)."
             )
         return _resolve_legacy_env_client()
 
@@ -273,6 +297,7 @@ def import_oauth_client_config(
     oauth_client_json_path: str,
     account_emails: list[str] | None = None,
     domains: list[str] | None = None,
+    script_ids: list[str] | None = None,
     set_default: bool = False,
     flow_preference: str = "auto",
 ) -> dict[str, Any]:
@@ -292,6 +317,7 @@ def import_oauth_client_config(
 
     config, _ = ensure_auth_clients_config()
     oauth_clients = _normalize_clients_map(config.get("oauth_clients", {}))
+    script_clients = _normalize_script_map(config.get("script_clients", {}))
     account_clients = _normalize_email_map(config.get("account_clients", {}))
     domain_clients = _normalize_domain_map(config.get("domain_clients", {}))
 
@@ -300,6 +326,9 @@ def import_oauth_client_config(
     )
     normalized_accounts = sorted(
         {_normalized_email(item) for item in (account_emails or []) if isinstance(item, str) and item.strip()}
+    )
+    normalized_script_ids = sorted(
+        {_normalize_script_id(item) for item in (script_ids or []) if isinstance(item, str) and item.strip()}
     )
 
     oauth_clients[normalized_client_key] = {
@@ -312,8 +341,11 @@ def import_oauth_client_config(
         account_clients[email] = normalized_client_key
     for domain in normalized_domains:
         domain_clients[domain] = normalized_client_key
+    for script_id in normalized_script_ids:
+        script_clients[script_id] = normalized_client_key
 
     config["oauth_clients"] = oauth_clients
+    config["script_clients"] = script_clients
     config["account_clients"] = account_clients
     config["domain_clients"] = domain_clients
     if set_default:
@@ -322,9 +354,10 @@ def import_oauth_client_config(
     destination_path = Path(get_auth_clients_config_path())
     atomic_write_json(str(destination_path), config)
     logger.info(
-        "Imported OAuth client '%s' into %s (accounts=%d, domains=%d, default=%s)",
+        "Imported OAuth client '%s' into %s (scripts=%d, accounts=%d, domains=%d, default=%s)",
         normalized_client_key,
         destination_path,
+        len(normalized_script_ids),
         len(normalized_accounts),
         len(normalized_domains),
         set_default,
@@ -334,6 +367,7 @@ def import_oauth_client_config(
         "config_path": str(destination_path),
         "client_key": normalized_client_key,
         "client_id": client_id,
+        "mapped_script_ids": normalized_script_ids,
         "mapped_accounts": normalized_accounts,
         "mapped_domains": normalized_domains,
         "set_default": set_default,

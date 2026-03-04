@@ -2,16 +2,16 @@
 
 ## Living Document Controls
 1. Status: `IN_IMPLEMENTATION`
-2. Last Updated (UTC): `2026-03-03T10:40:00Z`
+2. Last Updated (UTC): `2026-03-04T18:51:41Z`
 3. Canonical Path: `/Users/david.helmus/repos/ai-dev/_infra/gws-mcp-advanced/gws-mcp-advanced/agent-docs/roadmap/PLAN.md`
-4. Active Branch: `main`
+4. Active Branch: `codex/apps-script-support-v1`
 5. Local Task Board: `/Users/david.helmus/repos/ai-dev/_infra/gws-mcp-advanced/gws-mcp-advanced/agent-docs/roadmap/TASKS.md`
-6. Overall Progress: `87.5%` (`21/24` issues `Done`; `0/24` `In Progress`; `3/24` `Not Started`)
+6. Overall Progress: `87.1%` (`27/31` issues `Done`; `0/31` `In Progress`; `4/31` `Not Started`)
 7. Update Cadence:
    1. update this file after every completed issue ID (`SEC-*`, `SAFE-*`, `DIST-*`, etc.),
    2. update this file at the end of each implementation session,
    3. update this file before opening or merging any PR,
-   4. during active OpenCode/manual test loops, update this file immediately after each attempt result (`PASS`/`FAIL`/`BLOCKED`) and each local verification rerun.
+   4. during active Convex/manual test loops, update this file immediately after each attempt result (`PASS`/`FAIL`/`BLOCKED`) and each local verification rerun.
 8. Source-of-Truth Rule: if another planning file conflicts with this document, this document wins until reconciliation.
 
 ## Active Hotfix Track
@@ -24,7 +24,7 @@
 1. Status: `DONE`
 2. Priority: `P0` (required for enterprise + private coexistence in one MCP entry)
 3. Objective:
-   1. keep one MCP server config in OpenCode/Claude Code,
+   1. keep one MCP server config in Convex/Claude Code,
    2. allow account/domain-specific OAuth client routing inside that one MCP process,
    3. isolate credentials and sessions by `(oauth_client, user_email)`.
 4. Strategy baseline:
@@ -41,8 +41,8 @@
    1. `/Users/david.helmus/repos/ai-dev/_infra/gws-mcp-advanced/gws-mcp-advanced/agent-docs/AUTHENTICATION_GOGCLI_REVIEW.md`
 
 ### Temporary Fallback (Not Target End-State)
-1. Dual-MCP-entry tenant split remains a contingency workaround for immediate operations.
-2. It is explicitly not the target architecture and should be retired after `AUTH-02` closes.
+1. Dual-MCP-entry tenant split is now `RETIRED` as a standard path (recorded 2026-03-03) because `AUTH-02` is closed.
+2. It remains documented only as emergency incident fallback (manual, time-boxed, and explicitly non-default).
 
 ## Implementation Readiness Verdict
 1. Verdict: `YES`, preflight is complete and implementation is active.
@@ -65,6 +65,8 @@
 | Wave 4 | Autonomous MCP verification | 2026-03-02 to 2026-03-06 | Protocol + live lanes operational |
 | Wave 5 | Distribution infra | 2026-03-06 to 2026-03-07 | PyPI release workflow + uvx distribution path working |
 | Wave 6 | Distribution validation | 2026-03-07 to 2026-03-08 | uvx stable/pinned validation complete |
+| Wave 7 | Apps Script v1 | 2026-03-03 to 2026-03-10 | `APPS-01`..`APPS-06` closed with verification evidence |
+| Wave 8 | Smart-chip extensions | 2026-03-10 onward | `RM-05`..`RM-07` are either implemented or explicitly deferred with dated rationale |
 
 ## Issue Execution Tracker (Living)
 
@@ -94,8 +96,17 @@
 | DIST-03 | Done | Codex | codex/run-01-fastmcp-import-smoke | - | Deterministic pinned install and rollback guidance is documented in README + `docs/DISTRIBUTION_RELEASE.md`. | 2026-03-01 |
 | DIST-04 | Done | Codex | codex/run-01-fastmcp-import-smoke | - | npm provenance/auth path is de-scoped by product decision because npm/npx distribution is no longer in the release-critical path. | 2026-03-02 |
 | DIST-05 | Done | Codex | main | - | Canonical rename/migration hardening is complete: runtime/config defaults use `google-workspace-mcp-advanced`, legacy config path fallback is preserved, migration guide is published, and verification is green (`628 passed`, `3 skipped`). | 2026-03-02 |
+| APPS-01 | Done | Codex | codex/apps-script-support-v1 | - | APPS-01 closed: `get_script_project` foundation shipped (`gappsscript` package + manager/tool), runtime/auth/API wiring landed, targeted tests pass (`10 passed`), full gates pass (`ruff`, `format --check`, `pyright`, `pytest` => `658 passed, 3 skipped`), and Wave 7 regression checklist items passed (calendar/drive/gmail/docs/dry-run/auth-routing). | 2026-03-03 |
+| APPS-02 | Done | Codex | codex/apps-script-support-v1 | - | APPS-02 closed: Drive-backed `list_script_projects` + `delete_script_project` (`dry_run=True`) shipped with standalone-only limitation messaging; targeted tests pass (`16 passed`), full gates pass (`ruff`, `format --check`, `pyright`, `pytest` => `666 passed, 3 skipped`), Convex live checks validated list + delete preview against real Drive data, and auth flow now honors per-client `flow_preference`. | 2026-03-03 |
+| APPS-03 | Done | Codex | codex/apps-script-support-v1 | - | APPS-03 closed: implemented read tools (`get_script_content`, `list_deployments`, `list_versions`, `get_version`, `list_script_processes`, `get_script_metrics`) with strict DTO filter validation (`script_process_filter_json`, `user_process_filter_json`, `metrics_filter_json`) and deterministic unknown-key/enum rejection. Expanded appscript scope/tier mapping to reflect read-surface least privilege, targeted APPS tests pass (`36 passed`), and full gates pass (`ruff`, `format --check`, `pyright`, `pytest` => `686 passed, 3 skipped`). Live Script API manager probes in Convex validated content/deployments/processes/metrics paths. | 2026-03-03 |
+| APPS-04 | Done | Codex | codex/apps-script-support-v1 | - | APPS-04 closed: implemented mutators (`create_script_project`, `update_script_content`, `create_version`, `create_deployment`, `update_deployment`, `delete_deployment`, `run_script_function`) with default-safe `dry_run=True`, strict DTO validation for mutator payloads, appscript scope/tier expansion for mutating surface, and static dry-run policy lock extension. Targeted APPS tests pass (`59 passed`), dry-run checker passes, and full verification passes (`ruff`, `format --check`, `pyright`, `pytest` => `709 passed, 3 skipped`). Live Convex probe validated dry-run and explicit mutate paths for create/update content, versioning, deployment create/update/delete, and cleanup of created script assets; `run_script_function` mutate path returned `404 Requested entity was not found` on ephemeral probe scripts (environment/runtime characteristic, not a tool contract regression). | 2026-03-03 |
+| APPS-05 | Done | Codex | codex/apps-script-support-v1 | - | APPS-05 closed: least-privilege appscript scope lock is enforced (`script_projects_read` + Drive read/file for Drive-backed list/delete), appscript tier mappings are active in `core/tool_tiers.yaml`, policy tests landed (`tests/unit/auth/test_appscript_scopes.py`, `tests/unit/core/test_tool_tiers_appscript.py`, APPS wiring assertions), targeted APPS-05 tests pass (`23 passed`), and full gates pass (`ruff`, `format --check`, `pyright`, `pytest` => `673 passed, 3 skipped`). Wave-7 regression smoke passed in Convex for calendar/drive/gmail/docs markdown/dry-run; dual-tenant routing evidence is carried forward from the closed AUTH-02 runtime matrix. | 2026-03-03 |
+| APPS-06 | Done | Codex | codex/apps-script-support-v1 | - | APPS-06 closed: published Apps Script setup/limitations guide (`docs/setup/APPS_SCRIPT_SETUP.md`), updated README/docs index links, added release-note entry (`docs/RELEASE_NOTES.md`), and extended manual matrix with Wave-7 Apps Script rows executed in Convex (`AS-01`..`AS-07` in `agent-docs/testing/OPENCODE_MCP_MANUAL_TESTING.md`). Full verification is green (`ruff`, `format --check`, `pyright`, `pytest` => `709 passed, 3 skipped`) and Convex regression smoke remains green for calendar/drive/gmail/docs markdown/dry-run. | 2026-03-03 |
+| APPS-07 | Not Started | Codex | codex/apps-script-support-v1 | - | Deferred by product decision (non-blocking): cross-project `scripts.run` execution UX hardening will be resumed only on explicit pull-forward. Current behavior/limitations remain documented in setup/troubleshooting docs. | 2026-03-04 |
 
 ## Summary
+Execution environment note (2026-03-03): active MCP validation is performed in Convex. Historical OpenCode references below are retained as archival evidence.
+
 This plan follows the Codex ExecPlan model and is scoped to **actionable current issues**, sequenced in **risk-first waves**, with a **full MCP harness + live smoke testing** strategy using `david@helmus.me` in **full-write mode**.
 
 The plan is **decision-complete** for:
@@ -127,7 +138,7 @@ The plan resolves:
 ## Baseline (Current Reality to Plan Against)
 1. Lint: `ruff check` passes.
 2. Formatter is enforced in CI with `--check`, and local verification is now green.
-3. Tests: `pytest` passes (`648 passed`, `3 skipped`), coverage remains in the same approximate range.
+3. Tests: `pytest` passes (`709 passed`, `3 skipped`), coverage remains in the same approximate range.
 4. Runtime regression in `fastmcp_server.py` import path has been fixed in `RUN-01`.
 5. `SEC-01` implemented: unverified JWT identity extraction is denied by default; break-glass override is explicit and logged.
 6. `SEC-02` implemented: credential and session JSON persistence now use centralized secure atomic writes with restrictive permissions.
@@ -154,10 +165,19 @@ The plan resolves:
 | RM-04 | P3 | Images are implemented but insufficiently verified | Add deterministic tests for image insertion paths and structure assertions | `gdocs/markdown_parser.py`, integration/live tests |
 | DIST-00 | P1 | Distribution package naming mismatch across docs/plans | Standardize to `google-workspace-mcp-advanced` for PyPI/uvx examples and release automation | `PLAN.md`, `README.md`, `docs/DISTRIBUTION_RELEASE.md`, release metadata |
 | DIST-05 | P1 | Legacy runtime/config naming drift (`gws-mcp-advanced`) persists in defaults/docs/log output | Rename canonical runtime/config identifiers to `google-workspace-mcp-advanced`, add startup migration from legacy config dir, and publish explicit migration steps for existing users | `auth/config.py`, `auth/credential_types/store.py`, `core/managers.py`, `core/utils.py`, `README.md`, `docs/setup/*` |
+| APPS-01 | P1 | Apps Script service/module foundation missing | Add `gappsscript` package skeleton + manager + service registration + one initial read tool and tests | `gappsscript/*`, `main.py`, `auth/service_decorator.py` |
+| APPS-02 | P1 | Script project list/delete API assumptions can drift from API reality | Lock list/delete to Drive-backed behavior for standalone script files only; enforce explicit limitation text + tests | `gappsscript/apps_script_manager.py`, `gappsscript/apps_script_tools.py`, tests |
+| APPS-03 | P2 | Read surface lacks deterministic contracts for process/metrics filters | Define/validate DTO-backed JSON filter contracts and strict enum/key rejection with actionable errors | `gappsscript/models.py`, `gappsscript/apps_script_tools.py`, tests |
+| APPS-04 | P1 | Mutating Apps Script tools can violate default-safe mutation policy | Implement mutators with `dry_run=True` default, deterministic preview, and explicit `dry_run=False` execution paths | `gappsscript/apps_script_tools.py`, tests, dry-run checker |
+| APPS-05 | P1 | Least-privilege scope mapping is ambiguous for mixed Drive+Script operations | Enforce per-tool scope lock matrix + mixed-service decorators/tests to prevent over-scoped auth | `auth/scopes.py`, `auth/service_decorator.py`, `gappsscript/apps_script_tools.py`, tests |
+| APPS-06 | P2 | User/operator rollout docs for Apps Script are not yet execution-ready | Publish setup/usage/limitations docs + manual test matrix + release note entry | `README.md`, `docs/setup/APPS_SCRIPT_SETUP.md`, `agent-docs/testing/OPENCODE_MCP_MANUAL_TESTING.md` |
+| APPS-07 | P3 | Cross-project `scripts.run` onboarding/diagnostics UX is not productized for broad multi-script setups | Keep Wave-7 runtime behavior documented and defer execution UX hardening (`deployment_id` override/preflight diagnostics/scalable client-mapping onboarding) until explicit pull-forward | `gappsscript/apps_script_tools.py`, `docs/setup/APPS_SCRIPT_SETUP.md`, roadmap trackers |
 
 ## Open Roadmap Items Included
 1. PSE-backed `search_custom` enablement remains intentionally deferred (`OP-06`) by product decision.
 2. Smart-chip extension roadmap is now tracked as `RM-05`, `RM-06`, `RM-07` (not started).
+3. Apps Script v1 rollout (`APPS-01`..`APPS-06`) is complete and closed with evidence.
+4. Apps Script cross-project execution UX hardening (`APPS-07`) is intentionally deferred (non-blocking) until product pull-forward.
 
 ## Execution Waves (Risk-First)
 
@@ -196,6 +216,82 @@ The plan resolves:
 3. Build feature verification suite for Markdown and tool behavior.
 4. Add OpenCode headless lane using `opencode serve` and SDK client automation.
 5. Integrate into a repeatable command matrix so the agent can run it end-to-end.
+
+## Wave 5: Distribution Infrastructure (Day 8-9, closed)
+1. Keep PyPI release workflow (`release-pypi.yml`) green on `main`.
+2. Keep distribution guard scripts green (`check_distribution_scope`, version-coupling checks).
+3. Preserve uvx-first distribution contract as canonical release path.
+
+## Wave 6: Distribution Validation (Day 9-10, closed)
+1. Validate stable and pinned uvx runtime startup paths.
+2. Keep rollback/pinning runbook updated and verified.
+3. Keep distribution lane evidence recorded in verification table/changelog.
+
+## Wave 7: Apps Script v1 Execution (Day 6-13, active)
+1. Execute `APPS-01`..`APPS-06` in this locked order with one-tool/one-feature PR discipline:
+   1. `APPS-01`
+   2. `APPS-02`
+   3. `APPS-05` (policy gate before broad surface expansion)
+   4. `APPS-03`
+   5. `APPS-04`
+   6. `APPS-06`
+2. Enforce least-privilege scope lock per tool before broadening surface (`APPS-05` early gate).
+3. Keep Drive-backed standalone list/delete limitations explicit in tool outputs and docs.
+4. Apply full verification protocol after every slice (`ruff`, `format --check`, `pyright`, `pytest`).
+5. Update tracker row + changelog entry at every slice transition.
+
+### Wave 7 Ordered Steps with Test Section (Required After Each Step)
+1. Step `APPS-01` (foundation + first read tool):
+   1. implementation: add `gappsscript` package scaffold, register `appscript` service/scope wiring, and deliver `get_script_project`.
+   2. test section:
+      1. run targeted APPS-01 tests (foundation + first read tool),
+      2. run full verification protocol (`uv run ruff check .`, `uv run ruff format --check .`, `uv run pyright --project pyrightconfig.json`, `uv run pytest`),
+      3. run Wave 7 existing-feature regression checklist.
+2. Step `APPS-02` (Drive-backed standalone list/delete):
+   1. implementation: deliver `list_script_projects` + `delete_script_project` (with `dry_run=True`) and explicit container-bound exclusion messaging.
+   2. test section:
+      1. run targeted APPS-02 tests (Drive-backed list/delete + limitation behavior),
+      2. run full verification protocol,
+      3. run Wave 7 existing-feature regression checklist.
+3. Step `APPS-05` (early policy gate):
+   1. implementation: lock per-tool least-privilege scope mapping, add mixed-service auth routing tests, and verify tier filtering.
+   2. test section:
+      1. run targeted APPS-05 tests (scope lock + mixed-service auth + tier filtering),
+      2. run full verification protocol,
+      3. run Wave 7 existing-feature regression checklist.
+4. Step `APPS-03` (remaining read surface):
+   1. implementation: deliver read tools for content/deployments/versions/processes/metrics with strict DTO filter validation.
+   2. test section:
+      1. run targeted APPS-03 tests (read/filter DTO validation + pagination behavior),
+      2. run full verification protocol,
+      3. run Wave 7 existing-feature regression checklist.
+5. Step `APPS-04` (mutating Script surface):
+   1. implementation: deliver mutators with `dry_run=True` defaults and deterministic preview/execute paths.
+   2. test section:
+      1. run targeted APPS-04 tests (mutator default-safe + explicit mutation paths),
+      2. run full verification protocol,
+      3. run Wave 7 existing-feature regression checklist.
+6. Step `APPS-06` (docs/manual/release closeout):
+   1. implementation: publish setup/docs/manual matrix/release note updates.
+   2. test section:
+      1. run docs/manual-matrix verification checks,
+      2. run full verification protocol,
+      3. run Wave 7 existing-feature regression checklist,
+      4. only then mark `APPS-01`..`APPS-06` complete.
+
+### Wave 7 Mandatory Existing-Feature Regression Checklist (Run After Every APPS Slice)
+1. Calendar read smoke: `list_calendars` returns data for authenticated tenant.
+2. Drive read smoke: `list_drive_items` works without new auth/scope prompts.
+3. Gmail read smoke: `search_gmail_messages` returns data without auth regressions.
+4. Docs markdown smoke: create a minimal markdown doc and verify headings/list rendering is intact.
+5. Dry-run contract smoke: one representative mutator per non-AppScript domain still defaults to safe preview (`dry_run=True`).
+6. Auth routing smoke: private + enterprise tenant requests still resolve the correct OAuth client mapping (no cross-tenant fallback).
+7. Gate rule: if any item fails, do not advance APPS slice status to `Done`; log defect + mitigation in changelog and tracker.
+
+## Wave 8: Smart-Chip Extensions (Future / backlog)
+1. Keep `RM-05`..`RM-07` non-blocking for current release scope.
+2. Execute only after Wave 7 closure unless product priority changes.
+3. If activated, split into atomic sub-issues and update schedule/tracker before coding.
 
 ## Public API / Interface / Type Changes
 
@@ -374,6 +470,10 @@ The plan resolves:
 7. `DIST-00` is closed: docs, release workflows, and examples all use `google-workspace-mcp-advanced`.
 8. OpenCode headless SDK lane (`OPC-01`) is operational with spawn, health check, prompt execution, and deterministic teardown.
 9. OpenCode `OP-70` (kitchen-sink markdown fixture from `tests/manual/kitchen_sink.md`) is `PASS` on current HEAD with visual checklist evidence before merge/push.
+10. Apps Script execution track `APPS-01`..`APPS-06` is closed with evidence in tracker + verification table.
+11. Apps Script tools enforce least-privilege scope mapping exactly as locked in the per-tool matrix.
+12. Apps Script user and operator docs are published and linked (setup, limitations, manual test rows).
+13. Wave 7 existing-feature regression checklist passes for every closed APPS slice with evidence recorded.
 
 ## Assumptions and Defaults (Locked)
 1. Scope: actionable current issues only.
@@ -421,7 +521,7 @@ The plan resolves:
 ## Update Protocol (Required)
 1. On every issue transition (`Not Started` -> `In Progress` -> `Blocked`/`Done`), update the row in `Issue Execution Tracker (Living)`.
 2. On every implementation session end:
-   1. update `Last Updated: $(date -u +"%Y-%m-%d")
+   1. update `Last Updated (UTC)` with ISO-8601 UTC timestamp (example: `$(date -u +"%Y-%m-%dT%H:%M:%SZ")`),
    2. append one entry to `Execution Changelog`,
    3. update `Current Focus` in `Session Handoff`.
 3. On every PR:
@@ -443,6 +543,7 @@ The plan resolves:
 
 | Date (UTC) | Scope | Commands | Result | Notes |
 |---|---|---|---|---|
+| 2026-03-04 | APPS-07 deferment documentation sync | `uv run ruff check . && uv run ruff format --check . && uv run pytest` | Pass | Documentation update only; full verification remains green (`718 passed`, `3 skipped`; `162 files already formatted`) |
 | 2026-03-03 | DIST-01 release gate recovery | `uv run ruff check . && uv run ruff format --check . && uv run pyright --project pyrightconfig.json && uv run pytest -q` | Pass | Fixed release-blocking Pyright/type issues (`648 passed`, `3 skipped`; `0` pyright errors) |
 | 2026-03-03 | DIST-01 publish verification (`main`) | `gh workflow run release-pypi.yml -f version=1.0.2` + `gh run watch 22618871138 --exit-status` | Pass | `verify`, `build`, and `publish` jobs all green on run `22618871138` (head `28509fc`) |
 | 2026-03-03 | AUTH-01 release installability (`WS-06.5`) | `uvx --from google-workspace-mcp-advanced==1.0.1 google-workspace-mcp-advanced --help` | Pass | Published package resolves and launches via `uvx` |
@@ -563,13 +664,13 @@ The plan resolves:
 | 2026-02-28 | Keep OpenCode live lifecycle smoke opt-in (`OPENCODE_SMOKE_LIVE=1`) | Preserve deterministic local validation of prompt execution/teardown without forcing model/provider credentials in default test runs | OPC-01, QUAL-02 |
 
 ## Session Handoff (Living)
-1. Current Focus: `Auth release readiness and rollout documentation`
+1. Current Focus: `Wave 8 backlog execution planning (RM-05..RM-07) + APPS-07 deferred hold state`
 2. Next 3 Actions:
-   1. prepare release notes/version bump for auth stabilization + single-MCP multi-client rollout,
-   2. optionally improve `complete_google_auth` messaging when callback server already consumed OAuth state,
-   3. run post-release smoke on pinned package version and archive evidence.
+   1. prepare `RM-05` execution slice (native checklist mode) with strict regression plan,
+   2. keep Convex-first live verification evidence protocol for future feature slices,
+   3. keep `APPS-07` in deferred state until explicit product pull-forward; when resumed, start with a design slice for scalable cross-project execution onboarding (not per-script manual churn).
 3. Active Blockers:
-   1. None for auth track closure.
+   1. None currently.
 
 ## Execution Changelog (Living)
 1. 2026-02-27: Promoted `PLAN.md` to canonical living execution doc; added readiness verdict, wave schedule, issue tracker, update protocol, evidence log, decision log, and session handoff.
@@ -658,3 +759,219 @@ The plan resolves:
 84. 2026-03-03: Ingested OpenCode runtime matrix closeout: OP-74 PASS (private+enterprise routed in one MCP entry with distinct client behavior) and OP-76 PASS (persistence proven by `list_calendars` success without re-auth prompts: private `8` calendars, enterprise `15` calendars). Auth tracks `AUTH-01` and `AUTH-02` are now closed.
 85. 2026-03-03: Reproduced `Release PyPI` failure (`22617048674`) and fixed two release-gate type defects in `auth/oauth21_session_store.py` (protocol-compatible `store_session` signature and typed stats aggregation), then revalidated local release gate (`ruff`, `format --check`, `pyright`, `pytest`: `648 passed`, `3 skipped`).
 86. 2026-03-03: Dispatched and watched `release-pypi.yml` from `main` after fix (`22618871138`, head `28509fc`); all jobs passed (`verify`, `build`, `publish`), confirming PyPI release lane is healthy on current mainline.
+87. 2026-03-03: Performed focused critical review pass on Apps Script plan and patched implementation blockers: corrected Script API method assumptions (`list`/`delete` now explicitly Drive-backed), documented standalone vs container-bound limitations, added mixed-service scope/decorator contract (`require_multiple_services`) for Drive-backed operations, and made process/metrics filter contracts decision-complete with explicit validation and test requirements.
+88. 2026-03-03: Reconciled external critical-plan feedback into the canonical plan: fixed malformed update-protocol timestamp template, retired stale auth fallback state after `AUTH-02` closure, moved session handoff to Apps Script execution, added `APPS-01..APPS-06` issue IDs to tracker/register with corrected progress math, replaced broad delivery bundles with one-tool/one-feature slices, and locked per-tool least-privilege scope mapping.
+89. 2026-03-03: Synchronized secondary trackers with canonical Apps Script scope changes to prevent drift (`agent-docs/roadmap/STATUS.md`, `agent-docs/roadmap/TASKS.md`): branch/focus metadata aligned, `APPS-01..APPS-06` queued in task board, and smart-chip backlog shifted to Wave 8 to avoid wave ID collision.
+90. 2026-03-03: Closed second critical consistency pass from review feedback by adding Wave 8 to schedule (matching smart-chip backlog references), defining explicit execution sections for Waves 5-8 (including active Wave 7 Apps Script protocol), and extending Definition-of-Done with `APPS-*` completion and least-privilege/doc publication criteria.
+91. 2026-03-03: Synced `agent-docs/roadmap/STATUS.md` wave table to include Wave 8 smart-chip backlog row so dashboard numbering remains consistent with canonical plan schedule.
+92. 2026-03-03: Added a mandatory per-slice existing-feature regression checklist for Wave 7 (`APPS-*`) and bound it to Definition-of-Done so Apps Script rollout cannot regress existing Calendar/Drive/Gmail/Docs/auth behavior silently.
+93. 2026-03-03: Mirrored the Wave 7 regression checklist into `agent-docs/roadmap/TASKS.md` and updated `agent-docs/roadmap/STATUS.md` focus metadata so operational execution and dashboard views enforce the same gate.
+94. 2026-03-03: Added explicit interleaved test steps between every Wave 7 Apps Script slice (`APPS-01`..`APPS-06`) in both plan and task board so execution is strictly implement -> targeted tests -> full verification -> regression gate before advancing.
+95. 2026-03-03: Locked the Wave 7 APPS execution order to `APPS-01` -> `APPS-02` -> `APPS-05` -> `APPS-03` -> `APPS-04` -> `APPS-06` and added a required test section after each step in `PLAN.md` so every transition has explicit targeted tests, full verification, and regression-gate evidence.
+96. 2026-03-03: Closed pre-implementation readiness doc fixes by (a) correcting Wave 7 regression checklist tool names to code-truth (`list_drive_items`, `search_gmail_messages`), (b) aligning task-board gate sequencing to the locked APPS order, and (c) reconciling Apps Script spec scope/tier/phase details with canonical Wave 7 execution.
+97. 2026-03-03: Advanced `APPS-05` implementation by enforcing least-privilege appscript scope lock (`script_projects_read` + Drive read/file for Drive-backed tools), adding appscript tool-tier mappings and dedicated policy tests, and re-running full verification (`ruff`, `format --check`, `pyright`, `pytest` => `673 passed`, `3 skipped`); Convex regression checks for calendar/drive/gmail passed and the remaining closure gate is one-time callback consent for live `get_script_project`.
+98. 2026-03-03: Completed Convex callback authorization flow and closed `APPS-05` regression evidence (calendar/drive/gmail/docs markdown/dry-run smoke pass; dual-tenant routing coverage carried forward from AUTH-02 runtime matrix). Live `get_script_project` now fails with external `SERVICE_DISABLED` because `script.googleapis.com` is not enabled for OAuth project `684416038148`; this is tracked as an environment dependency for APPS live Script API validation, not a code defect.
+99. 2026-03-03: Confirmed external dependency resolution for Script API access (`script.googleapis.com` enabled for OAuth project `684416038148`): live `get_script_project` now succeeds in Convex for script `127dMAUctpUu0-ReHWFMtt4T5HWNfzfEH-m0a-7sDzEzSskTecvMvK2xu`.
+100. 2026-03-03: Closed `APPS-03` by implementing Apps Script read-surface tools (`get_script_content`, `list_deployments`, `list_versions`, `get_version`, `list_script_processes`, `get_script_metrics`), adding strict Pydantic filter contracts (`script_process_filter_json`, `user_process_filter_json`, `metrics_filter_json`) with unknown-key/enum rejection tests, expanding least-privilege appscript scope/tier mapping for read tools, and re-running full verification (`ruff`, `format --check`, `pyright`, `pytest` => `686 passed`, `3 skipped`). Convex regression smoke remains green and live manager probes validated content/deployments/processes/metrics paths.
+101. 2026-03-03: Closed `APPS-04` by implementing mutating Apps Script tools (`create_script_project`, `update_script_content`, `create_version`, `create_deployment`, `update_deployment`, `delete_deployment`, `run_script_function`) with `dry_run=True` defaults, extending static dry-run checker coverage, and updating appscript scope/tier policy for mutation support. Resolved live API contract defects discovered during Convex probe (`create_deployment` requires top-level payload + non-zero `versionNumber`; `update_deployment` requires wrapped `deploymentConfig`), added regression tests for these request-shape contracts, re-ran full verification (`ruff`, `format --check`, `pyright`, `pytest` => `709 passed`, `3 skipped`), and executed end-to-end live mutation probe with cleanup (create/update content, version create, deployment create/update/delete, script trash cleanup). `run_script_function` mutate call on ephemeral probe scripts returned `404 Requested entity was not found`, recorded as environment/runtime behavior outside APPS-04 code-contract scope.
+102. 2026-03-03: Closed `APPS-06` by publishing Apps Script rollout documentation and release artifacts: added `docs/setup/APPS_SCRIPT_SETUP.md`, added `docs/RELEASE_NOTES.md` (Apps Script v1 entry), updated `README.md` + `docs/INDEX.md` + setup hub links, and extended manual testing matrix with Convex-executed Apps Script rows (`AS-01`..`AS-07`) including live evidence for read/mutate paths and cleanup. Re-ran full verification (`ruff`, `format --check`, `pyright`, `pytest` => `709 passed`, `3 skipped`) and re-validated Convex regression smoke (`list_calendars`, `list_drive_items`, `search_gmail_messages`, `create_doc` markdown smoke, `create_event` dry-run smoke).
+103. 2026-03-03: Follow-up APPS hotfix after live validation: fixed `list_script_processes` enum serialization bug by switching filter DTO export to JSON mode (`model_dump(..., mode=\"json\")`) so Script API receives raw enum values (e.g., `COMPLETED`) instead of `ProcessStatus.COMPLETED`; added regression assertion in `tests/unit/tools/test_apps_script_tools.py` and re-ran full verification (`uv run ruff check .`, `uv run ruff format .`, `uv run pytest` => `711 passed`, `3 skipped`).
+104. 2026-03-03: Re-ran full Convex Apps Script matrix against target script `127dMAUctpUu0-ReHWFMtt4T5HWNfzfEH-m0a-7sDzEzSskTecvMvK2xu` plus temporary mutate-cycle script: `29/30` checks passing. Validated fixes: script/user process listing now succeeds and `update_script_content` accepts get-content style files with extra metadata. Remaining open runtime gate: `run_script_function` with `dry_run=False` still returns Script API `404 Requested entity was not found` on ephemeral scripts despite create/update/version/deployment success, indicating environment/runtime execution prerequisites beyond current tool contract.
+105. 2026-03-03: Closed APPS execution diagnostics gap for `run_script_function`: reproduced failure on user script (`127d...`) and confirmed runtime preconditions (404/403 transition after enabling `executionApi.access`). Implemented tool-level precondition handling for Script API `403/404` with actionable guidance (executionApi, version/deployment, one-time editor consent), added regression test coverage, and re-ran full verification (`uv run ruff check .`, `uv run ruff format .`, `uv run pytest` => `712 passed`, `3 skipped`).
+106. 2026-03-03: Applied functional execution-ID resolution for `run_script_function` non-dev path: when `dev_mode=False`, tool now resolves and uses latest `EXECUTION_API` deployment ID instead of raw project ID to avoid avoidable NOT_FOUND behavior. Live retest on target script after user consent/deploy changed non-dev result from 404 to 403 (`PERMISSION_DENIED`), confirming ID-resolution fix landed while a remaining external permission gate persists. Added regression coverage for deployment-ID selection and fallback behavior; full verification remains green (`uv run ruff check .`, `uv run ruff format .`, `uv run pytest` => `712 passed`, `3 skipped`).
+107. 2026-03-03: Performed post-consent live execution retest against target script and fresh minimal probe scripts. Results are now consistent: both dev/non-dev execution paths fail with `403 PERMISSION_DENIED` (non-dev no longer fails with avoidable 404 once execution-ID resolution is applied), indicating residual external execution permission constraints beyond MCP code path. Re-ran full verification after patch (`uv run ruff check .`, `uv run ruff format .`, `uv run pytest` => `713 passed`, `3 skipped`).
+108. 2026-03-03: Reviewed official Apps Script API docs and cross-validated runtime behavior: `scripts.run` method reference now specifies path parameter `deploymentId` and explicitly states `403 PERMISSION_DENIED` indicates caller/script Cloud project mismatch. Live probes against project ID and both API executable deployment IDs (`AKfycbwYY...`, `AKfycbw46...`) all return `403 PERMISSION_DENIED`, aligning with docs and confirming remaining unblock is Cloud project alignment for execution API, not MCP transport/tool wiring.
+109. 2026-03-03: Re-ran live probes using user-confirmed execution identifiers (`deploymentId=AKfycbwYY_HQPlXxTt8CKxYNrnzATopke_cdXHmF18VfZGgoapWoEs0NDKKPiDs1OF38mfFkeg`, API executable endpoint script ID `AKfycbw46UjH2FT0voBOgAWjjlbTGS7aHyVyZd70wCMxXDR16uyEN6FYvUG3vLI_Cn_5DRDHDw`). Metadata/content/deployments reads are healthy, while execution calls still fail with Script API `403 PERMISSION_DENIED`; this reproduces the remaining gate on exact user-provided IDs and confirms MCP run-path targeting is no longer the blocker.
+110. 2026-03-03: Captured next Apps Script capability candidates from official REST reference for post-v1 hardening: (a) add explicit `deployment_id` override input for `run_script_function` (while keeping auto-resolution), (b) add deployment entry-point diagnostics surfacing `executionApi.entryPointConfig.access`/web-app `executeAs`/`access`, and (c) add a dedicated execution-readiness/preflight tool that validates deployment type + access policy and flags likely Cloud-project mismatch before attempting `scripts.run`.
+111. 2026-03-04: Re-validated execution using corrected API executable deployment ID `AKfycbw46UjH2FT0voBOgAWjjlbTGS7aHyVyZd70wCMxXDR16uyEN6FYvUG3vLI_Cn_5DRDHDw` (user-provided mismatch correction). Live `projects.deployments.get` confirms version `5` and entry point `EXECUTION_API` with access `MYSELF`; direct `scripts.run` against this deployment ID still returns `403 PERMISSION_DENIED` for both `dev_mode=False/True`. This confirms identifier mismatch is resolved and the remaining gate is execution permission/project-alignment policy. Library URL (`.../d/127d.../5`) aligns with script ID+version lineage but is not used as an execution target by `scripts.run`.
+112. 2026-03-04: Implemented clean script-aware OAuth routing for Apps Script tools (no account-level mapping flips): added `script_clients` support to `auth_clients.json` resolution precedence (`override -> script -> account -> domain -> default`), wired script-aware client override through decorator auth flow (`require_google_service`/`require_multiple_services`) and downstream OAuth2/OAuth2.1 service acquisition, and extended admin import tooling with `mapped_script_ids` (`import_google_auth_client`). Updated setup/auth/apps-script docs to describe script mapping and execution troubleshooting. Verification is fully green: targeted auth tests (`28 passed`), `uv run ruff check .`, `uv run ruff format .`, `uv run pyright --project pyrightconfig.json` (`0 errors`), and full `uv run pytest` (`718 passed`, `3 skipped`).
+113. 2026-03-04: Applied product deferral decision for cross-project Apps Script execution UX hardening as formal roadmap item `APPS-07` (non-blocking). Reconciled canonical tracker fields (`PLAN.md`, `TASKS.md`, `STATUS.md`) and setup docs with explicit resume criteria so this can be pulled forward later without rediscovery.
+
+## Apps Script Support (Full v1) — Decision-Complete Plan
+
+### Summary
+Implement first-class Google Apps Script support as a new `gappsscript` service with full v1 scope (read + mutate + execution + deployment + versioning + metrics), aligned to repo standards:
+1. async-only tools
+2. decorator safety model
+3. `dry_run=True` defaults on mutators
+4. strong validation/testing/docs
+5. practical `clasp` interoperability
+
+### Branch and Delivery Strategy
+1. Feature branch: `codex/apps-script-support-v1`.
+2. Delivery rule: one tool or one infra primitive per PR slice (no broad bundled "full read/mutate surface" PRs).
+3. Planned atomic slices (execution order):
+   1. `APPS-01A`: scaffold `gappsscript` module + service registration + manager wiring.
+   2. `APPS-01B`: `get_script_project` read tool + unit tests.
+   3. `APPS-02A`: `list_script_projects` (Drive-backed standalone listing) + limitation text + tests.
+   4. `APPS-02B`: `delete_script_project` (Drive-backed standalone delete, `dry_run=True`) + tests.
+   5. `APPS-05A`: enforce least-privilege scope matrix + mixed-service auth tests + tier filtering updates.
+   6. `APPS-03A`: `get_script_content` (+ optional `version_number`) + tests.
+   7. `APPS-03B`: deployments and versions read tools (`list_deployments`, `list_versions`, `get_version`) + tests.
+   8. `APPS-03C`: process and metrics read tools with strict DTO filter validation + tests.
+   9. `APPS-04A`: create/update content mutators (`create_script_project`, `update_script_content`) + dry-run tests.
+   10. `APPS-04B`: deployment/version mutators (`create_deployment`, `update_deployment`, `delete_deployment`, `create_version`) + dry-run tests.
+   11. `APPS-04C`: `run_script_function` + parameter parsing/error tests.
+   12. `APPS-06A`: helper/docs/manual matrix (`generate_trigger_code`, `generate_clasp_helper`, setup/testing docs).
+4. Quality gates per slice:
+   1. `uv run ruff check .`
+   2. `uv run ruff format --check .`
+   3. `uv run pyright --project pyrightconfig.json`
+   4. `uv run pytest`
+
+### Locked Decisions
+1. Scope: Full Spec v1
+2. `run_script_function` tier: extended
+3. Include full `clasp` helper tool in v1 (no local file writes)
+4. Delivery granularity is hard-locked to one-tool/one-feature PR slices.
+
+### Public API / Interface Changes
+1. New package:
+   1. `gappsscript/__init__.py`
+   2. `gappsscript/models.py`
+   3. `gappsscript/apps_script_manager.py`
+   4. `gappsscript/apps_script_tools.py`
+2. `main.py`:
+   1. add `"appscript"` to `--tools` choices
+   2. add module import mapping
+3. `auth/scopes.py`:
+   1. add script scopes (`script.projects`, `script.projects.readonly`, `script.deployments`, `script.deployments.readonly`, `script.processes`, `script.metrics`)
+   2. keep Drive scopes in scope map usage for Drive-backed Apps Script operations (`list_script_projects`, `delete_script_project`)
+   3. map `"appscript"` in `TOOL_SCOPES_MAP` for Script API operations
+4. `auth/service_decorator.py`:
+   1. add service config: `{"service": "script", "version": "v1"}`
+   2. add scope aliases: `script_projects`, `script_projects_read`, `script_deployments`, `script_deployments_read`, `script_processes`, `script_metrics`
+   3. use `@require_multiple_services(...)` on tools that need both Drive + Script semantics
+5. `core/tool_tiers.yaml`:
+   1. add `appscript` core/extended/complete entries
+   2. place `run_script_function` in `extended`
+
+### API Reality (Validated)
+1. Apps Script `projects` resource supports: `create`, `get`, `getContent`, `updateContent`, `getMetrics` (no native `list` or `delete`).
+2. `list_script_projects` and `delete_script_project` will be implemented as Drive-backed operations against Apps Script file MIME type (`application/vnd.google-apps.script`) for standalone projects.
+3. Container-bound scripts are out of Drive listing/deletion scope; this limitation must be explicit in tool responses and docs.
+4. Process APIs:
+   1. `processes.list` supports `userProcessFilter`.
+   2. `processes.listScriptProcesses` supports `scriptId` + `scriptProcessFilter`.
+5. Metrics API:
+   1. `projects.getMetrics` requires `metricsGranularity`.
+   2. optional `metricsFilter` supports deployment-based filtering.
+
+### Least-Privilege Scope Lock (Mandatory)
+1. Per-tool scope mapping is locked; requesting broader aliases than listed below is treated as a policy regression under `APPS-05`.
+2. Mapping matrix:
+
+| Tool | Service(s) | Required scope aliases (only) | Policy note |
+|---|---|---|---|
+| `list_script_projects` | Drive | `drive_read` | Drive-backed listing of standalone Apps Script files only |
+| `delete_script_project` | Drive | `drive_file` | Drive-backed deletion path, `dry_run=True` default |
+| `get_script_project` | Script | `script_projects_read` | Read project metadata |
+| `get_script_content` | Script | `script_projects_read` | Read project content/version |
+| `list_deployments` | Script | `script_deployments_read` | Read deployment inventory |
+| `list_versions` | Script | `script_projects_read` | Read version list |
+| `get_version` | Script | `script_projects_read` | Read single version |
+| `list_script_processes` | Script | `script_processes` | Read process executions |
+| `get_script_metrics` | Script | `script_metrics` | Read aggregated metrics |
+| `create_script_project` | Script | `script_projects` | Mutation, `dry_run=True` default |
+| `update_script_content` | Script | `script_projects` | Mutation, `dry_run=True` default |
+| `create_deployment` | Script | `script_deployments` | Mutation, `dry_run=True` default |
+| `update_deployment` | Script | `script_deployments` | Mutation, `dry_run=True` default |
+| `delete_deployment` | Script | `script_deployments` | Mutation, `dry_run=True` default |
+| `create_version` | Script | `script_projects` | Mutation, `dry_run=True` default |
+| `run_script_function` | Script | `script_projects` | Executed as mutation-tier operation, `dry_run=True` default |
+| `generate_trigger_code` | None | `none` | Local helper output only |
+| `generate_clasp_helper` | None | `none` | Local helper output only |
+
+### Tool Surface (v1)
+#### Read tools
+1. `list_script_projects` (Drive-backed, standalone Apps Script files only)
+2. `get_script_project`
+3. `get_script_content` (accept optional `version_number`)
+4. `list_deployments`
+5. `list_versions`
+6. `get_version`
+7. `list_script_processes`
+   1. parameters:
+      1. `script_id: str | None = None`
+      2. `script_process_filter_json: str | None = None`
+      3. `user_process_filter_json: str | None = None`
+      4. `page_size: int = 50`
+      5. `page_token: str | None = None`
+   2. rule: when `script_id` is present call `processes.listScriptProcesses`; otherwise call `processes.list`.
+8. `get_script_metrics`
+   1. parameters:
+      1. `script_id: str`
+      2. `metrics_granularity: Literal["DAILY", "WEEKLY"] = "DAILY"`
+      3. `metrics_filter_json: str | None = None`
+9. `generate_trigger_code`
+10. `generate_clasp_helper` (new helper tool)
+
+#### Mutating tools (all `dry_run=True` by default)
+1. `create_script_project`
+2. `update_script_content`
+3. `delete_script_project` (Drive-backed delete for standalone Apps Script files)
+4. `create_deployment`
+5. `update_deployment`
+6. `delete_deployment`
+7. `create_version`
+8. `run_script_function`
+
+### Validation and Safety
+1. `files_json`, `parameters_json`, `script_process_filter_json`, `user_process_filter_json`, and `metrics_filter_json` are parsed and validated via Pydantic DTOs.
+2. Guardrails:
+   1. max files/update: 50
+   2. max total payload: 1MB
+   3. max single file: 250KB
+3. Do not log script source or raw parameters.
+4. Always return actionable IDs/URLs (`script_id`, deployment/version IDs, editor URL).
+5. For Drive-backed list/delete, emit explicit note: only standalone script projects are affected; container-bound scripts are excluded.
+6. For `update_script_content`, validate manifest presence (`appsscript`, `type=JSON`) before API call.
+7. For process/metrics filters, reject unknown keys and invalid enum values with actionable error messages.
+
+### Test Plan
+1. `tests/unit/gappsscript/test_apps_script_manager.py`
+2. `tests/unit/gappsscript/test_apps_script_tools.py`
+3. `tests/unit/auth/test_appscript_scopes.py`
+4. `tests/unit/core/test_tool_tiers_appscript.py`
+5. Integration-ish mocked workflow:
+   1. create project -> update content -> create version -> create deployment
+   2. dry-run paths assert no mutation calls
+   3. run-function parsing/error behavior
+6. Mixed-service auth tests:
+   1. `list_script_projects` uses Drive service + drive read scope.
+   2. `delete_script_project` uses Drive service + drive write/file scope.
+   3. Script-only tools use Script service + script scopes.
+7. Negative tests:
+   1. missing manifest in `files_json`
+   2. invalid filter JSON keys/enums
+   3. container-bound visibility disclaimer appears in listing/deletion outputs
+   4. pagination token pass-through behavior for process listing and versions
+
+### Docs Plan
+1. Update `README.md` with Apps Script capabilities + examples.
+2. Add `docs/setup/APPS_SCRIPT_SETUP.md`:
+   1. auth scopes
+   2. tool usage
+   3. dry-run behavior
+   4. `clasp` workflow (`clone/pull/push`)
+   5. `generate_clasp_helper` usage
+   6. limitations section:
+      1. standalone vs container-bound visibility
+      2. Drive-backed listing/deletion behavior
+3. Add links in `docs/INDEX.md` and setup hub.
+
+### Risks and Mitigations
+1. Scope mismatch/API permissions -> strict alias mapping + actionable errors.
+2. Payload schema/size issues -> DTO validation + payload caps.
+3. Execution side effects -> `dry_run=True` default + explicit warning text.
+4. Service registration drift -> phase-0 startup test with `--tools appscript`.
+5. API expectation mismatch (`list`/`delete` on Script projects) -> lock Drive-backed implementation in contract and test for explicit user-facing limitation text.
+
+### Acceptance Criteria
+1. `--tools appscript` loads successfully.
+2. Tool tier filtering works with new `appscript` entries.
+3. All mutating tools default to `dry_run=True`.
+4. Quality gates pass (`ruff`, `format --check`, `pyright`, `pytest`).
+5. User docs cover setup, auth, `clasp` alignment, and standalone/container-bound limitations.
+6. Process and metrics tools have deterministic filter contracts (`*_filter_json`) with explicit validation failures.
+7. Drive-backed list/delete behavior and Script API-backed operations are both covered by tests and clearly documented.

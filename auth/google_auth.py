@@ -137,7 +137,10 @@ def _get_auth_flow_mode() -> str:
     return AUTH_FLOW_AUTO
 
 
-def _get_effective_auth_flow_mode() -> str:
+def _get_effective_auth_flow_mode(
+    user_google_email: str | None = None,
+    override_client_key: str | None = None,
+) -> str:
     """
     Resolve effective auth mode.
 
@@ -147,6 +150,22 @@ def _get_effective_auth_flow_mode() -> str:
     configured_mode = _get_auth_flow_mode()
     if configured_mode in {AUTH_FLOW_CALLBACK, AUTH_FLOW_DEVICE}:
         return configured_mode
+
+    if user_google_email:
+        try:
+            oauth_client = resolve_oauth_client_for_user(
+                user_google_email,
+                override_client_key=override_client_key,
+            )
+            if oauth_client.flow_preference in {AUTH_FLOW_CALLBACK, AUTH_FLOW_DEVICE}:
+                logger.info(
+                    "Auth flow mode overridden by oauth client config: user=%s flow_preference=%s",
+                    user_google_email,
+                    oauth_client.flow_preference,
+                )
+                return oauth_client.flow_preference
+        except Exception as exc:
+            logger.debug("Could not resolve oauth client flow preference for %s: %s", user_google_email, exc)
 
     transport_mode = get_transport_mode()
     return AUTH_FLOW_DEVICE if transport_mode == "stdio" else AUTH_FLOW_CALLBACK
@@ -163,6 +182,7 @@ async def _start_callback_auth_challenge(
     service_name: str,
     required_scopes: list[str],
     fallback_reason: str | None = None,
+    override_client_key: str | None = None,
 ) -> tuple[None, str]:
     """Start callback flow and optionally prefix a fallback explanation."""
     oauth_redirect_uri = resolve_oauth_redirect_uri_for_auth_flow()
@@ -170,6 +190,7 @@ async def _start_callback_auth_challenge(
         user_google_email=user_google_email,
         service_name=service_name,
         redirect_uri=oauth_redirect_uri,
+        override_client_key=override_client_key,
     )
 
     if fallback_reason:
@@ -306,11 +327,15 @@ def _start_or_resume_device_auth_flow(
     service_name: str,
     required_scopes: list[str],
     status_hint: str | None = None,
+    override_client_key: str | None = None,
 ) -> str:
     """
     Create or reuse a pending device flow for a user and return user instructions.
     """
-    oauth_client, client_id, client_secret = _resolve_client_id_and_secret(user_google_email)
+    oauth_client, client_id, client_secret = _resolve_client_id_and_secret(
+        user_google_email,
+        override_client_key=override_client_key,
+    )
 
     store = get_oauth21_session_store()
     pending = store.get_pending_device_flow(user_google_email, oauth_client_key=oauth_client.client_key)
@@ -386,6 +411,7 @@ async def _poll_pending_device_auth_flow(
     user_google_email: str,
     required_scopes: list[str],
     session_id: str | None = None,
+    override_client_key: str | None = None,
 ) -> tuple[Credentials | None, str | None]:
     """
     Poll pending device flow once.
@@ -395,7 +421,10 @@ async def _poll_pending_device_auth_flow(
         - credentials is set when token exchange succeeds
         - status_hint indicates pending/slow_down/expired_token/access_denied/error
     """
-    oauth_client, client_id, client_secret = _resolve_client_id_and_secret(user_google_email)
+    oauth_client, client_id, client_secret = _resolve_client_id_and_secret(
+        user_google_email,
+        override_client_key=override_client_key,
+    )
 
     store = get_oauth21_session_store()
     pending = store.get_pending_device_flow(user_google_email, oauth_client_key=oauth_client.client_key)
@@ -497,6 +526,7 @@ async def initiate_auth_challenge(
     service_name: str,
     required_scopes: list[str],
     session_id: str | None = None,
+    override_client_key: str | None = None,
 ) -> tuple[Credentials | None, str]:
     """
     Initiate or resume authentication based on configured auth-flow mode.
@@ -507,13 +537,17 @@ async def initiate_auth_challenge(
         - message: actionable instructions when user interaction is required
     """
     requested_auth_mode = _get_auth_flow_mode()
-    effective_auth_mode = _get_effective_auth_flow_mode()
+    effective_auth_mode = _get_effective_auth_flow_mode(
+        user_google_email,
+        override_client_key=override_client_key,
+    )
 
     if effective_auth_mode == AUTH_FLOW_DEVICE:
         credentials, device_status = await _poll_pending_device_auth_flow(
             user_google_email=user_google_email,
             required_scopes=required_scopes,
             session_id=session_id,
+            override_client_key=override_client_key,
         )
         if credentials and credentials.valid:
             return credentials, f"Authentication completed successfully for '{user_google_email}'."
@@ -532,6 +566,7 @@ async def initiate_auth_challenge(
                     service_name=service_name,
                     required_scopes=required_scopes,
                     fallback_reason=device_status,
+                    override_client_key=override_client_key,
                 )
             raise GoogleAuthenticationError(
                 "Device authorization polling failed. "
@@ -544,6 +579,7 @@ async def initiate_auth_challenge(
                 service_name=service_name,
                 required_scopes=required_scopes,
                 status_hint=device_status,
+                override_client_key=override_client_key,
             )
             return None, challenge_message
         except GoogleAuthenticationError as exc:
@@ -559,6 +595,7 @@ async def initiate_auth_challenge(
                     service_name=service_name,
                     required_scopes=required_scopes,
                     fallback_reason=str(exc),
+                    override_client_key=override_client_key,
                 )
             raise
 
@@ -566,6 +603,7 @@ async def initiate_auth_challenge(
         user_google_email=user_google_email,
         service_name=service_name,
         required_scopes=required_scopes,
+        override_client_key=override_client_key,
     )
 
 
@@ -1077,6 +1115,7 @@ def get_credentials(
     client_secrets_path: str | None = None,
     credentials_base_dir: str = DEFAULT_CREDENTIALS_DIR,
     session_id: str | None = None,
+    override_client_key: str | None = None,
 ) -> Credentials | None:
     """
     Retrieves stored credentials, prioritizing OAuth 2.1 store, then session, then file. Refreshes if necessary.
@@ -1096,7 +1135,10 @@ def get_credentials(
     oauth_client_key: str | None = None
     if user_google_email:
         try:
-            oauth_client_selection = _resolve_oauth_client_selection(user_google_email)
+            oauth_client_selection = _resolve_oauth_client_selection(
+                user_google_email,
+                override_client_key=override_client_key,
+            )
             oauth_client_key = oauth_client_selection.client_key
         except Exception as e:
             logger.warning("[get_credentials] OAuth client resolution failed for %s: %s", user_google_email, e)
@@ -1426,6 +1468,7 @@ async def get_authenticated_google_service(
     user_google_email: str,  # Required - no more Optional
     required_scopes: list[str],
     session_id: str | None = None,  # Session context for logging
+    override_client_key: str | None = None,
 ) -> tuple[Any, str]:
     """
     Centralized Google service authentication for all MCP tools.
@@ -1489,6 +1532,7 @@ async def get_authenticated_google_service(
         required_scopes=required_scopes,
         client_secrets_path=CONFIG_CLIENT_SECRETS_PATH,
         session_id=session_id,  # Pass through session context
+        override_client_key=override_client_key,
     )
 
     if not credentials or not credentials.valid:
@@ -1500,6 +1544,7 @@ async def get_authenticated_google_service(
             service_name=f"Google {service_name.title()}",
             required_scopes=required_scopes,
             session_id=session_id,
+            override_client_key=override_client_key,
         )
         if not credentials or not credentials.valid:
             raise GoogleAuthenticationError(auth_response)

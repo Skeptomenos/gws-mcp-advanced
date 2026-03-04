@@ -141,3 +141,24 @@ search:
     - search_custom_siterestrict
   complete:
     - get_search_engine_info
+
+appscript:
+  core:
+    - get_script_project
+    - list_script_projects
+    - get_script_content
+    - create_script_project
+    - update_script_content
+  extended:
+    - create_deployment
+    - update_deployment
+    - delete_deployment
+    - create_version
+    - run_script_function
+    - delete_script_project
+    - list_deployments
+    - list_versions
+    - get_version
+    - list_script_processes
+    - get_script_metrics
+  complete: []

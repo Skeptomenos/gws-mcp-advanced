@@ -37,6 +37,12 @@ from auth.scopes import (
     GMAIL_READONLY_SCOPE,
     GMAIL_SEND_SCOPE,
     GMAIL_SETTINGS_BASIC_SCOPE,
+    SCRIPT_DEPLOYMENTS_READONLY_SCOPE,
+    SCRIPT_DEPLOYMENTS_SCOPE,
+    SCRIPT_METRICS_SCOPE,
+    SCRIPT_PROCESSES_SCOPE,
+    SCRIPT_PROJECTS_READONLY_SCOPE,
+    SCRIPT_PROJECTS_SCOPE,
     SHEETS_READONLY_SCOPE,
     SHEETS_WRITE_SCOPE,
     SLIDES_READONLY_SCOPE,
@@ -168,6 +174,7 @@ async def _authenticate_service(
     resolved_scopes: list[str],
     mcp_session_id: str | None,
     authenticated_user: str | None,
+    override_client_key: str | None = None,
 ) -> tuple[Any, str]:
     """
     Authenticate and get Google service using appropriate OAuth version.
@@ -186,6 +193,7 @@ async def _authenticate_service(
             session_id=mcp_session_id,
             auth_token_email=authenticated_user,
             allow_recent_auth=False,
+            override_client_key=override_client_key,
         )
     else:
         logger.debug(f"[{tool_name}] Using legacy OAuth 2.0 flow")
@@ -196,6 +204,7 @@ async def _authenticate_service(
             user_google_email=user_google_email,
             required_scopes=resolved_scopes,
             session_id=mcp_session_id,
+            override_client_key=override_client_key,
         )
 
 
@@ -208,6 +217,7 @@ async def get_authenticated_google_service_oauth21(
     session_id: str | None = None,
     auth_token_email: str | None = None,
     allow_recent_auth: bool = False,
+    override_client_key: str | None = None,
 ) -> tuple[Any, str]:
     """
     OAuth 2.1 authentication using the session store with security validation.
@@ -252,7 +262,10 @@ async def get_authenticated_google_service_oauth21(
     store = get_oauth21_session_store()
     oauth_client_key: str | None = None
     try:
-        oauth_client_key = resolve_oauth_client_for_user(user_google_email).client_key
+        oauth_client_key = resolve_oauth_client_for_user(
+            user_google_email,
+            override_client_key=override_client_key,
+        ).client_key
     except Exception as e:
         raise GoogleAuthenticationError(f"OAuth client resolution failed for {user_google_email}: {e}") from e
 
@@ -285,6 +298,42 @@ async def get_authenticated_google_service_oauth21(
     logger.info(f"[{tool_name}] Authenticated {service_name} for {user_google_email}")
 
     return service, user_google_email
+
+
+def _resolve_script_client_override(
+    user_google_email: str,
+    service_type: str,
+    args: tuple[Any, ...],
+    kwargs: dict[str, Any],
+    wrapper_sig: inspect.Signature,
+) -> str | None:
+    """
+    Resolve client override for Apps Script tools using script-level mapping.
+
+    For non-appscript services, this returns None.
+    """
+    if service_type != "appscript":
+        return None
+
+    try:
+        bound_args = wrapper_sig.bind_partial(*args, **kwargs)
+    except TypeError:
+        return None
+
+    script_id = bound_args.arguments.get("script_id")
+    if not isinstance(script_id, str) or not script_id.strip():
+        return None
+
+    try:
+        selection = resolve_oauth_client_for_user(
+            user_google_email,
+            script_id=script_id.strip(),
+        )
+        return selection.client_key
+    except Exception as e:
+        raise GoogleAuthenticationError(
+            f"OAuth client resolution failed for script '{script_id.strip()}' and user '{user_google_email}': {e}"
+        ) from e
 
 
 def _extract_oauth21_user_email(authenticated_user: str | None, func_name: str) -> str:
@@ -375,6 +424,7 @@ SERVICE_CONFIGS = {
     "slides": {"service": "slides", "version": "v1"},
     "tasks": {"service": "tasks", "version": "v1"},
     "customsearch": {"service": "customsearch", "version": "v1"},
+    "appscript": {"service": "script", "version": "v1"},
 }
 
 
@@ -415,6 +465,13 @@ SCOPE_GROUPS = {
     "tasks_read": TASKS_READONLY_SCOPE,
     # Custom Search scope
     "customsearch": CUSTOM_SEARCH_SCOPE,
+    # Apps Script scopes
+    "script_projects": SCRIPT_PROJECTS_SCOPE,
+    "script_projects_read": SCRIPT_PROJECTS_READONLY_SCOPE,
+    "script_deployments": SCRIPT_DEPLOYMENTS_SCOPE,
+    "script_deployments_read": SCRIPT_DEPLOYMENTS_READONLY_SCOPE,
+    "script_processes": SCRIPT_PROCESSES_SCOPE,
+    "script_metrics": SCRIPT_METRICS_SCOPE,
 }
 
 
@@ -566,6 +623,14 @@ def require_google_service(
                         tool_name,
                     )
 
+                override_client_key = _resolve_script_client_override(
+                    user_google_email=user_google_email,
+                    service_type=service_type,
+                    args=args,
+                    kwargs=kwargs,
+                    wrapper_sig=wrapper_sig,
+                )
+
                 # Authenticate service
                 service, actual_user_email = await _authenticate_service(
                     use_oauth21,
@@ -576,6 +641,7 @@ def require_google_service(
                     resolved_scopes,
                     mcp_session_id,
                     authenticated_user,
+                    override_client_key=override_client_key,
                 )
             except GoogleAuthenticationError as e:
                 logger.error(
@@ -689,6 +755,14 @@ def require_multiple_services(service_configs: list[dict[str, Any]]):
                             service_type,
                         )
 
+                    override_client_key = _resolve_script_client_override(
+                        user_google_email=user_google_email,
+                        service_type=service_type,
+                        args=args,
+                        kwargs=kwargs,
+                        wrapper_sig=wrapper_sig,
+                    )
+
                     # Authenticate service
                     service, _ = await _authenticate_service(
                         use_oauth21,
@@ -699,6 +773,7 @@ def require_multiple_services(service_configs: list[dict[str, Any]]):
                         resolved_scopes,
                         mcp_session_id,
                         authenticated_user,
+                        override_client_key=override_client_key,
                     )
 
                     # Inject service with specified parameter name

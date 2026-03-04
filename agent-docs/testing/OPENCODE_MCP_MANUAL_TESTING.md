@@ -5,10 +5,14 @@ OpenCode should update this document during testing with status, evidence, findi
 
 ## Document Controls
 - Status: `ACTIVE`
-- Last Updated (UTC): `2026-03-03T09:09:39Z`
+- Last Updated (UTC): `2026-03-03T21:05:00Z`
 - Canonical Path: `/Users/david.helmus/repos/ai-dev/_infra/gws-mcp-advanced/gws-mcp-advanced/agent-docs/testing/OPENCODE_MCP_MANUAL_TESTING.md`
 - Related Plan: `/Users/david.helmus/repos/ai-dev/_infra/gws-mcp-advanced/gws-mcp-advanced/agent-docs/roadmap/PLAN.md`
 - Related Status: `/Users/david.helmus/repos/ai-dev/_infra/gws-mcp-advanced/gws-mcp-advanced/agent-docs/roadmap/STATUS.md`
+
+Execution note (2026-03-03):
+1. Apps Script Wave-7 manual validation rows (`OP-71`+) are executed in Convex-hosted MCP sessions.
+2. OpenCode rows remain authoritative historical evidence for non-Apps-Script tracks.
 
 ## Living Document Rules
 1. Append updates; do not erase prior run history.
@@ -211,6 +215,19 @@ Run in order unless blocked.
 | OP-68 | RM-01 Code-Block Visual Regression | "Create a doc with fenced markdown code block using language label (` ```python ... ``` `) and inspect in Google Docs." | Code block renders with shaded box + paragraph borders; language label appears above code content; no formatting bleed into following paragraph. | PASS | Doc `13lblDK6...` created. Content: `python` label followed by `def hello(): print("world")`. Text before/after code block intact. No formatting bleed into following paragraph. Language label present. | Artifact trashed. RM-01 regression verified. Note: shading/borders are visual-only and cannot be verified via text export; text structure confirms correct content separation. |
 | OP-69 | RM-04 Image Rendering Regression | "Create a doc with markdown images (single image between paragraphs and two images in sequence) and inspect in Google Docs." | Images render inline in expected order, surrounding text remains intact, and no unexpected formatting drift appears around image positions. | PASS | Run 4 (2026-03-01): doc `1pE9JML...` created. User visually confirmed **both images render correctly** in Google Docs. `inspect_doc_structure` reports 0 inline objects because it only surfaces paragraph-level text previews, not inline image elements within paragraphs. Text flow intact: `Text before image.` / [image] / `Text between images.` / [image] / `Text after images.` | DEF-012 confirmed fixed. `inspect_doc_structure` limitation: doesn't report inlineObjectElements — visual confirmation required for images. Artifact trashed. |
 | OP-70 | Kitchen Sink Full Rendering Gate | "Load markdown from `tests/manual/kitchen_sink.md` and call `create_doc` with `dry_run=false` (title prefix: `opencode-kitchen-sink-`). Visually inspect in Google Docs." | Entire fixture renders correctly: typography (bold/italic/bold+italic/link/inline code), heading levels, nested unordered/ordered lists, fenced code block (label + box styling), blockquote, table (3x3 with expected values), spacing + horizontal rule, strikethrough, task list, and inline image; no list-bleed or spacing artifacts. | PASS | Doc ID: `1oO0jTTlK5arWehrtH9TcFjFO3CONVqOkkJ49ke5vxEw`. Attempt 5 visually inspected. All remaining formatting nuances (table cell font size, swallowed newlines, strikethrough drift) have been fully resolved. The document perfectly reflects the markdown fixture. Cleanup: artifact trashed. | `create_doc` formatting drift and index calculation bugs fully resolved. DEF-013 Fixed. Merge/push gate cleared. |
+
+## Apps Script Wave 7 Matrix (Convex Execution)
+These rows are executed in Convex-hosted MCP sessions as the active Wave-7 validation lane.
+
+| ID | Area | Prompt / Action | Expected Result | Status | Evidence | Notes |
+|---|---|---|---|---|---|---|
+| AS-01 | Apps Script Read | Call `get_script_project` with a known script ID. | Script metadata returns without auth/runtime regressions. | PASS | Live call succeeded for script `127dMAUctpUu0-ReHWFMtt4T5HWNfzfEH-m0a-7sDzEzSskTecvMvK2xu` after Script API enablement. | Confirms Script API auth path is active in Convex lane. |
+| AS-02 | Apps Script Mutator | `create_script_project` dry-run and explicit mutate (`dry_run=false`). | Dry-run preview is safe; mutate returns script ID/link. | PASS | Dry-run preview confirmed; mutate returned script IDs including `1D2F6Jxp6_xRpZ6Tp3yaIPHcA-TDS5KeB-haI6tBJUWLaaHxDVWOjye6f`. | Probe artifacts were cleaned up (trashed in Drive). |
+| AS-03 | Apps Script Mutator | `update_script_content` dry-run and explicit mutate with manifest + code file. | Dry-run preview is safe; mutate updates script content deterministically. | PASS | Dry-run listed 2 files (`appsscript`, `Code`); mutate succeeded and returned updated file count. | Manifest requirement validated by tool DTO contract. |
+| AS-04 | Apps Script Mutator | `create_version` + `create_deployment` dry-run and explicit mutate. | Version/deployment creation succeeds with explicit version pinning. | PASS | `create_version` returned version `1`; `create_deployment` succeeded only after explicit `version_number=1`. | Live probe exposed and confirmed required deployment payload/version contract. |
+| AS-05 | Apps Script Mutator | `update_deployment` + `delete_deployment` dry-run and explicit mutate. | Update/delete deployment paths both succeed with deterministic responses. | PASS | Dry-run preview + mutate succeeded for deployment `AKfycbxCrAk4dN2SUKWhaDgsCpO5DjdrCjf7MLYFqFDZboWDe5dnCtsJ1xWzW0Sga2EsXO9R`. | `update_deployment` request requires wrapped `deploymentConfig` payload. |
+| AS-06 | Apps Script Execute | `run_script_function` dry-run and explicit mutate on probe scripts. | Dry-run preview is safe; mutate either executes successfully or surfaces safe runtime error without crash. | PASS | Dry-run succeeded; explicit mutate on ephemeral probe scripts returned safe Script API `404 Requested entity was not found`. | Runtime/environment characteristic; tracked in APPS-04 evidence as non-contract regression. |
+| AS-07 | Cleanup | Trash all probe scripts created during AS-02..AS-06 execution. | No probe artifacts left active in Drive. | PASS | Probe scripts (for example `1D2F6Jxp6_xRpZ6Tp3yaIPHcA-TDS5KeB-haI6tBJUWLaaHxDVWOjye6f`) were trashed after run completion. | Cleanup executed in the same Convex session as mutator probes. |
 
 ## Cross-Service Extended Matrix
 Run for full product coverage.

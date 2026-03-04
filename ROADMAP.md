@@ -1,7 +1,7 @@
 # Product Roadmap
 
 ## Metadata
-- Last Updated (UTC): 2026-03-02T22:35:00Z
+- Last Updated (UTC): 2026-03-03T14:27:00Z
 - Canonical Execution Plan: `agent-docs/roadmap/PLAN.md`
 - Canonical Manual Matrix: `agent-docs/testing/OPENCODE_MCP_MANUAL_TESTING.md`
 
@@ -26,10 +26,15 @@
    - Revisit trigger: when unified web-search routing through this MCP becomes a product requirement.
 
 ## Next Roadmap Focus
-1. Rename and migration hardening (`DIST-05`):
-   - Complete canonical naming cleanup in runtime defaults/docs/tests
-   - Keep legacy config directory compatibility with explicit migration guidance
-2. Smart-chip extension stream (`RM-05`..`RM-07`):
+1. Apps Script v1 execution (Wave 7, active):
+   - `APPS-01`: foundation (`gappsscript` package, service wiring, first read tool: `get_script_project`)
+   - APPS gate after `APPS-01`: targeted tests + full verification (`ruff`, `format --check`, `pyright`, `pytest`) + existing-feature regression checklist
+   - `APPS-02`: Drive-backed standalone script list/delete with explicit container-bound limitation messaging
+   - `APPS-05` (early policy gate): least-privilege scope lock and mixed-service auth coverage before broad surface expansion
+   - `APPS-03`: remaining read surface + strict filter DTO validation
+   - `APPS-04`: mutating surface with `dry_run=True` defaults and runtime dry-run contract tests
+   - `APPS-06`: docs/manual matrix/release notes closeout
+2. Smart-chip extension stream (`RM-05`..`RM-07`) after Wave 7 closure:
    - Native checklist bullets
    - Mention-to-chip mapping
    - Add-ons-backed third-party chips feasibility

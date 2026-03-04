@@ -137,6 +137,7 @@ import gforms.forms_tools
 import gslides.slides_tools
 import gtasks.tasks_tools
 import gsearch.search_tools
+import gappsscript
 
 # Configure tool registration
 wrap_server_tool_method(server)
@@ -153,6 +154,7 @@ all_services = [
     "slides",
     "tasks",
     "search",
+    "appscript",
 ]
 set_enabled_tools(all_services)  # Set enabled services for scopes
 set_enabled_tool_names(None)  # Don't filter individual tools - enable all

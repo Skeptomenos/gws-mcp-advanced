@@ -606,13 +606,14 @@ async def setup_google_auth_clients() -> str:
 async def import_google_auth_client(
     client_key: str,
     oauth_client_json_path: str,
+    mapped_script_ids: list[str] | None = None,
     mapped_accounts: list[str] | None = None,
     mapped_domains: list[str] | None = None,
     set_default: bool = False,
     flow_preference: str = "auto",
 ) -> str:
     """
-    Import a Google OAuth client JSON into `auth_clients.json` and apply account/domain mappings.
+    Import a Google OAuth client JSON into `auth_clients.json` and apply script/account/domain mappings.
 
     This is an admin/setup tool for enterprise/private multi-client routing.
     """
@@ -620,6 +621,7 @@ async def import_google_auth_client(
         result = import_oauth_client_config(
             client_key=client_key,
             oauth_client_json_path=oauth_client_json_path,
+            script_ids=mapped_script_ids,
             account_emails=mapped_accounts,
             domains=mapped_domains,
             set_default=set_default,
@@ -627,7 +629,9 @@ async def import_google_auth_client(
         )
         return (
             f"Imported OAuth client '{result['client_key']}' from `{oauth_client_json_path}`. "
-            f"Mapped accounts: {len(result['mapped_accounts'])}, domains: {len(result['mapped_domains'])}. "
+            f"Mapped scripts: {len(result['mapped_script_ids'])}, "
+            f"accounts: {len(result['mapped_accounts'])}, "
+            f"domains: {len(result['mapped_domains'])}. "
             f"Config path: `{result['config_path']}`"
         )
     except Exception as e:

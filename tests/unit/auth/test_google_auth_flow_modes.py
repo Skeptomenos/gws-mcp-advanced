@@ -63,6 +63,42 @@ def test_effective_auth_flow_mode_honors_explicit_setting(monkeypatch):
     assert _get_effective_auth_flow_mode() == AUTH_FLOW_DEVICE
 
 
+def test_effective_auth_flow_mode_honors_client_flow_preference_callback(monkeypatch):
+    monkeypatch.setenv("WORKSPACE_MCP_AUTH_FLOW", AUTH_FLOW_AUTO)
+    monkeypatch.setattr("auth.google_auth.get_transport_mode", lambda: "stdio")
+    monkeypatch.setattr(
+        "auth.google_auth.resolve_oauth_client_for_user",
+        lambda user_email, **_: OAuthClientSelection(
+            client_key="private",
+            client_id="private-client-id",
+            client_secret="private-client-secret",
+            source="account_mapping",
+            selection_mode="mapped_only",
+            flow_preference=AUTH_FLOW_CALLBACK,
+        ),
+    )
+
+    assert _get_effective_auth_flow_mode("user@example.com") == AUTH_FLOW_CALLBACK
+
+
+def test_effective_auth_flow_mode_honors_client_flow_preference_device(monkeypatch):
+    monkeypatch.setenv("WORKSPACE_MCP_AUTH_FLOW", AUTH_FLOW_AUTO)
+    monkeypatch.setattr("auth.google_auth.get_transport_mode", lambda: "streamable-http")
+    monkeypatch.setattr(
+        "auth.google_auth.resolve_oauth_client_for_user",
+        lambda user_email, **_: OAuthClientSelection(
+            client_key="enterprise",
+            client_id="enterprise-client-id",
+            client_secret="enterprise-client-secret",
+            source="domain_mapping",
+            selection_mode="mapped_only",
+            flow_preference=AUTH_FLOW_DEVICE,
+        ),
+    )
+
+    assert _get_effective_auth_flow_mode("user@example.com") == AUTH_FLOW_DEVICE
+
+
 def test_start_or_resume_device_auth_reuses_pending_flow(monkeypatch):
     class _Store:
         def get_pending_device_flow(self, user_email: str, oauth_client_key: str | None = None):
@@ -78,7 +114,7 @@ def test_start_or_resume_device_auth_reuses_pending_flow(monkeypatch):
     monkeypatch.setattr("auth.google_auth.get_oauth21_session_store", lambda: _Store())
     monkeypatch.setattr(
         "auth.google_auth._resolve_client_id_and_secret",
-        lambda _user: (
+        lambda _user, override_client_key=None: (
             OAuthClientSelection(
                 client_key="legacy-env",
                 client_id="legacy-client-id",
@@ -106,7 +142,7 @@ async def test_initiate_auth_challenge_device_returns_credentials(monkeypatch):
     credentials = _valid_credentials()
     poll_mock = AsyncMock(return_value=(credentials, None))
 
-    monkeypatch.setattr("auth.google_auth._get_effective_auth_flow_mode", lambda: AUTH_FLOW_DEVICE)
+    monkeypatch.setattr("auth.google_auth._get_effective_auth_flow_mode", lambda *_, **__: AUTH_FLOW_DEVICE)
     monkeypatch.setattr("auth.google_auth._poll_pending_device_auth_flow", poll_mock)
 
     resolved_credentials, message = await initiate_auth_challenge(
@@ -125,7 +161,7 @@ async def test_initiate_auth_challenge_device_returns_credentials(monkeypatch):
 async def test_initiate_auth_challenge_device_returns_actionable_message(monkeypatch):
     poll_mock = AsyncMock(return_value=(None, "authorization_pending"))
 
-    monkeypatch.setattr("auth.google_auth._get_effective_auth_flow_mode", lambda: AUTH_FLOW_DEVICE)
+    monkeypatch.setattr("auth.google_auth._get_effective_auth_flow_mode", lambda *_, **__: AUTH_FLOW_DEVICE)
     monkeypatch.setattr("auth.google_auth._poll_pending_device_auth_flow", poll_mock)
     monkeypatch.setattr("auth.google_auth._start_or_resume_device_auth_flow", lambda **_: "do-device-auth")
 
@@ -144,7 +180,7 @@ async def test_initiate_auth_challenge_device_returns_actionable_message(monkeyp
 async def test_initiate_auth_challenge_device_raises_on_poll_error(monkeypatch):
     poll_mock = AsyncMock(return_value=(None, "error:invalid_client"))
 
-    monkeypatch.setattr("auth.google_auth._get_effective_auth_flow_mode", lambda: AUTH_FLOW_DEVICE)
+    monkeypatch.setattr("auth.google_auth._get_effective_auth_flow_mode", lambda *_, **__: AUTH_FLOW_DEVICE)
     monkeypatch.setattr("auth.google_auth._poll_pending_device_auth_flow", poll_mock)
 
     with pytest.raises(GoogleAuthenticationError, match="Device authorization polling failed"):
@@ -161,7 +197,7 @@ async def test_initiate_auth_challenge_device_invalid_client_falls_back_to_callb
     start_auth_flow_mock = AsyncMock(return_value="callback-auth-link")
 
     monkeypatch.setattr("auth.google_auth._get_auth_flow_mode", lambda: AUTH_FLOW_AUTO)
-    monkeypatch.setattr("auth.google_auth._get_effective_auth_flow_mode", lambda: AUTH_FLOW_DEVICE)
+    monkeypatch.setattr("auth.google_auth._get_effective_auth_flow_mode", lambda *_, **__: AUTH_FLOW_DEVICE)
     monkeypatch.setattr("auth.google_auth._poll_pending_device_auth_flow", AsyncMock(return_value=(None, None)))
     monkeypatch.setattr(
         "auth.google_auth._start_or_resume_device_auth_flow",
@@ -191,7 +227,7 @@ async def test_initiate_auth_challenge_device_invalid_client_falls_back_to_callb
 @pytest.mark.asyncio
 async def test_initiate_auth_challenge_device_invalid_client_raises_in_explicit_device_mode(monkeypatch):
     monkeypatch.setattr("auth.google_auth._get_auth_flow_mode", lambda: AUTH_FLOW_DEVICE)
-    monkeypatch.setattr("auth.google_auth._get_effective_auth_flow_mode", lambda: AUTH_FLOW_DEVICE)
+    monkeypatch.setattr("auth.google_auth._get_effective_auth_flow_mode", lambda *_, **__: AUTH_FLOW_DEVICE)
     monkeypatch.setattr("auth.google_auth._poll_pending_device_auth_flow", AsyncMock(return_value=(None, None)))
     monkeypatch.setattr(
         "auth.google_auth._start_or_resume_device_auth_flow",
@@ -214,7 +250,7 @@ async def test_initiate_auth_challenge_poll_invalid_client_falls_back_to_callbac
     start_auth_flow_mock = AsyncMock(return_value="callback-auth-link")
 
     monkeypatch.setattr("auth.google_auth._get_auth_flow_mode", lambda: AUTH_FLOW_AUTO)
-    monkeypatch.setattr("auth.google_auth._get_effective_auth_flow_mode", lambda: AUTH_FLOW_DEVICE)
+    monkeypatch.setattr("auth.google_auth._get_effective_auth_flow_mode", lambda *_, **__: AUTH_FLOW_DEVICE)
     monkeypatch.setattr(
         "auth.google_auth._poll_pending_device_auth_flow",
         AsyncMock(return_value=(None, "error:invalid_client:Invalid client type for device flow")),
@@ -242,7 +278,7 @@ async def test_initiate_auth_challenge_poll_invalid_client_falls_back_to_callbac
 async def test_initiate_auth_challenge_callback_mode_uses_start_auth_flow(monkeypatch):
     start_auth_flow_mock = AsyncMock(return_value="callback-auth-link")
 
-    monkeypatch.setattr("auth.google_auth._get_effective_auth_flow_mode", lambda: AUTH_FLOW_CALLBACK)
+    monkeypatch.setattr("auth.google_auth._get_effective_auth_flow_mode", lambda *_, **__: AUTH_FLOW_CALLBACK)
     monkeypatch.setattr(
         "auth.google_auth.resolve_oauth_redirect_uri_for_auth_flow",
         lambda: "http://localhost:9876/oauth2callback",
@@ -389,6 +425,7 @@ async def test_import_google_auth_client_reports_success(monkeypatch):
         "import_oauth_client_config",
         lambda **_: {
             "client_key": "work",
+            "mapped_script_ids": ["script-123"],
             "mapped_accounts": ["user@hellofresh.com"],
             "mapped_domains": ["hellofresh.com"],
             "config_path": "/tmp/auth_clients.json",
@@ -399,6 +436,7 @@ async def test_import_google_auth_client_reports_success(monkeypatch):
     result = await import_google_auth_client(
         client_key="work",
         oauth_client_json_path="/tmp/work-client.json",
+        mapped_script_ids=["script-123"],
         mapped_accounts=["user@hellofresh.com"],
         mapped_domains=["hellofresh.com"],
     )

@@ -11,7 +11,7 @@ Use this mode when:
 
 ## Key Behavior
 
-1. Client routing is deterministic by account/domain mapping.
+1. Client routing is deterministic by script/account/domain mapping.
 2. `selection_mode=mapped_only` hard-fails on missing mapping or domain/client mismatch.
 3. No cross-client fallback is attempted on mismatch.
 4. Credentials and sessions are persisted with client context.
@@ -42,9 +42,10 @@ For each tenant/client, call:
 Parameters:
 1. `client_key` (for example `private`, `work`)
 2. `oauth_client_json_path` (path to downloaded Google OAuth client JSON)
-3. `mapped_accounts` (optional specific emails)
-4. `mapped_domains` (optional domains)
-5. `set_default` (optional, only used in non-`mapped_only` modes)
+3. `mapped_script_ids` (optional script IDs/deployment IDs that must use this client)
+4. `mapped_accounts` (optional specific emails)
+5. `mapped_domains` (optional domains)
+6. `set_default` (optional, only used in non-`mapped_only` modes)
 
 ### 3) Verify generated config
 
@@ -69,6 +70,10 @@ Expected shape:
       "flow_preference": "auto"
     }
   },
+  "script_clients": {
+    "127dMAUctpUu0-ReHWFMtt4T5HWNfzfEH-m0a-7sDzEzSskTecvMvK2xu": "private",
+    "AKfycbw46UjH2FT0voBOgAWjjlbTGS7aHyVyZd70wCMxXDR16uyEN6FYvUG3vLI_Cn_5DRDHDw": "private"
+  },
   "account_clients": {
     "david@helmus.me": "private",
     "david.helmus@hellofresh.com": "work"
@@ -92,13 +97,14 @@ If callback completion is needed in your client lifecycle, use:
 
 1. Legacy env-only auth (`GOOGLE_OAUTH_CLIENT_ID`/`GOOGLE_OAUTH_CLIENT_SECRET`) still works when auth client config is not configured yet.
 2. Once mappings/profiles are configured under `mapped_only`, mapping is required.
-3. Domain mismatch errors are expected and intentional security behavior.
+3. Resolution precedence is: override -> `script_clients` -> `account_clients` -> `domain_clients` -> default client (non-`mapped_only` only).
+4. Domain mismatch errors are expected and intentional security behavior.
 
 ## Troubleshooting
 
 ### "No OAuth client mapping found ... selection_mode=mapped_only"
 
-Add account or domain mapping in `auth_clients.json`.
+Add script, account, or domain mapping in `auth_clients.json`.
 
 ### "OAuth client 'X' is not allowed for domain 'Y'"
 

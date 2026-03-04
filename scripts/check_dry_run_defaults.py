@@ -60,6 +60,15 @@ REQUIRED_DRY_RUN_TOOLS: dict[str, list[str]] = {
         "clear_completed_tasks",
     ],
     "gchat/chat_tools.py": ["send_message"],
+    "gappsscript/apps_script_tools.py": [
+        "create_script_project",
+        "update_script_content",
+        "create_version",
+        "create_deployment",
+        "update_deployment",
+        "delete_deployment",
+        "run_script_function",
+    ],
 }
 
 
