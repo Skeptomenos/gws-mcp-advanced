@@ -2,6 +2,10 @@
 
 This guide covers Apps Script support in `google-workspace-mcp-advanced`, including required API/scopes, supported tools, and known runtime limitations.
 
+For a workflow-first view of what users can do with these tools, see:
+- [Apps Script User Guide](APPS_SCRIPT_USER_GUIDE.md)
+- [Apps Script + clasp Guide](APPS_SCRIPT_CLASP_GUIDE.md)
+
 ## Scope
 
 Apps Script v1 support includes:

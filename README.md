@@ -179,6 +179,8 @@ If you previously ran the project as `gws-mcp-advanced`, follow:
 - Authentication model: [docs/setup/AUTHENTICATION_MODEL.md](docs/setup/AUTHENTICATION_MODEL.md)
 - Single-MCP multi-client auth setup: [docs/setup/MULTI_CLIENT_AUTH_SETUP.md](docs/setup/MULTI_CLIENT_AUTH_SETUP.md)
 - Apps Script setup and limitations: [docs/setup/APPS_SCRIPT_SETUP.md](docs/setup/APPS_SCRIPT_SETUP.md)
+- Apps Script capabilities and workflows: [docs/setup/APPS_SCRIPT_USER_GUIDE.md](docs/setup/APPS_SCRIPT_USER_GUIDE.md)
+- Apps Script + clasp workflows: [docs/setup/APPS_SCRIPT_CLASP_GUIDE.md](docs/setup/APPS_SCRIPT_CLASP_GUIDE.md)
 - Claude Code setup: [docs/setup/CLAUDE_CODE_MCP_SETUP.md](docs/setup/CLAUDE_CODE_MCP_SETUP.md)
 - Cursor setup: [docs/setup/CURSOR_MCP_SETUP.md](docs/setup/CURSOR_MCP_SETUP.md)
 - OpenCode setup: [docs/setup/OPENCODE_MCP_SETUP.md](docs/setup/OPENCODE_MCP_SETUP.md)

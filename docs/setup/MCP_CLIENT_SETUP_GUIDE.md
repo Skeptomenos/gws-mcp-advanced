@@ -61,6 +61,8 @@ If one MCP instance must route two tenants to different OAuth clients, follow:
 ## Service-Specific Setup
 
 - [Apps Script Setup](APPS_SCRIPT_SETUP.md) for Script API enablement, tool coverage, and runtime limitations.
+- [Apps Script User Guide](APPS_SCRIPT_USER_GUIDE.md) for workflow-level capability usage.
+- [Apps Script + clasp Guide](APPS_SCRIPT_CLASP_GUIDE.md) for local IDE + MCP hybrid workflows.
 
 This flow uses `auth_clients.json` plus admin setup tools:
 1. `setup_google_auth_clients`
