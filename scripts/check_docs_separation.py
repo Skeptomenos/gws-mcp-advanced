@@ -9,6 +9,7 @@ ALLOWED_USER_DOCS = {
     "docs/INDEX.md",
     "docs/COMPARISON.md",
     "docs/DISTRIBUTION_RELEASE.md",
+    "docs/RELEASE_NOTES.md",
 }
 
 ALLOWED_SETUP_PREFIXES = (
