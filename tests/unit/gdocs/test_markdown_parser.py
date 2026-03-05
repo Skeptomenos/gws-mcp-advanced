@@ -42,6 +42,7 @@ MarkdownToDocsConverter = _mp.MarkdownToDocsConverter
 HEADING_STYLE_MAP = _mp.HEADING_STYLE_MAP
 BULLET_PRESET_UNORDERED = _mp.BULLET_PRESET_UNORDERED
 BULLET_PRESET_ORDERED = _mp.BULLET_PRESET_ORDERED
+BULLET_PRESET_CHECKBOX = _mp.BULLET_PRESET_CHECKBOX
 CODE_FONT_FAMILY = _mp.CODE_FONT_FAMILY
 CODE_BACKGROUND_COLOR = _mp.CODE_BACKGROUND_COLOR
 CODE_BORDER_COLOR = _mp.CODE_BORDER_COLOR
@@ -913,6 +914,59 @@ class TestTaskLists:
         delete_requests = [r for r in result if "deleteParagraphBullets" in r]
         assert len(bullet_requests) == 0
         assert len(delete_requests) == 0
+
+    def test_native_task_list_mode_emits_checkbox_bullets(self):
+        converter = MarkdownToDocsConverter(checklist_mode="native")
+        result = converter.convert("- [ ] one\n- [x] two")
+
+        insert_text = next(r for r in result if "insertText" in r)["insertText"]["text"]
+        bullet_requests = [r for r in result if "createParagraphBullets" in r]
+
+        assert CHECKBOX_UNCHECKED not in insert_text
+        assert CHECKBOX_CHECKED not in insert_text
+        assert len(bullet_requests) == 1
+        assert bullet_requests[0]["createParagraphBullets"]["bulletPreset"] == BULLET_PRESET_CHECKBOX
+
+
+class TestPersonMentions:
+    def test_text_mode_keeps_mentions_as_plain_text(self):
+        converter = MarkdownToDocsConverter()
+        result = converter.convert("Hello @user@example.com")
+
+        insert_text = next(r for r in result if "insertText" in r)["insertText"]["text"]
+        assert "@user@example.com" in insert_text
+        assert not any("insertPerson" in request for request in result)
+
+    def test_person_chip_mode_emits_insert_person_requests(self):
+        converter = MarkdownToDocsConverter(mention_mode="person_chip")
+        result = converter.convert("Hello @user@example.com")
+
+        insert_text = next(r for r in result if "insertText" in r)["insertText"]["text"]
+        assert "@user@example.com" in insert_text
+
+        person_requests = [request for request in result if "insertPerson" in request]
+        delete_requests = [request for request in result if "deleteContentRange" in request]
+        assert len(person_requests) == 1
+        assert len(delete_requests) == 1
+        assert person_requests[0]["insertPerson"]["personProperties"]["email"] == "user@example.com"
+
+    def test_person_chip_mode_ignores_inline_code_mentions(self):
+        converter = MarkdownToDocsConverter(mention_mode="person_chip")
+        result = converter.convert("`@code@example.com` and @user@example.com")
+
+        person_requests = [request for request in result if "insertPerson" in request]
+        assert len(person_requests) == 1
+        assert person_requests[0]["insertPerson"]["personProperties"]["email"] == "user@example.com"
+
+    def test_person_chip_requests_are_descending_by_index(self):
+        converter = MarkdownToDocsConverter(mention_mode="person_chip")
+        result = converter.convert("@first@example.com then @second@example.com")
+
+        delete_ranges = [
+            request["deleteContentRange"]["range"] for request in result if "deleteContentRange" in request
+        ]
+        starts = [item["startIndex"] for item in delete_ranges]
+        assert starts == sorted(starts, reverse=True)
 
 
 class TestKitchenSinkRegression:

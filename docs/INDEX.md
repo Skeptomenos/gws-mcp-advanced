@@ -22,6 +22,7 @@ Audience: users and operators running this MCP in clients such as OpenCode, Clau
 - Cursor setup: [Cursor MCP Setup](setup/CURSOR_MCP_SETUP.md)
 - OpenCode setup: [OpenCode MCP Setup](setup/OPENCODE_MCP_SETUP.md)
 - Gemini CLI setup: [Gemini CLI MCP Setup](setup/GEMINI_CLI_MCP_SETUP.md)
+- Live test cadence automation: [Live Cadence Workflow Guide](setup/LIVE_CADENCE_WORKFLOW.md)
 - Release/versioning/rollback: [Distribution and Release Guide](DISTRIBUTION_RELEASE.md)
 - Release notes: [Release Notes](RELEASE_NOTES.md)
 - Product overview and upstream comparison: [Comparison](COMPARISON.md)

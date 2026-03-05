@@ -1,7 +1,7 @@
 # Product Roadmap
 
 ## Metadata
-- Last Updated (UTC): 2026-03-03T14:27:00Z
+- Last Updated (UTC): 2026-03-05T11:21:47Z
 - Canonical Execution Plan: `agent-docs/roadmap/PLAN.md`
 - Canonical Manual Matrix: `agent-docs/testing/OPENCODE_MCP_MANUAL_TESTING.md`
 
@@ -26,18 +26,14 @@
    - Revisit trigger: when unified web-search routing through this MCP becomes a product requirement.
 
 ## Next Roadmap Focus
-1. Apps Script v1 execution (Wave 7, active):
-   - `APPS-01`: foundation (`gappsscript` package, service wiring, first read tool: `get_script_project`)
-   - APPS gate after `APPS-01`: targeted tests + full verification (`ruff`, `format --check`, `pyright`, `pytest`) + existing-feature regression checklist
-   - `APPS-02`: Drive-backed standalone script list/delete with explicit container-bound limitation messaging
-   - `APPS-05` (early policy gate): least-privilege scope lock and mixed-service auth coverage before broad surface expansion
-   - `APPS-03`: remaining read surface + strict filter DTO validation
-   - `APPS-04`: mutating surface with `dry_run=True` defaults and runtime dry-run contract tests
-   - `APPS-06`: docs/manual matrix/release notes closeout
-2. Smart-chip extension stream (`RM-05`..`RM-07`) after Wave 7 closure:
-   - Native checklist bullets
-   - Mention-to-chip mapping
-   - Add-ons-backed third-party chips feasibility
+1. Smart-chip extension stream (Wave 8):
+   - `RM-05`: done (`checklist_mode` with `unicode` default and `native` opt-in)
+   - `RM-06`: done (`mention_mode` with `text` default and `person_chip` opt-in)
+   - `RM-07`: deferred (Add-ons-backed third-party smart chips remain out of scope under current no-external/third-party dependency policy)
+2. Deferred Apps Script follow-up:
+   - `APPS-07`: cross-project execution UX hardening (non-blocking, pull-forward only)
+3. Autonomous verification operations:
+   - Wave 4 cleanup/cadence automation is in place (`scripts/mcp_live_cleanup.py` + `.github/workflows/live-mcp-cadence.yml`)
 
 ## Closure Notes
 1. Markdown formatting is no longer an active roadmap risk area.

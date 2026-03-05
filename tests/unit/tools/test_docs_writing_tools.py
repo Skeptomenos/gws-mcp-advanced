@@ -66,7 +66,9 @@ class _HeaderFooterManager:
 
 
 class _MarkdownToDocsConverter:
-    def __init__(self):
+    def __init__(self, checklist_mode: str = "unicode", mention_mode: str = "text"):
+        self.checklist_mode = checklist_mode
+        self.mention_mode = mention_mode
         self.pending_tables = []
 
     def convert(self, _markdown_text: str, start_index: int = 1):
@@ -187,11 +189,12 @@ def test_partition_markdown_requests_extracts_structural_pairs(docs_writing_modu
         {"insertTable": {"location": {"index": 3}, "rows": 2, "columns": 2}},
     ]
 
-    base, image_phase, table_phase = docs_writing_module._partition_markdown_requests(requests)
+    base, mention_phase, image_phase, table_phase = docs_writing_module._partition_markdown_requests(requests)
 
     assert len(base) == 2
     assert any("insertText" in request for request in base)
     assert any("updateParagraphStyle" in request for request in base)
+    assert mention_phase == []
 
     assert len(image_phase) == 2
     assert "deleteContentRange" in image_phase[0]
@@ -200,6 +203,49 @@ def test_partition_markdown_requests_extracts_structural_pairs(docs_writing_modu
     assert len(table_phase) == 2
     assert "deleteContentRange" in table_phase[0]
     assert "insertTable" in table_phase[1]
+
+
+@pytest.mark.asyncio
+async def test_insert_markdown_person_chip_fallback_keeps_literal_token(docs_writing_module):
+    service = MagicMock()
+
+    class _MentionConverter:
+        pending_tables = []
+
+        def __init__(self, checklist_mode: str = "unicode", mention_mode: str = "text"):
+            self.checklist_mode = checklist_mode
+            self.mention_mode = mention_mode
+
+        def convert(self, _markdown_text: str, start_index: int = 1):
+            return [
+                {"insertText": {"location": {"index": start_index}, "text": "@user@example.com\n"}},
+                {"deleteContentRange": {"range": {"startIndex": start_index, "endIndex": start_index + 17}}},
+                {
+                    "insertPerson": {
+                        "location": {"index": start_index},
+                        "personProperties": {"email": "user@example.com"},
+                    }
+                },
+            ]
+
+    docs_writing_module.MarkdownToDocsConverter = _MentionConverter
+    service.documents.return_value.batchUpdate.return_value.execute.side_effect = [
+        {},  # base phase succeeds
+        RuntimeError("insertPerson unsupported"),  # mention phase fails -> fallback note
+    ]
+    document_id = "f" * 24
+
+    result = await docs_writing_module.insert_markdown(
+        service=service,
+        user_google_email="user@example.com",
+        document_id=document_id,
+        markdown_text="@user@example.com",
+        mention_mode="person_chip",
+        dry_run=False,
+    )
+
+    assert "Inserted Markdown content into document" in result
+    assert "Mention fallback kept literal tokens for: @user@example.com" in result
 
 
 @pytest.mark.asyncio

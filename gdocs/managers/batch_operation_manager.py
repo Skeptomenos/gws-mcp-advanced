@@ -224,13 +224,23 @@ class BatchOperationManager:
         elif op_type == "insert_markdown":
             markdown_text = op["markdown_text"]
             start_index = op.get("index", 1)
-            converter = MarkdownToDocsConverter()
+            checklist_mode = op.get("checklist_mode", "unicode")
+            mention_mode = op.get("mention_mode", "text")
+            if checklist_mode not in {"unicode", "native"}:
+                raise ValueError("insert_markdown.checklist_mode must be one of: unicode, native.")
+            if mention_mode not in {"text", "person_chip"}:
+                raise ValueError("insert_markdown.mention_mode must be one of: text, person_chip.")
+            converter = MarkdownToDocsConverter(checklist_mode=checklist_mode, mention_mode=mention_mode)
             markdown_requests = converter.convert(markdown_text, start_index=start_index)
             if not markdown_requests:
                 raise ValueError("Markdown conversion produced no requests. Check markdown_text content.")
             request = markdown_requests
             preview = markdown_text[:30].replace("\n", " ")
-            description = f"insert markdown at {start_index} ({len(markdown_requests)} requests, '{preview}{'...' if len(markdown_text) > 30 else ''}')"
+            description = (
+                f"insert markdown at {start_index} ({len(markdown_requests)} requests, "
+                f"checklist_mode={checklist_mode}, mention_mode={mention_mode}, "
+                f"'{preview}{'...' if len(markdown_text) > 30 else ''}')"
+            )
 
         elif op_type == "raw_request":
             # Direct pass-through for debugging/advanced usage
@@ -346,7 +356,7 @@ class BatchOperationManager:
                 },
                 "insert_markdown": {
                     "required": ["markdown_text"],
-                    "optional": ["index"],
+                    "optional": ["index", "checklist_mode", "mention_mode"],
                     "description": "Insert Markdown content converted to native Google Docs formatting",
                 },
             },

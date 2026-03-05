@@ -62,8 +62,50 @@ Live pytest wrapper (opt-in only):
 OPENCODE_SMOKE_LIVE=1 uv run pytest tests/opencode/test_opencode_sdk_session_flow.py -q
 ```
 
+## Lane D: Live Artifact Cleanup
+Dry-run preview (safe default):
+```bash
+uv run python scripts/mcp_live_cleanup.py \
+  --user-email "$MCP_TEST_USER_EMAIL" \
+  --artifact-prefix "${MCP_TEST_PREFIX:-codex-it-}" \
+  --older-than-hours 24 \
+  --services all
+```
+
+Execute cleanup:
+```bash
+uv run python scripts/mcp_live_cleanup.py \
+  --user-email "$MCP_TEST_USER_EMAIL" \
+  --artifact-prefix "${MCP_TEST_PREFIX:-codex-it-}" \
+  --older-than-hours 24 \
+  --services all \
+  --execute
+```
+
+Notes:
+1. Cleanup only targets resources whose name/title starts with the configured prefix.
+2. Cleanup also enforces retention cutoff (`--older-than-hours`) before deletion.
+3. Services supported today: `drive`, `calendar`, `tasks`.
+
+## Cadence
+Scheduled/manual cadence workflow:
+1. `.github/workflows/live-mcp-cadence.yml`
+2. Trigger modes:
+   1. nightly schedule (`03:15 UTC`)
+   2. manual `workflow_dispatch` (optional write lane + cleanup execute toggle)
+3. Required repository secrets:
+   1. `MCP_TEST_USER_EMAIL`
+   2. `MCP_CREDENTIALS_JSON` (credential JSON for the test account)
+4. Optional repository secret:
+   1. `MCP_AUTH_CLIENTS_JSON` (when client-mapping config is required)
+5. Optional repository variables:
+   1. `MCP_TEST_PREFIX` (artifact prefix override)
+   2. `MCP_LIVE_WRITE_CADENCE=1` (enable write lane by default)
+   3. `MCP_LIVE_CLEANUP_EXECUTE=1` (enable execute-mode cleanup by default)
+
 ## CI Integration Notes
 1. Lane A is suitable for standard CI by default.
 2. Lane B and write-lane tests should be gated to protected environments.
-3. OpenCode lane should skip gracefully when `opencode`/`node` are unavailable.
-4. Keep `--live` SDK smoke opt-in because it executes a real prompt against the configured OpenCode model/provider.
+3. Lane D should run after live lanes (preview always, execute by explicit policy).
+4. OpenCode lane should skip gracefully when `opencode`/`node` are unavailable.
+5. Keep `--live` SDK smoke opt-in because it executes a real prompt against the configured OpenCode model/provider.

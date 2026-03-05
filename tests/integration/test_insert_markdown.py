@@ -150,6 +150,24 @@ class TestInsertMarkdownRequestStructure:
         preset = bullet_req["createParagraphBullets"]["bulletPreset"]
         assert "NUMBERED" in preset
 
+    def test_native_checklist_mode_generates_checkbox_bullets(self):
+        """Verify native checklist mode emits BULLET_CHECKBOX for task lists."""
+        converter = MarkdownToDocsConverter(checklist_mode="native")
+        requests = converter.convert("- [ ] One\n- [x] Two")
+
+        bullet_requests = [r for r in requests if "createParagraphBullets" in r]
+        assert len(bullet_requests) == 1
+        assert bullet_requests[0]["createParagraphBullets"]["bulletPreset"] == "BULLET_CHECKBOX"
+
+    def test_person_chip_mode_generates_insert_person_requests(self):
+        """Verify person-chip mode emits insertPerson requests for @email mentions."""
+        converter = MarkdownToDocsConverter(mention_mode="person_chip")
+        requests = converter.convert("Ping @user@example.com")
+
+        person_requests = [r for r in requests if "insertPerson" in r]
+        assert len(person_requests) == 1
+        assert person_requests[0]["insertPerson"]["personProperties"]["email"] == "user@example.com"
+
     def test_code_block_generates_font_style_request(self, converter):
         """Verify code block produces updateTextStyle with monospace font."""
         requests = converter.convert("```\ncode here\n```")
