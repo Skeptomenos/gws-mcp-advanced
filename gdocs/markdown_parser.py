@@ -23,6 +23,7 @@ See Also:
 from __future__ import annotations
 
 import logging
+import re
 from typing import TYPE_CHECKING
 
 from markdown_it import MarkdownIt
@@ -46,6 +47,7 @@ HEADING_STYLE_MAP: dict[str, str] = {
 # Bullet list presets for the Google Docs API
 BULLET_PRESET_UNORDERED = "BULLET_DISC_CIRCLE_SQUARE"
 BULLET_PRESET_ORDERED = "NUMBERED_DECIMAL_ALPHA_ROMAN"
+BULLET_PRESET_CHECKBOX = "BULLET_CHECKBOX"
 
 # Code block styling constants
 CODE_FONT_FAMILY = "Consolas"
@@ -77,6 +79,13 @@ IMAGE_PLACEHOLDER_CHAR = "\ufffc"
 # Table placeholder used during single-insert buffering. Each placeholder
 # is later replaced with a delete+insertTable request pair.
 TABLE_PLACEHOLDER_CHAR = "\ufffd"
+
+# Supported markdown conversion modes for Wave 8 extensions.
+CHECKLIST_MODES = {"unicode", "native"}
+MENTION_MODES = {"text", "person_chip"}
+
+# @user@example.com mention token matcher used in person-chip mode.
+PERSON_MENTION_PATTERN = re.compile(r"(?<![\w@])@([A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,})(?![\w@])")
 
 # Top-level block tokens whose source line maps are used to preserve explicit
 # blank lines from markdown input (e.g. spacing around headings/hr blocks).
@@ -123,8 +132,18 @@ class MarkdownToDocsConverter:
         3
     """
 
-    def __init__(self) -> None:
+    def __init__(self, checklist_mode: str = "unicode", mention_mode: str = "text") -> None:
         """Initialize the converter with CommonMark parser + table/strikethrough extensions."""
+        if checklist_mode not in CHECKLIST_MODES:
+            raise ValueError(
+                f"Invalid checklist_mode '{checklist_mode}'. Supported values: {', '.join(sorted(CHECKLIST_MODES))}."
+            )
+        if mention_mode not in MENTION_MODES:
+            raise ValueError(
+                f"Invalid mention_mode '{mention_mode}'. Supported values: {', '.join(sorted(MENTION_MODES))}."
+            )
+        self.checklist_mode = checklist_mode
+        self.mention_mode = mention_mode
         # CommonMark base with GFM-style extensions:
         # - table: GFM tables (MARKDOWN_STEP_3_TABLES.md)
         # - strikethrough: ~~text~~ syntax (Task 6.2)
@@ -184,12 +203,18 @@ class MarkdownToDocsConverter:
         # Table data for post-processing (populated during convert())
         # Each entry is (table_data_2d, bold_headers) for one table found in the markdown
         self.pending_tables: list[tuple[list[list[str]], bool]] = []
+        # Pending person mentions captured from markdown text in person-chip mode as
+        # (buffer-relative start, buffer-relative end, email).
+        self.pending_person_mentions: list[tuple[int, int, str]] = []
         # Pending table placeholders captured during buffering as
         # (buffer-relative index, rows, cols).
         self._pending_table_insertions: list[tuple[int, int, int]] = []
         # Pending inline images captured during buffering as
         # (buffer-relative index, image_uri).
         self._pending_inline_images: list[tuple[int, str]] = []
+        # In native checklist mode, the task-list plugin leaves a leading space
+        # in the following text token after the checkbox html token. Strip one.
+        self._strip_next_task_text_space: bool = False
         # Track top-level source block line boundaries to preserve explicit
         # blank lines in the original markdown.
         self._last_tracked_block_end_line: int | None = None
@@ -235,8 +260,10 @@ class MarkdownToDocsConverter:
         self._deferred_styles = []
         self._style_start_positions = []
         self.pending_tables = []
+        self.pending_person_mentions = []
         self._pending_table_insertions = []
         self._pending_inline_images = []
+        self._strip_next_task_text_space = False
         self._last_tracked_block_end_line = None
 
         tokens: list[Token] = self.md.parse(markdown_text)
@@ -286,6 +313,7 @@ class MarkdownToDocsConverter:
         bullet_requests = self._adjust_bullet_indices_for_tab_removal(raw_bullet_requests, start_index)
         table_requests = self._build_table_replacement_requests(start_index, raw_bullet_requests)
         image_requests = self._build_inline_image_requests(start_index, raw_bullet_requests)
+        mention_requests = self._build_person_mention_requests(start_index, raw_bullet_requests)
         # NOTE: Table cell insertText requests are no longer included in output.
         # Cell population requires inspecting the document after table creation
         # to get actual cell paragraph indices. See create_doc in writing.py.
@@ -296,6 +324,7 @@ class MarkdownToDocsConverter:
             + other_style_requests
             + para_requests
             + bullet_requests
+            + mention_requests
             + image_requests
             + table_requests
         )
@@ -413,7 +442,14 @@ class MarkdownToDocsConverter:
                 if self._in_table_cell:
                     self._current_cell_content += child.content
                 else:
-                    self._insert_text(child.content)
+                    text_content = child.content
+                    if self._strip_next_task_text_space:
+                        text_content = text_content[1:] if text_content.startswith(" ") else text_content
+                        self._strip_next_task_text_space = False
+                    if self.mention_mode == "person_chip":
+                        self._insert_text_with_person_mentions(text_content)
+                    else:
+                        self._insert_text(text_content)
             elif child.type == "softbreak":
                 # Soft line breaks become spaces in Google Docs
                 self._insert_text(" ")
@@ -588,17 +624,22 @@ class MarkdownToDocsConverter:
             logger.warning("_apply_top_level_list_bullets called without start index")
             return False
 
+        bullet_preset = BULLET_PRESET_UNORDERED
         if self._top_level_list_has_task_items:
-            logger.debug("Skipping createParagraphBullets for task-list block")
-            self._top_level_list_start_index = None
-            self._top_level_list_type = None
-            self._top_level_list_has_task_items = False
-            return False
+            if self.checklist_mode == "native":
+                bullet_preset = BULLET_PRESET_CHECKBOX
+            else:
+                logger.debug("Skipping createParagraphBullets for task-list block (unicode checklist mode)")
+                self._top_level_list_start_index = None
+                self._top_level_list_type = None
+                self._top_level_list_has_task_items = False
+                return False
 
-        if self._top_level_list_type == "bullet":
-            bullet_preset = BULLET_PRESET_UNORDERED
-        else:
-            bullet_preset = BULLET_PRESET_ORDERED
+        if not self._top_level_list_has_task_items:
+            if self._top_level_list_type == "bullet":
+                bullet_preset = BULLET_PRESET_UNORDERED
+            else:
+                bullet_preset = BULLET_PRESET_ORDERED
 
         # Exclude the list-closing newline from the bullet range to avoid
         # rendering an extra empty bullet paragraph after task/list blocks.
@@ -1088,11 +1129,17 @@ class MarkdownToDocsConverter:
         # or with checked="checked" for checked items
         # Note: The following text token already has a leading space, so we don't add one
         if 'class="task-list-item-checkbox"' in content:
-            checkbox_char = CHECKBOX_CHECKED if 'checked="checked"' in content else CHECKBOX_UNCHECKED
-            self._insert_text(checkbox_char)
-            if self._list_type_stack:
-                self._top_level_list_has_task_items = True
-            logger.debug(f"Inserted task list checkbox: {checkbox_char!r}")
+            if self.checklist_mode == "native":
+                if self._list_type_stack:
+                    self._top_level_list_has_task_items = True
+                self._strip_next_task_text_space = True
+                logger.debug("Detected task list checkbox in native checklist mode")
+            else:
+                checkbox_char = CHECKBOX_CHECKED if 'checked="checked"' in content else CHECKBOX_UNCHECKED
+                self._insert_text(checkbox_char)
+                if self._list_type_stack:
+                    self._top_level_list_has_task_items = True
+                logger.debug(f"Inserted task list checkbox: {checkbox_char!r}")
         else:
             # For other HTML inline elements, insert as plain text
             # This preserves any raw HTML the user may have included
@@ -1243,6 +1290,74 @@ class MarkdownToDocsConverter:
                 }
             )
         return requests
+
+    def _build_person_mention_requests(self, start_index: int, raw_bullet_requests: list[dict]) -> list[dict]:
+        """
+        Build deferred person-mention replacement requests.
+
+        In person-chip mode, mention tokens are inserted as literal text first
+        so fallback is always safe. This method creates replacement pairs:
+        1) deleteContentRange over the literal token range
+        2) insertPerson at the same start index
+
+        Requests are emitted in descending range order to avoid index drift when
+        multiple mentions are replaced sequentially.
+        """
+        if self.mention_mode != "person_chip" or not self.pending_person_mentions:
+            return []
+
+        requests: list[dict] = []
+        for rel_start, rel_end, email in sorted(self.pending_person_mentions, key=lambda item: item[0], reverse=True):
+            abs_start = start_index + rel_start
+            abs_end = start_index + rel_end
+            abs_start -= self._tabs_removed_before_index(abs_start, start_index, raw_bullet_requests)
+            abs_end -= self._tabs_removed_before_index(abs_end, start_index, raw_bullet_requests)
+            requests.append(
+                {
+                    "deleteContentRange": {
+                        "range": {
+                            "startIndex": abs_start,
+                            "endIndex": abs_end,
+                        }
+                    }
+                }
+            )
+            requests.append(
+                {
+                    "insertPerson": {
+                        "location": {"index": abs_start},
+                        "personProperties": {"email": email},
+                    }
+                }
+            )
+        return requests
+
+    def _insert_text_with_person_mentions(self, text: str) -> None:
+        """
+        Insert text and track @user@example.com tokens for person-chip replacement.
+
+        Tokens are kept as literal text in the base insertion pass so failed
+        mention replacement calls can gracefully fall back without data loss.
+        """
+        if not text:
+            return
+
+        cursor = 0
+        for match in PERSON_MENTION_PATTERN.finditer(text):
+            start, end = match.span()
+            if start > cursor:
+                self._insert_text(text[cursor:start])
+
+            mention_literal = match.group(0)
+            email = match.group(1)
+            rel_start = len(self._text_buffer)
+            self._insert_text(mention_literal)
+            rel_end = len(self._text_buffer)
+            self.pending_person_mentions.append((rel_start, rel_end, email))
+            cursor = end
+
+        if cursor < len(text):
+            self._insert_text(text[cursor:])
 
     def _tabs_removed_before_index(self, abs_index: int, start_index: int, raw_bullet_requests: list[dict]) -> int:
         """

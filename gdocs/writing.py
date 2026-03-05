@@ -28,19 +28,30 @@ from gdrive.drive_helpers import resolve_file_id_or_alias
 logger = logging.getLogger(__name__)
 
 
+def _validate_markdown_modes(checklist_mode: str, mention_mode: str) -> str | None:
+    """Validate markdown conversion mode inputs."""
+    if checklist_mode not in {"unicode", "native"}:
+        return "Error: checklist_mode must be one of: unicode, native."
+    if mention_mode not in {"text", "person_chip"}:
+        return "Error: mention_mode must be one of: text, person_chip."
+    return None
+
+
 def _partition_markdown_requests(
     requests: list[dict[str, Any]],
-) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]]]:
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]]]:
     """
-    Partition markdown conversion requests into three execution phases:
+    Partition markdown conversion requests into four execution phases:
     1) base text/style/bullet requests
-    2) inline image placeholder replacements (delete+insertInlineImage)
-    3) table placeholder replacements (delete+insertTable)
+    2) person mention replacements (delete+insertPerson)
+    3) inline image placeholder replacements (delete+insertInlineImage)
+    4) table placeholder replacements (delete+insertTable)
 
     This keeps structural placeholder replacement logic centralized so
     `create_doc` and `insert_markdown` stay behaviorally aligned.
     """
     base_requests: list[dict[str, Any]] = []
+    mention_phase_requests: list[dict[str, Any]] = []
     image_phase_requests: list[dict[str, Any]] = []
     table_phase_requests: list[dict[str, Any]] = []
 
@@ -51,6 +62,11 @@ def _partition_markdown_requests(
         # Keep delete+image pairs together for phase 2.
         if "deleteContentRange" in request and index + 1 < len(requests):
             next_request = requests[index + 1]
+            if "insertPerson" in next_request:
+                mention_phase_requests.append(request)
+                mention_phase_requests.append(next_request)
+                index += 2
+                continue
             if "insertInlineImage" in next_request:
                 image_phase_requests.append(request)
                 image_phase_requests.append(next_request)
@@ -62,7 +78,9 @@ def _partition_markdown_requests(
                 index += 2
                 continue
 
-        if "insertInlineImage" in request:
+        if "insertPerson" in request:
+            mention_phase_requests.append(request)
+        elif "insertInlineImage" in request:
             image_phase_requests.append(request)
         elif "insertTable" in request:
             table_phase_requests.append(request)
@@ -70,7 +88,58 @@ def _partition_markdown_requests(
             base_requests.append(request)
         index += 1
 
-    return base_requests, image_phase_requests, table_phase_requests
+    return base_requests, mention_phase_requests, image_phase_requests, table_phase_requests
+
+
+async def _execute_person_mention_phase(
+    service: Any,
+    document_id: str,
+    mention_phase_requests: list[dict[str, Any]],
+) -> list[str]:
+    """
+    Execute mention replacement pairs with deterministic fallback.
+
+    Each mention replacement pair is executed in its own batchUpdate call:
+    1) delete literal @user@example.com range
+    2) insertPerson at the same index
+
+    If a pair fails, the original literal text remains unchanged because the
+    call is atomic, and we record a fallback note for response visibility.
+    """
+    if not mention_phase_requests:
+        return []
+
+    mention_pairs: list[tuple[dict[str, Any], dict[str, Any]]] = []
+    index = 0
+    while index < len(mention_phase_requests):
+        request = mention_phase_requests[index]
+        if "deleteContentRange" in request and index + 1 < len(mention_phase_requests):
+            next_request = mention_phase_requests[index + 1]
+            if "insertPerson" in next_request:
+                mention_pairs.append((request, next_request))
+                index += 2
+                continue
+        index += 1
+
+    def _pair_start(item: tuple[dict[str, Any], dict[str, Any]]) -> int:
+        return int(item[0]["deleteContentRange"]["range"]["startIndex"])
+
+    fallback_mentions: list[str] = []
+    for delete_request, insert_person_request in sorted(mention_pairs, key=_pair_start, reverse=True):
+        person_props = insert_person_request.get("insertPerson", {}).get("personProperties", {})
+        email = str(person_props.get("email", "")).strip()
+        mention_token = f"@{email}" if email else "@unknown"
+        try:
+            await asyncio.to_thread(
+                service.documents()
+                .batchUpdate(documentId=document_id, body={"requests": [delete_request, insert_person_request]})
+                .execute
+            )
+        except Exception:
+            # Keep literal mention text when insertPerson cannot be applied.
+            fallback_mentions.append(mention_token)
+
+    return fallback_mentions
 
 
 @server.tool()
@@ -82,6 +151,8 @@ async def create_doc(
     title: str,
     content: str = "",
     parse_markdown: bool = True,
+    checklist_mode: str = "unicode",
+    mention_mode: str = "text",
     dry_run: bool = True,
 ) -> str:
     """
@@ -98,6 +169,10 @@ async def create_doc(
         content: Optional initial content. Interpreted as Markdown by default.
         parse_markdown: If True (default), parse content as Markdown and apply
                         formatting. If False, insert content as plain text.
+        checklist_mode: Checklist rendering mode for markdown task lists:
+                        `unicode` (default) or `native`.
+        mention_mode: Mention rendering mode for markdown mentions:
+                      `text` (default) or `person_chip`.
         dry_run: When True (default), preview create/update actions without executing them.
 
     Returns:
@@ -107,25 +182,33 @@ async def create_doc(
         # Create doc with Markdown content (default behavior)
         create_doc(title="My Doc", content="# Heading\\n\\n**Bold** text")
 
+        # Create doc with native checklist bullets
+        create_doc(title="Checklist Doc", content="- [ ] One\\n- [x] Two", checklist_mode="native")
+
         # Create doc with plain text (no Markdown parsing)
         create_doc(title="Plain Doc", content="# This is literal text", parse_markdown=False)
     """
     logger.info(
         f"[create_doc] Invoked. Email: '{user_google_email}', Title='{title}', "
-        f"parse_markdown={parse_markdown}, dry_run={dry_run}, content_len={len(content)}"
+        f"parse_markdown={parse_markdown}, checklist_mode={checklist_mode}, mention_mode={mention_mode}, "
+        f"dry_run={dry_run}, content_len={len(content)}"
     )
+
+    mode_error = _validate_markdown_modes(checklist_mode, mention_mode)
+    if mode_error:
+        return mode_error
 
     if dry_run:
         if not content:
             return f"DRY RUN: Would create empty Google Doc '{title}' for {user_google_email}."
 
         if parse_markdown:
-            converter = MarkdownToDocsConverter()
+            converter = MarkdownToDocsConverter(checklist_mode=checklist_mode, mention_mode=mention_mode)
             requests = converter.convert(content, start_index=1)
             return (
                 f"DRY RUN: Would create Google Doc '{title}' for {user_google_email} with Markdown content "
                 f"({len(content)} characters), apply {len(requests)} request(s), and populate "
-                f"{len(converter.pending_tables)} table(s)."
+                f"{len(converter.pending_tables)} table(s). Mentions mode={mention_mode}, checklist mode={checklist_mode}."
             )
 
         return (
@@ -135,13 +218,16 @@ async def create_doc(
 
     doc = await asyncio.to_thread(service.documents().create(body={"title": title}).execute)
     doc_id = doc.get("documentId")
+    fallback_mentions: list[str] = []
 
     if content:
         if parse_markdown:
-            converter = MarkdownToDocsConverter()
+            converter = MarkdownToDocsConverter(checklist_mode=checklist_mode, mention_mode=mention_mode)
             requests = converter.convert(content, start_index=1)
             logger.debug(f"[create_doc] Markdown converter generated {len(requests)} request(s)")
-            base_requests, image_phase_requests, table_phase_requests = _partition_markdown_requests(requests)
+            base_requests, mention_phase_requests, image_phase_requests, table_phase_requests = (
+                _partition_markdown_requests(requests)
+            )
 
             # Phase 1: send base text/style requests in a single batch.
             # The createParagraphBullets request uses leading TAB characters to determine
@@ -153,7 +239,10 @@ async def create_doc(
                     service.documents().batchUpdate(documentId=doc_id, body={"requests": base_requests}).execute
                 )
 
-            # Phase 2: Inline image replacement.
+            # Phase 2: Person mention replacement with deterministic fallback.
+            fallback_mentions = await _execute_person_mention_phase(service, doc_id, mention_phase_requests)
+
+            # Phase 3: Inline image replacement.
             # Image requests are emitted from markdown conversion as placeholder delete+insert
             # operations. Running them in a dedicated batchUpdate avoids API drops observed
             # when image operations are mixed with large structural batches.
@@ -162,7 +251,7 @@ async def create_doc(
                     service.documents().batchUpdate(documentId=doc_id, body={"requests": image_phase_requests}).execute
                 )
 
-            # Phase 3: Table placeholder replacement.
+            # Phase 4: Table placeholder replacement.
             # Table insertions expand document indices, so we apply them only after
             # text/style/image phases complete.
             if table_phase_requests:
@@ -170,7 +259,7 @@ async def create_doc(
                     service.documents().batchUpdate(documentId=doc_id, body={"requests": table_phase_requests}).execute
                 )
 
-            # Phase 4: Populate table cells (requires document inspection for actual indices).
+            # Phase 5: Populate table cells (requires document inspection for actual indices).
             # Tables are created empty in Phase 3. Cell population needs a fresh read of the
             # document to find actual cell paragraph positions.
             if converter.pending_tables:
@@ -196,6 +285,12 @@ async def create_doc(
                     raise RuntimeError(
                         f"Document '{doc_id}' created but markdown table population was incomplete ({failure_msg})."
                     )
+            if fallback_mentions:
+                logger.info(
+                    "[create_doc] Mention fallback applied for %d token(s): %s",
+                    len(fallback_mentions),
+                    ", ".join(fallback_mentions),
+                )
         else:
             requests = [{"insertText": {"location": {"index": 1}, "text": content}}]
             await asyncio.to_thread(
@@ -205,6 +300,8 @@ async def create_doc(
     link = f"https://docs.google.com/document/d/{doc_id}/edit"
     mode_info = "with Markdown formatting" if (content and parse_markdown) else "with plain text" if content else ""
     msg = f"Created Google Doc '{title}' (ID: {doc_id}) {mode_info}. Link: {link}".strip()
+    if content and parse_markdown and fallback_mentions:
+        msg += " Mention fallback kept literal tokens for: " + ", ".join(fallback_mentions)
     logger.info(f"Successfully created Google Doc '{title}' (ID: {doc_id}) for {user_google_email}. Link: {link}")
     return msg
 
@@ -597,6 +694,8 @@ async def insert_markdown(
     document_id: str,
     markdown_text: str,
     index: int = 1,
+    checklist_mode: str = "unicode",
+    mention_mode: str = "text",
     dry_run: bool = True,
 ) -> str:
     """
@@ -611,6 +710,10 @@ async def insert_markdown(
         markdown_text: Markdown string to convert and insert.
         index: Document index to start insertion at (1-based, default: 1).
                Index 1 is the start of the document body.
+        checklist_mode: Checklist rendering mode for markdown task lists:
+                        `unicode` (default) or `native`.
+        mention_mode: Mention rendering mode for markdown mentions:
+                      `text` (default) or `person_chip`.
         dry_run: When True (default), return planned mutation without executing it
 
     Returns:
@@ -622,7 +725,10 @@ async def insert_markdown(
             markdown_text="# Welcome\n\nThis is **bold** and *italic* text.\n\n- Item 1\n- Item 2"
         )
     """
-    logger.info(f"[insert_markdown] Doc={document_id}, markdown_len={len(markdown_text)}, start_index={index}")
+    logger.info(
+        f"[insert_markdown] Doc={document_id}, markdown_len={len(markdown_text)}, start_index={index}, "
+        f"checklist_mode={checklist_mode}, mention_mode={mention_mode}"
+    )
 
     # Resolve alias (A-Z) to actual file ID if applicable
     document_id = resolve_file_id_or_alias(document_id)
@@ -639,10 +745,16 @@ async def insert_markdown(
     if index < 1:
         return "Error: index must be at least 1 (document body starts at index 1)."
 
+    mode_error = _validate_markdown_modes(checklist_mode, mention_mode)
+    if mode_error:
+        return mode_error
+
     # Convert Markdown to Google Docs API requests
-    converter = MarkdownToDocsConverter()
+    converter = MarkdownToDocsConverter(checklist_mode=checklist_mode, mention_mode=mention_mode)
     requests = converter.convert(markdown_text, start_index=index)
-    base_requests, image_phase_requests, table_phase_requests = _partition_markdown_requests(requests)
+    base_requests, mention_phase_requests, image_phase_requests, table_phase_requests = _partition_markdown_requests(
+        requests
+    )
 
     if not requests:
         return "Error: Markdown conversion produced no requests. Check markdown_text content."
@@ -650,15 +762,18 @@ async def insert_markdown(
     if dry_run:
         return (
             f"DRY RUN: Would insert Markdown into document {document_id} for {user_google_email} at index {index}. "
-            f"Generated {len(requests)} API request(s)."
+            f"Generated {len(requests)} API request(s). Mentions mode={mention_mode}, checklist mode={checklist_mode}."
         )
 
     # Execute markdown requests in shared phases to keep index behavior
     # consistent with create_doc.
+    fallback_mentions: list[str] = []
     if base_requests:
         await asyncio.to_thread(
             service.documents().batchUpdate(documentId=document_id, body={"requests": base_requests}).execute
         )
+
+    fallback_mentions = await _execute_person_mention_phase(service, document_id, mention_phase_requests)
 
     if image_phase_requests:
         await asyncio.to_thread(
@@ -671,6 +786,9 @@ async def insert_markdown(
         )
 
     link = f"https://docs.google.com/document/d/{document_id}/edit"
-    return (
+    message = (
         f"Inserted Markdown content into document {document_id}. Generated {len(requests)} API request(s). Link: {link}"
     )
+    if fallback_mentions:
+        message += " Mention fallback kept literal tokens for: " + ", ".join(fallback_mentions)
+    return message

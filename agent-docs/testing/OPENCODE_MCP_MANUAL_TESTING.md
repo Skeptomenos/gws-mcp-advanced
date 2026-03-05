@@ -5,7 +5,7 @@ OpenCode should update this document during testing with status, evidence, findi
 
 ## Document Controls
 - Status: `ACTIVE`
-- Last Updated (UTC): `2026-03-03T21:05:00Z`
+- Last Updated (UTC): `2026-03-04T23:35:20Z`
 - Canonical Path: `/Users/david.helmus/repos/ai-dev/_infra/gws-mcp-advanced/gws-mcp-advanced/agent-docs/testing/OPENCODE_MCP_MANUAL_TESTING.md`
 - Related Plan: `/Users/david.helmus/repos/ai-dev/_infra/gws-mcp-advanced/gws-mcp-advanced/agent-docs/roadmap/PLAN.md`
 - Related Status: `/Users/david.helmus/repos/ai-dev/_infra/gws-mcp-advanced/gws-mcp-advanced/agent-docs/roadmap/STATUS.md`
@@ -13,6 +13,7 @@ OpenCode should update this document during testing with status, evidence, findi
 Execution note (2026-03-03):
 1. Apps Script Wave-7 manual validation rows (`OP-71`+) are executed in Convex-hosted MCP sessions.
 2. OpenCode rows remain authoritative historical evidence for non-Apps-Script tracks.
+3. Wave-8 smart-chip validation rows are executed in Convex-hosted sessions using direct tool-call paths from current branch code.
 
 ## Living Document Rules
 1. Append updates; do not erase prior run history.
@@ -228,6 +229,16 @@ These rows are executed in Convex-hosted MCP sessions as the active Wave-7 valid
 | AS-05 | Apps Script Mutator | `update_deployment` + `delete_deployment` dry-run and explicit mutate. | Update/delete deployment paths both succeed with deterministic responses. | PASS | Dry-run preview + mutate succeeded for deployment `AKfycbxCrAk4dN2SUKWhaDgsCpO5DjdrCjf7MLYFqFDZboWDe5dnCtsJ1xWzW0Sga2EsXO9R`. | `update_deployment` request requires wrapped `deploymentConfig` payload. |
 | AS-06 | Apps Script Execute | `run_script_function` dry-run and explicit mutate on probe scripts. | Dry-run preview is safe; mutate either executes successfully or surfaces safe runtime error without crash. | PASS | Dry-run succeeded; explicit mutate on ephemeral probe scripts returned safe Script API `404 Requested entity was not found`. | Runtime/environment characteristic; tracked in APPS-04 evidence as non-contract regression. |
 | AS-07 | Cleanup | Trash all probe scripts created during AS-02..AS-06 execution. | No probe artifacts left active in Drive. | PASS | Probe scripts (for example `1D2F6Jxp6_xRpZ6Tp3yaIPHcA-TDS5KeB-haI6tBJUWLaaHxDVWOjye6f`) were trashed after run completion. | Cleanup executed in the same Convex session as mutator probes. |
+
+## Wave 8 Smart-Chip Matrix (Convex Execution)
+These rows are executed in Convex-hosted sessions using direct tool-call paths (`create_doc.fn` / `insert_markdown.fn`) from the current branch runtime.
+
+| ID | Area | Prompt / Action | Expected Result | Status | Evidence | Notes |
+|---|---|---|---|---|---|---|
+| W8-01 | RM-05 Native Checklist | Create a doc and insert markdown task list with `checklist_mode='native'`. | Task list renders as native checklist bullets (`BULLET_CHECKBOX`) without Unicode checkbox chars in text payload. | PASS | Doc created: `1hOSLHQ5sve6lsbILHPFEHGbVKIuNuZ5sn7NtQNBVMu8`; insertion path succeeded with native mode. | Validates parser/tool mode wiring and native checklist request generation. |
+| W8-02 | RM-05 Unicode Compatibility | Insert markdown task list with default mode (`checklist_mode='unicode'`). | Existing behavior preserved: literal checkbox markers remain text-based for backward compatibility. | PASS | Default-mode insertion succeeded in same runtime probe session; output preserved legacy text mode behavior. | Confirms backward-compatible default contract. |
+| W8-03 | RM-06 Person Chip | Insert markdown with `@user@example.com` mentions and `mention_mode='person_chip'`. | Mention replacement phase executes with `insertPerson`; operation succeeds or degrades safely with explicit fallback notes. | PASS | Person-chip insertion path executed in live probe with no regressions; mention replacement phase completed. | Deterministic fallback handling is implemented in per-mention execution phase. |
+| W8-04 | RM-06 Text Mode Fallback | Insert markdown mentions with `mention_mode='text'`. | Mentions remain literal text (`@user@example.com`) and document content stays intact. | PASS | Retrieved doc content includes literal `@plain@example.com` line after insertion. | Confirms non-chip mode behavior and mixed-mode safety. |
 
 ## Cross-Service Extended Matrix
 Run for full product coverage.

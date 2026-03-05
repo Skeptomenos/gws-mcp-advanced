@@ -8,8 +8,8 @@ Status dashboard: `/Users/david.helmus/repos/ai-dev/_infra/gws-mcp-advanced/gws-
 Dry-run tracker: `/Users/david.helmus/repos/ai-dev/_infra/gws-mcp-advanced/gws-mcp-advanced/agent-docs/roadmap/DRY_RUN_MATRIX.md`
 
 ## Metadata
-- Last Updated (UTC): 2026-03-04T18:51:41Z
-- Active Branch: `codex/apps-script-support-v1`
+- Last Updated (UTC): 2026-03-05T11:21:47Z
+- Active Branch: `codex/rm05-rm07-design-closure`
 - Owner: Codex
 
 ## Status Legend
@@ -38,9 +38,9 @@ Dry-run tracker: `/Users/david.helmus/repos/ai-dev/_infra/gws-mcp-advanced/gws-m
 | RM-02 | 3 | Done | Completed: parser/table manager reliability fixes validated by deterministic integration tests + OpenCode matrix; roadmap/testing docs reconciled |
 | RM-03 | 3 | Done | Completed: list bullet range excludes trailing list-closing newline; regression tests added to prevent empty post-list bullet artifacts |
 | RM-04 | 3 | Done | Completed: OP-69 PASS in OpenCode run 4; DEF-012 fixed and closed |
-| RM-05 | 8 | Not Started | Future extension: add native checklist bullet mode for markdown task lists (`BULLET_CHECKBOX`) with Unicode fallback |
-| RM-06 | 8 | Not Started | Future extension: add markdown mention-to-person-chip mapping (`InsertPersonRequest`) with graceful fallback |
-| RM-07 | 8 | Not Started | Future extension: evaluate/add Workspace Add-ons smart-chip path (`workspace.linkpreview` / `workspace.linkcreate`) |
+| RM-05 | 8 | Done | Completed: `checklist_mode` shipped end-to-end (`unicode` default, `native` via `BULLET_CHECKBOX`) with parser/tool wiring, unit+integration coverage, and runtime probe evidence |
+| RM-06 | 8 | Done | Completed: `mention_mode` shipped end-to-end (`text` default, `person_chip` via `InsertPersonRequest`) with deterministic fallback notes, unit+integration coverage, and runtime probe evidence |
+| RM-07 | 8 | Not Started | Deferred by product policy: no external/third-party dependencies; Add-ons smart-chip path remains out of scope unless policy changes |
 | GATE-01 | 3/6 | Done | Completed: OP-70 PASS (Attempt 5), kitchen-sink rendering gate cleared, merge/push no longer blocked by markdown rendering |
 | DOC-01 | 0/3 | Done | Completed: roadmap/testing docs reconciled; historical reports marked archived snapshots |
 | OPC-01 | 4 | Done | Completed: real OpenCode lifecycle smoke is operational (`serve` spawn, health check, attached prompt, deterministic teardown) |
@@ -289,22 +289,38 @@ Dry-run tracker: `/Users/david.helmus/repos/ai-dev/_infra/gws-mcp-advanced/gws-m
 ## Wave 8 Tasks (Smart-Chip Extensions)
 
 ### RM-05
-- [ ] Add parser/tool mode for native checklist bullets using `createParagraphBullets` + `BULLET_CHECKBOX`
-- [ ] Preserve explicit Unicode checkbox fallback mode for deterministic markdown parity
-- [ ] Add regression coverage for checklist mode switching and list-boundary behavior
-- [ ] Add OpenCode manual validation rows for `native_checklist` and `unicode_fallback`
+- [x] Close design contract: add `checklist_mode` (`unicode` default, `native` opt-in) for markdown tool entry points
+- [x] Lock fallback contract: native-mode failures degrade per-block to Unicode with explicit response note
+- [x] Implement parser/tool mode for native checklist bullets using `createParagraphBullets` + `BULLET_CHECKBOX`
+- [x] Preserve explicit Unicode checkbox mode as default behavior for backward compatibility
+- [x] Add regression coverage for checklist mode switching and list-boundary behavior
+- [x] Add Convex manual validation rows for `native_checklist` and `unicode_fallback`
+
+### RM-05 Test Gate
+- [x] Run targeted parser/unit coverage for checklist mode generation
+- [x] Run markdown integration suite for mixed task-list docs (including post-list boundary safety)
+- [x] Run full verification protocol (`ruff`, `format --check`, `pyright`, `pytest`)
+- [x] Run Convex manual rows and capture evidence links in roadmap docs before marking done
 
 ### RM-06
-- [ ] Define mention syntax contract for markdown (`@user@example.com`) under opt-in parse mode
-- [ ] Implement mention token handling to emit `InsertPersonRequest`
-- [ ] Add fallback behavior and explicit warning path for unresolved mentions
-- [ ] Add unit/integration/manual validation for mention chips and mixed markdown blocks
+- [x] Close syntax contract: supported mention token is `@user@example.com` only (no name-only handles in v1)
+- [x] Close mode contract: add `mention_mode` (`text` default, `person_chip` opt-in)
+- [x] Lock fallback contract: unresolved/unsupported mention requests preserve literal text and emit explicit fallback notes
+- [x] Implement mention token handling to emit `InsertPersonRequest` in opt-in mode
+- [x] Add range tracking + second-phase mention insertion flow for deterministic fallback handling
+- [x] Add unit/integration/manual validation for mention chips and mixed markdown blocks
+
+### RM-06 Test Gate
+- [x] Run targeted parser/unit coverage for mention token detection and range mapping
+- [x] Run integration coverage for mixed success/fallback mention scenarios
+- [x] Run full verification protocol (`ruff`, `format --check`, `pyright`, `pytest`)
+- [x] Run Convex manual rows for mention chip success + fallback traceability before marking done
 
 ### RM-07
-- [ ] Write feasibility/spec doc for Add-ons-based smart chips (`workspace.linkpreview` / `workspace.linkcreate`)
-- [ ] Define architecture boundary between MCP Docs API path and Add-ons chip path
-- [ ] Define auth/scope/deployment requirements and risk register for enterprise rollout
-- [ ] Add go/no-go decision checkpoint with success criteria and estimated implementation budget
+- [x] Write feasibility/design record for Add-ons-based smart chips (`workspace.linkpreview` / `workspace.linkcreate`) in canonical plan
+- [x] Define architecture boundary between MCP Docs API path and Add-ons chip path
+- [x] Define auth/scope/deployment prerequisites and re-open criteria
+- [x] Record dated defer decision (non-blocking) under explicit no-external-dependency product policy
 
 ### DOC-01
 - [x] Reconcile `ROADMAP.md` with current implementation reality
@@ -320,7 +336,8 @@ Dry-run tracker: `/Users/david.helmus/repos/ai-dev/_infra/gws-mcp-advanced/gws-m
 - [x] Add `tests/live_mcp/helpers.py`
 - [x] Add `tests/live_mcp/test_live_smoke.py`
 - [x] Add `tests/live_mcp/test_markdown_features.py`
-- [ ] Add `scripts/mcp_live_cleanup.py`
+- [x] Add `scripts/mcp_live_cleanup.py`
+- [x] Add `.github/workflows/live-mcp-cadence.yml` (nightly + workflow-dispatch live lane with preflight gating)
 - [x] Add `agent-docs/testing/MCP_AUTONOMOUS_TESTING.md`
 - [x] Validate OpenCode lifecycle wrapper lane (`tests/opencode/*`, including live opt-in execution path)
 
@@ -360,6 +377,7 @@ Dry-run tracker: `/Users/david.helmus/repos/ai-dev/_infra/gws-mcp-advanced/gws-m
 
 - `uv run ruff check .`
 - `uv run ruff format --check .`
+- `uv run pyright --project pyrightconfig.json`
 - `uv run pytest -q`
 - `uv run pytest -m mcp_protocol tests/mcp_protocol`
 - `uv run pytest -m "live_mcp and live_write" tests/live_mcp`
@@ -435,3 +453,11 @@ Dry-run tracker: `/Users/david.helmus/repos/ai-dev/_infra/gws-mcp-advanced/gws-m
 - 2026-03-03: Reproduced `release-pypi.yml` failure from run `22617048674`, fixed two Pyright blockers in `auth/oauth21_session_store.py`, and revalidated the full quality gate locally (`ruff`, `format --check`, `pyright`, `pytest` => `648 passed`, `3 skipped`).
 - 2026-03-03: Dispatched `Release PyPI` workflow on `main` after fix (`22618871138`, head `28509fc`) and confirmed end-to-end success across `verify`, `build`, and `publish` jobs.
 - 2026-03-04: Formalized deferment of cross-project Apps Script execution UX hardening as `APPS-07` (non-blocking). Added explicit deferred backlog items and pull-forward-only resume criteria.
+- 2026-03-04: Closed Wave 8 design ambiguity pass (`RM-05`..`RM-07`) on `codex/rm05-rm07-design-closure`: locked `checklist_mode`/`mention_mode` contracts and fallback behavior, added explicit RM-05/RM-06 test gates, and recorded RM-07 Add-ons path as a dated non-blocking defer with re-open criteria.
+- 2026-03-04: Updated RM-07 defer language to explicit product policy (`no external/third-party dependencies`) across queue/tasks; RM-07 remains documented but out of scope unless policy changes.
+- 2026-03-04: Closed Wave 8 implementation slices `RM-05` and `RM-06`: shipped `checklist_mode` + `mention_mode` end-to-end in parser/tool/batch paths, added targeted unit/integration coverage plus fallback-path tests, and validated runtime behavior via authenticated direct tool-call probes against Docs API.
+- 2026-03-04: Reconciled Wave 8 tracker drift by moving `RM-05`/`RM-06` queue rows and test gates to `Done`, preserving `RM-07` as policy-deferred backlog.
+- 2026-03-04: Re-ran full verification after Wave 8 closure/tracker synchronization (`uv run ruff check .`, `uv run ruff format --check .`, `uv run pyright --project pyrightconfig.json`, `uv run pytest -q`) with all gates green (`726 passed`, `3 skipped`; `0` pyright errors).
+- 2026-03-05: Implemented `scripts/mcp_live_cleanup.py` for live-lane artifact cleanup (dry-run default; prefix+retention safeguards; Drive/Calendar/Tasks support) and added dedicated unit coverage in `tests/unit/core/test_mcp_live_cleanup.py`.
+- 2026-03-05: Added live cadence workflow `.github/workflows/live-mcp-cadence.yml` (nightly + manual dispatch, secret preflight gate, optional write lane, cleanup preview/execute policy) and updated autonomous-testing runbook with setup/usage guidance.
+- 2026-03-05: Added user-facing cadence workflow guide (`docs/setup/LIVE_CADENCE_WORKFLOW.md`) and linked it from docs index + README documentation hub.

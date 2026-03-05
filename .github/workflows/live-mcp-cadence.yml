@@ -1,0 +1,142 @@
+name: Live MCP Cadence
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_write_lane:
+        description: "Also run live write-marked tests (requires valid write credentials)"
+        required: false
+        default: false
+        type: boolean
+      execute_cleanup:
+        description: "Execute artifact cleanup (otherwise dry-run preview only)"
+        required: false
+        default: false
+        type: boolean
+      cleanup_older_than_hours:
+        description: "Cleanup retention window in hours"
+        required: false
+        default: "24"
+        type: string
+  schedule:
+    - cron: "15 3 * * *"
+
+permissions:
+  contents: read
+
+jobs:
+  live-cadence:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      MCP_LIVE_TESTS: "1"
+      MCP_TEST_USER_EMAIL: ${{ secrets.MCP_TEST_USER_EMAIL }}
+      USER_GOOGLE_EMAIL: ${{ secrets.MCP_TEST_USER_EMAIL }}
+      MCP_TEST_PREFIX: ${{ vars.MCP_TEST_PREFIX }}
+      WORKSPACE_MCP_CONFIG_DIR: ${{ runner.temp }}/google-workspace-mcp-advanced
+      MCP_CREDENTIALS_JSON: ${{ secrets.MCP_CREDENTIALS_JSON }}
+      MCP_AUTH_CLIENTS_JSON: ${{ secrets.MCP_AUTH_CLIENTS_JSON }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+
+      - name: Install dependencies
+        run: uv pip install -e ".[dev]" --system
+
+      - name: Preflight gate
+        id: preflight
+        run: |
+          set -euo pipefail
+          if [ -z "${MCP_TEST_USER_EMAIL}" ]; then
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            echo "Skipping live cadence: MCP_TEST_USER_EMAIL secret is not configured."
+            exit 0
+          fi
+          if [ -z "${MCP_CREDENTIALS_JSON}" ]; then
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            echo "Skipping live cadence: MCP_CREDENTIALS_JSON secret is not configured."
+            exit 0
+          fi
+          echo "enabled=true" >> "$GITHUB_OUTPUT"
+          echo "Live cadence preflight passed."
+
+      - name: Prepare credential store
+        if: steps.preflight.outputs.enabled == 'true'
+        run: |
+          set -euo pipefail
+          mkdir -p "${WORKSPACE_MCP_CONFIG_DIR}/credentials"
+          printf '%s' "${MCP_CREDENTIALS_JSON}" > "${WORKSPACE_MCP_CONFIG_DIR}/credentials/${MCP_TEST_USER_EMAIL}.json"
+          chmod 600 "${WORKSPACE_MCP_CONFIG_DIR}/credentials/${MCP_TEST_USER_EMAIL}.json"
+
+          if [ -n "${MCP_AUTH_CLIENTS_JSON}" ]; then
+            printf '%s' "${MCP_AUTH_CLIENTS_JSON}" > "${WORKSPACE_MCP_CONFIG_DIR}/auth_clients.json"
+            chmod 600 "${WORKSPACE_MCP_CONFIG_DIR}/auth_clients.json"
+          fi
+
+      - name: Lane A - protocol
+        if: steps.preflight.outputs.enabled == 'true'
+        run: uv run pytest -m mcp_protocol tests/mcp_protocol -q
+
+      - name: Lane B - live read
+        if: steps.preflight.outputs.enabled == 'true'
+        env:
+          MCP_TEST_PREFIX: ${{ vars.MCP_TEST_PREFIX }}
+        run: |
+          export MCP_TEST_PREFIX="${MCP_TEST_PREFIX:-codex-it-}"
+          uv run pytest -m live_mcp tests/live_mcp -q
+
+      - name: Lane B - live write
+        if: >
+          steps.preflight.outputs.enabled == 'true' &&
+          (
+            (github.event_name == 'workflow_dispatch' && github.event.inputs.run_write_lane == 'true') ||
+            vars.MCP_LIVE_WRITE_CADENCE == '1'
+          )
+        env:
+          MCP_TEST_ALLOW_WRITE: "1"
+          MCP_TEST_PREFIX: ${{ vars.MCP_TEST_PREFIX }}
+        run: |
+          export MCP_TEST_PREFIX="${MCP_TEST_PREFIX:-codex-it-}"
+          uv run pytest -m "live_mcp and live_write" tests/live_mcp -q
+
+      - name: Cleanup preview
+        if: always() && steps.preflight.outputs.enabled == 'true'
+        env:
+          MCP_TEST_PREFIX: ${{ vars.MCP_TEST_PREFIX }}
+          CLEANUP_HOURS: ${{ github.event.inputs.cleanup_older_than_hours }}
+        run: |
+          set -euo pipefail
+          export MCP_TEST_PREFIX="${MCP_TEST_PREFIX:-codex-it-}"
+          uv run python scripts/mcp_live_cleanup.py \
+            --user-email "${MCP_TEST_USER_EMAIL}" \
+            --artifact-prefix "${MCP_TEST_PREFIX}" \
+            --older-than-hours "${CLEANUP_HOURS:-24}" \
+            --services all
+
+      - name: Cleanup execute
+        if: >
+          always() && steps.preflight.outputs.enabled == 'true' &&
+          (
+            (github.event_name == 'workflow_dispatch' && github.event.inputs.execute_cleanup == 'true') ||
+            vars.MCP_LIVE_CLEANUP_EXECUTE == '1'
+          )
+        env:
+          MCP_TEST_PREFIX: ${{ vars.MCP_TEST_PREFIX }}
+          CLEANUP_HOURS: ${{ github.event.inputs.cleanup_older_than_hours }}
+        run: |
+          set -euo pipefail
+          export MCP_TEST_PREFIX="${MCP_TEST_PREFIX:-codex-it-}"
+          uv run python scripts/mcp_live_cleanup.py \
+            --user-email "${MCP_TEST_USER_EMAIL}" \
+            --artifact-prefix "${MCP_TEST_PREFIX}" \
+            --older-than-hours "${CLEANUP_HOURS:-24}" \
+            --services all \
+            --execute

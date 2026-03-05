@@ -2,11 +2,11 @@
 
 ## Living Document Controls
 1. Status: `IN_IMPLEMENTATION`
-2. Last Updated (UTC): `2026-03-04T18:51:41Z`
+2. Last Updated (UTC): `2026-03-05T11:21:47Z`
 3. Canonical Path: `/Users/david.helmus/repos/ai-dev/_infra/gws-mcp-advanced/gws-mcp-advanced/agent-docs/roadmap/PLAN.md`
-4. Active Branch: `codex/apps-script-support-v1`
+4. Active Branch: `codex/rm05-rm07-design-closure`
 5. Local Task Board: `/Users/david.helmus/repos/ai-dev/_infra/gws-mcp-advanced/gws-mcp-advanced/agent-docs/roadmap/TASKS.md`
-6. Overall Progress: `87.1%` (`27/31` issues `Done`; `0/31` `In Progress`; `4/31` `Not Started`)
+6. Overall Progress: `93.5%` (`29/31` issues `Done`; `0/31` `In Progress`; `2/31` `Not Started`)
 7. Update Cadence:
    1. update this file after every completed issue ID (`SEC-*`, `SAFE-*`, `DIST-*`, etc.),
    2. update this file at the end of each implementation session,
@@ -66,7 +66,7 @@
 | Wave 5 | Distribution infra | 2026-03-06 to 2026-03-07 | PyPI release workflow + uvx distribution path working |
 | Wave 6 | Distribution validation | 2026-03-07 to 2026-03-08 | uvx stable/pinned validation complete |
 | Wave 7 | Apps Script v1 | 2026-03-03 to 2026-03-10 | `APPS-01`..`APPS-06` closed with verification evidence |
-| Wave 8 | Smart-chip extensions | 2026-03-10 onward | `RM-05`..`RM-07` are either implemented or explicitly deferred with dated rationale |
+| Wave 8 | Smart-chip extensions | 2026-03-04 onward | `RM-05`..`RM-07` are either implemented or explicitly deferred with dated rationale |
 
 ## Issue Execution Tracker (Living)
 
@@ -87,9 +87,9 @@
 | RM-02 | Done | Codex | codex/run-01-fastmcp-import-smoke | - | Markdown table flow closure is complete with deterministic integration coverage (preceding-content + multi-table order + fail-fast incomplete population) and manual matrix confirmation. | 2026-03-01 |
 | RM-03 | Done | Codex | codex/run-01-fastmcp-import-smoke | - | List bullet range now excludes trailing list-closing newline to prevent empty post-list bullet artifacts; parser regressions added and full verification green (`590 passed`, `3 skipped`); OpenCode live regression `OP-67` PASS confirms no extra empty bullet between task list and following heading/paragraph | 2026-03-01 |
 | RM-04 | Done | Codex | codex/run-01-fastmcp-import-smoke | - | OpenCode `OP-69` run 4 is PASS and DEF-012 is fixed. Follow-on OP-70 kitchen-sink gate is PASS after DEF-013 nuance fixes, confirming end-to-end markdown rendering stability on current HEAD. | 2026-03-02 |
-| RM-05 | Not Started | Codex | codex/run-01-fastmcp-import-smoke | - | Future extension: native Docs checklist bullets for markdown task lists via `BULLET_CHECKBOX`, with explicit Unicode fallback mode to preserve deterministic behavior. | 2026-03-02 |
-| RM-06 | Not Started | Codex | codex/run-01-fastmcp-import-smoke | - | Future extension: markdown mention-to-chip support using Docs `InsertPersonRequest` with graceful fallback for unresolved mentions. | 2026-03-02 |
-| RM-07 | Not Started | Codex | codex/run-01-fastmcp-import-smoke | - | Future extension: evaluate/add Google Workspace Add-ons path for third-party smart chips (`workspace.linkpreview` / `workspace.linkcreate`) where Docs API direct writes are not available. | 2026-03-02 |
+| RM-05 | Done | Codex | codex/rm05-rm07-design-closure | - | Implemented checklist mode contract end-to-end: `checklist_mode` added to markdown tools, parser emits `BULLET_CHECKBOX` in `native` mode, default `unicode` behavior preserved, tests + runtime probe green. | 2026-03-04 |
+| RM-06 | Done | Codex | codex/rm05-rm07-design-closure | - | Implemented mention mode contract end-to-end: `mention_mode` added to markdown tools, parser emits `insertPerson` replacement pairs for `@user@example.com`, deterministic fallback notes on failure, tests + runtime probe green. | 2026-03-04 |
+| RM-07 | Not Started | Codex | codex/rm05-rm07-design-closure | - | Explicitly deferred by product policy (no external/third-party dependencies): Add-ons smart-chip path remains out of scope for MCP Docs API delivery. | 2026-03-04 |
 | DIST-00 | Done | Codex | codex/run-01-fastmcp-import-smoke | - | Canonical package identity is standardized (`google-workspace-mcp-advanced`) across npm metadata/docs, and distribution guard checks are enforced in CI + release workflows. | 2026-03-01 |
 | DIST-01 | Done | Codex | main | - | PyPI release workflow is operational and verified on current `main`: baseline publish run `22577853068` (`1.0.0`) plus post-fix revalidation run `22618871138` (`1.0.2`) after Pyright gate repair. | 2026-03-03 |
 | DIST-02 | Done | Codex | codex/run-01-fastmcp-import-smoke | - | npm launcher preflight/remediation path is implemented and automated smoke tests are in place (`tests/unit/core/test_npm_launcher.py`) and wired into CI. | 2026-03-01 |
@@ -175,7 +175,7 @@ The plan resolves:
 
 ## Open Roadmap Items Included
 1. PSE-backed `search_custom` enablement remains intentionally deferred (`OP-06`) by product decision.
-2. Smart-chip extension roadmap is now tracked as `RM-05`, `RM-06`, `RM-07` (not started).
+2. Smart-chip extension roadmap is tracked as `RM-05`, `RM-06`, `RM-07` (`RM-05`/`RM-06` implemented, `RM-07` policy-deferred).
 3. Apps Script v1 rollout (`APPS-01`..`APPS-06`) is complete and closed with evidence.
 4. Apps Script cross-project execution UX hardening (`APPS-07`) is intentionally deferred (non-blocking) until product pull-forward.
 
@@ -288,10 +288,72 @@ The plan resolves:
 6. Auth routing smoke: private + enterprise tenant requests still resolve the correct OAuth client mapping (no cross-tenant fallback).
 7. Gate rule: if any item fails, do not advance APPS slice status to `Done`; log defect + mitigation in changelog and tracker.
 
-## Wave 8: Smart-Chip Extensions (Future / backlog)
-1. Keep `RM-05`..`RM-07` non-blocking for current release scope.
-2. Execute only after Wave 7 closure unless product priority changes.
-3. If activated, split into atomic sub-issues and update schedule/tracker before coding.
+## Wave 8: Smart-Chip Extensions (RM-05/RM-06 Implemented, RM-07 Deferred)
+1. Scope status:
+   1. `RM-05` and `RM-06` are implemented and evidence-backed.
+   2. `RM-07` is design-complete and explicitly deferred (non-blocking) by product policy: no external/third-party dependency rollout in current scope.
+2. Locked implementation order:
+   1. `RM-05` native checklist bullets first (completed),
+   2. `RM-06` mention-to-person chips second (completed),
+   3. `RM-07` Add-ons path only when product explicitly revises the dependency policy.
+3. Closed assumptions from primary Google docs:
+   1. Docs API request model supports checkbox bullet preset (`BULLET_CHECKBOX`) in `createParagraphBullets`.
+   2. Docs API request model includes `InsertPersonRequest` for person mentions.
+   3. Add-ons smart-chip triggers/scopes are manifest-driven (`linkPreviewTriggers` + `workspace.linkpreview`; `createActionTriggers` + `workspace.linkcreate`) and are not part of the direct Docs API write surface.
+4. Primary references (official docs):
+   1. Docs API requests reference: `createParagraphBullets`, `BULLET_CHECKBOX`, `InsertPersonRequest`:
+      [https://developers.google.com/docs/api/reference/rest/v1/documents/request](https://developers.google.com/docs/api/reference/rest/v1/documents/request)
+   2. Add-ons link previews (`workspace.linkpreview`):
+      [https://developers.google.com/workspace/add-ons/guides/preview-links-smart-chips](https://developers.google.com/workspace/add-ons/guides/preview-links-smart-chips)
+   3. Add-ons create actions (`workspace.linkcreate`):
+      [https://developers.google.com/workspace/add-ons/guides/create-insert-resource-smart-chip](https://developers.google.com/workspace/add-ons/guides/create-insert-resource-smart-chip)
+
+### RM-05 Contract (Native Checklist Mode)
+1. API surface changes (backward-compatible):
+   1. Add optional checklist rendering mode to markdown entry tools (`create_doc`, `insert_markdown`, and markdown path inside `batch_update_doc`):
+      1. default: `unicode` (preserve current behavior),
+      2. opt-in: `native` (Docs checkbox bullets).
+2. Parser behavior:
+   1. `unicode` mode: keep current ballot-char rendering (`☐` / `☑`) and skip bullet request on task-list blocks.
+   2. `native` mode: generate task-list paragraphs as plain text items and apply `createParagraphBullets` with `BULLET_CHECKBOX` across contiguous task-list ranges.
+   3. non-task lists remain unchanged.
+3. Fallback policy:
+   1. if `native` mode cannot be applied for a block due to deterministic index/structure constraints, fallback that block to `unicode` rendering and return explicit fallback note in tool response.
+4. Verification gates:
+   1. unit tests: parser request generation for `unicode` vs `native`,
+   2. integration tests: markdown flows with mixed task-lists/headings/tables/images and no post-list bullet regressions,
+   3. Convex manual rows: `native` checklist visual parity + explicit `unicode` compatibility.
+
+### RM-06 Contract (Mention-to-Person Chip Mode)
+1. API surface changes (backward-compatible):
+   1. add optional mention mode to markdown entry tools:
+      1. default: `text`,
+      2. opt-in: `person_chip`.
+2. Syntax contract:
+   1. supported token format: `@user@example.com`,
+   2. matching is disabled inside fenced code, inline code, and link URLs,
+   3. name-only mentions (for example `@David`) are out of scope for v1.
+3. Execution model:
+   1. phase 1 inserts markdown text deterministically,
+   2. phase 2 attempts mention replacement using Docs `InsertPersonRequest` at tracked token ranges.
+4. Fallback policy:
+   1. if a mention cannot be resolved or request is unsupported for that principal/document context, preserve literal `@user@example.com` text and emit an explicit per-mention fallback note.
+5. Verification gates:
+   1. unit tests: token parser and range tracking,
+   2. integration tests: mixed markdown with multiple mentions and partial fallback scenarios,
+   3. Convex manual rows: successful person-chip insertion and unresolved-mention fallback traceability.
+
+### RM-07 Contract (Add-ons Smart-Chip Path, Deferred)
+1. Boundary decision:
+   1. direct Docs API tools remain the only in-scope path for MCP markdown writes,
+   2. Add-ons smart-chip implementation is a separate product/infrastructure stream (manifest, deployment, admin rollout, add-on auth lifecycle).
+2. Defer rationale (dated):
+   1. product policy for current roadmap forbids external/third-party dependency adoption.
+   2. this repository can document and integrate with an Add-on path, but cannot fully deliver the Add-on lifecycle solely via current MCP Docs API tooling.
+3. Re-open criteria:
+   1. product explicitly removes/updates the no-external-dependency policy for this scope,
+   2. manifest + OAuth scopes are approved (`workspace.linkpreview`, `workspace.linkcreate`),
+   3. integration contract between MCP and Add-on backend is ratified.
 
 ## Public API / Interface / Type Changes
 
@@ -386,6 +448,7 @@ The plan resolves:
 10. `tests/opencode/test_opencode_sdk_session_flow.py`
 11. `scripts/opencode_serve_smoke.sh`
 12. `scripts/opencode_sdk_smoke.mjs`
+13. `.github/workflows/live-mcp-cadence.yml`
 
 ## Live Test Safety Model (Full Write, as selected)
 1. Only create/update/delete artifacts with enforced prefix match.
@@ -543,6 +606,12 @@ The plan resolves:
 
 | Date (UTC) | Scope | Commands | Result | Notes |
 |---|---|---|---|---|
+| 2026-03-05 | Wave 4 closure full verification protocol | `uv run ruff check . && uv run ruff format --check . && uv run pyright --project pyrightconfig.json && uv run pytest -q` | Pass | Full repository gates remain green after Wave 4 cleanup/cadence implementation (`732 passed`, `3 skipped`; `0` pyright errors). |
+| 2026-03-05 | Wave 4 cleanup + cadence closure | `uv run pytest -q tests/unit/core/test_mcp_live_cleanup.py && uv run python scripts/mcp_live_cleanup.py --help` | Pass | Added cleanup utility with coverage and documented/scheduled live cadence workflow gates |
+| 2026-03-04 | Wave 8 closure sync + tracker reconciliation | `uv run ruff check . && uv run ruff format --check . && uv run pyright --project pyrightconfig.json && uv run pytest -q` | Pass | Revalidated all gates after synchronizing `PLAN`/`STATUS`/`TASKS`/`ROADMAP` and adding Wave 8 Convex evidence rows (`726 passed`, `3 skipped`; `0` pyright errors). |
+| 2026-03-04 | RM-05/RM-06 targeted automated coverage | `uv run pytest -q tests/unit/gdocs/test_markdown_parser.py tests/unit/tools/test_docs_writing_tools.py tests/integration/test_insert_markdown.py tests/integration/test_create_doc_markdown.py tests/integration/test_create_doc_table_population_flow.py` | Pass | Added checklist/mention mode coverage and fallback-path tests (`174 passed`) |
+| 2026-03-04 | RM-05/RM-06 full verification protocol | `uv run ruff check . && uv run ruff format --check . && uv run pyright --project pyrightconfig.json && uv run pytest -q` | Pass | Full repo gates green after Wave 8 implementation (`726 passed`, `3 skipped`; `0` pyright errors) |
+| 2026-03-04 | RM-05/RM-06 live runtime probe (direct tool call path) | `uv run python (invoke create_doc.fn + insert_markdown.fn with checklist_mode='native' and mention_mode='person_chip')` | Pass | Runtime docs calls succeeded on authenticated principal; native checklist insertion path executed and mention modes validated (`text` preserves literal mentions, `person_chip` path executes without regression) |
 | 2026-03-04 | APPS-07 deferment documentation sync | `uv run ruff check . && uv run ruff format --check . && uv run pytest` | Pass | Documentation update only; full verification remains green (`718 passed`, `3 skipped`; `162 files already formatted`) |
 | 2026-03-03 | DIST-01 release gate recovery | `uv run ruff check . && uv run ruff format --check . && uv run pyright --project pyrightconfig.json && uv run pytest -q` | Pass | Fixed release-blocking Pyright/type issues (`648 passed`, `3 skipped`; `0` pyright errors) |
 | 2026-03-03 | DIST-01 publish verification (`main`) | `gh workflow run release-pypi.yml -f version=1.0.2` + `gh run watch 22618871138 --exit-status` | Pass | `verify`, `build`, and `publish` jobs all green on run `22618871138` (head `28509fc`) |
@@ -633,6 +702,10 @@ The plan resolves:
 
 | Date (UTC) | Decision | Rationale | Affected IDs |
 |---|---|---|---|
+| 2026-03-05 | Operationalize live cadence via dedicated workflow with preflight gating and credential-store bootstrap | Enables recurring live verification without forcing hard-failure when protected secrets are absent; keeps write lane and destructive cleanup explicitly opt-in by policy | QUAL-02, OPC-01 |
+| 2026-03-04 | Keep markdown mode defaults backward-compatible (`checklist_mode=unicode`, `mention_mode=text`) | Existing behavior must remain deterministic for current users while enabling opt-in Wave 8 enhancements | RM-05, RM-06 |
+| 2026-03-04 | Defer RM-07 by explicit no-external-dependency policy | Product direction for current roadmap excludes external/third-party dependency rollout; Add-ons smart-chip path remains documented but out of scope | RM-07 |
+| 2026-03-04 | Close Wave-8 design contracts and defer Add-ons implementation path | Locked `RM-05` (`checklist_mode`), `RM-06` (`mention_mode`), and formalized `RM-07` defer boundary after validating official Docs/Add-ons API capabilities and scope/deployment requirements | RM-05, RM-06, RM-07 |
 | 2026-02-27 | Adopt canonical npm package `google-workspace-mcp-advanced` | Prevent naming drift and keep distribution canonical | DIST-00..DIST-04 |
 | 2026-02-27 | Keep `PLAN.md` as canonical living execution plan | Reduce planning drift and duplicate sources | DOC-01 |
 | 2026-02-27 | Track dry-run rollout progress in dedicated matrix doc | Improve execution transparency for `SAFE-01` and avoid checklist drift | SAFE-01, DOC-01 |
@@ -664,11 +737,11 @@ The plan resolves:
 | 2026-02-28 | Keep OpenCode live lifecycle smoke opt-in (`OPENCODE_SMOKE_LIVE=1`) | Preserve deterministic local validation of prompt execution/teardown without forcing model/provider credentials in default test runs | OPC-01, QUAL-02 |
 
 ## Session Handoff (Living)
-1. Current Focus: `Wave 8 backlog execution planning (RM-05..RM-07) + APPS-07 deferred hold state`
+1. Current Focus: `Wave 4 + Wave 8 are operationally closed; RM-07/APPS-07 remain policy-deferred`
 2. Next 3 Actions:
-   1. prepare `RM-05` execution slice (native checklist mode) with strict regression plan,
-   2. keep Convex-first live verification evidence protocol for future feature slices,
-   3. keep `APPS-07` in deferred state until explicit product pull-forward; when resumed, start with a design slice for scalable cross-project execution onboarding (not per-script manual churn).
+   1. keep `RM-07` deferred under current no-external-dependency policy unless product direction changes,
+   2. keep live cadence workflow secrets/vars configured so scheduled lanes execute as intended,
+   3. begin next prioritized roadmap item once assigned.
 3. Active Blockers:
    1. None currently.
 
@@ -786,6 +859,12 @@ The plan resolves:
 111. 2026-03-04: Re-validated execution using corrected API executable deployment ID `AKfycbw46UjH2FT0voBOgAWjjlbTGS7aHyVyZd70wCMxXDR16uyEN6FYvUG3vLI_Cn_5DRDHDw` (user-provided mismatch correction). Live `projects.deployments.get` confirms version `5` and entry point `EXECUTION_API` with access `MYSELF`; direct `scripts.run` against this deployment ID still returns `403 PERMISSION_DENIED` for both `dev_mode=False/True`. This confirms identifier mismatch is resolved and the remaining gate is execution permission/project-alignment policy. Library URL (`.../d/127d.../5`) aligns with script ID+version lineage but is not used as an execution target by `scripts.run`.
 112. 2026-03-04: Implemented clean script-aware OAuth routing for Apps Script tools (no account-level mapping flips): added `script_clients` support to `auth_clients.json` resolution precedence (`override -> script -> account -> domain -> default`), wired script-aware client override through decorator auth flow (`require_google_service`/`require_multiple_services`) and downstream OAuth2/OAuth2.1 service acquisition, and extended admin import tooling with `mapped_script_ids` (`import_google_auth_client`). Updated setup/auth/apps-script docs to describe script mapping and execution troubleshooting. Verification is fully green: targeted auth tests (`28 passed`), `uv run ruff check .`, `uv run ruff format .`, `uv run pyright --project pyrightconfig.json` (`0 errors`), and full `uv run pytest` (`718 passed`, `3 skipped`).
 113. 2026-03-04: Applied product deferral decision for cross-project Apps Script execution UX hardening as formal roadmap item `APPS-07` (non-blocking). Reconciled canonical tracker fields (`PLAN.md`, `TASKS.md`, `STATUS.md`) and setup docs with explicit resume criteria so this can be pulled forward later without rediscovery.
+114. 2026-03-04: Closed Wave-8 design ambiguity pass on dedicated planning branch (`codex/rm05-rm07-design-closure`): validated primary Google docs for Docs checkbox bullets/person mentions/Add-ons smart-chip scopes, locked implementation contracts for `RM-05` (`checklist_mode`) and `RM-06` (`mention_mode`), and formalized `RM-07` as a dated non-blocking defer with explicit re-open criteria.
+115. 2026-03-04: Tightened RM-07 defer policy per product direction: no external/third-party dependencies in current scope. Updated plan/task/status/roadmap language so RM-07 remains documented but strictly out-of-scope unless policy changes.
+116. 2026-03-04: Implemented and validated Wave-8 delivery scope (`RM-05`, `RM-06`): added tool-level mode parameters (`checklist_mode`, `mention_mode`), added parser support for native checklist bullets (`BULLET_CHECKBOX`) and person-mention replacement (`insertPerson`) with deterministic fallback notes, expanded unit/integration coverage, ran full verification (`726 passed`, `3 skipped`), and executed live runtime probes via direct tool-call path on authenticated Docs principal.
+117. 2026-03-04: Completed Wave-8 closure reconciliation pass: synchronized `STATUS.md`, `TASKS.md`, and `ROADMAP.md` to code truth (`RM-05`/`RM-06` done, `RM-07` deferred), added Wave 8 Convex evidence rows to the manual matrix, and re-ran full verification with green gates (`726 passed`, `3 skipped`).
+118. 2026-03-05: Closed remaining Wave-4 operational items by shipping `scripts/mcp_live_cleanup.py` (dry-run default, prefix/retention safeguards, Drive/Calendar/Tasks support) with dedicated unit coverage, adding live cadence workflow `.github/workflows/live-mcp-cadence.yml` (nightly + workflow_dispatch, secret preflight gate, optional write lane, cleanup preview/execute policy), and updating autonomous-testing docs/trackers.
+119. 2026-03-05: Added end-user cadence documentation (`docs/setup/LIVE_CADENCE_WORKFLOW.md`) and linked it in `docs/INDEX.md` and `README.md` so operators can configure schedule/manual live validation and cleanup safely.
 
 ## Apps Script Support (Full v1) — Decision-Complete Plan
 

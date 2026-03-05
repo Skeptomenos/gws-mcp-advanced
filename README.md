@@ -185,6 +185,7 @@ If you previously ran the project as `gws-mcp-advanced`, follow:
 - Cursor setup: [docs/setup/CURSOR_MCP_SETUP.md](docs/setup/CURSOR_MCP_SETUP.md)
 - OpenCode setup: [docs/setup/OPENCODE_MCP_SETUP.md](docs/setup/OPENCODE_MCP_SETUP.md)
 - Gemini CLI setup: [docs/setup/GEMINI_CLI_MCP_SETUP.md](docs/setup/GEMINI_CLI_MCP_SETUP.md)
+- Live cadence workflow guide: [docs/setup/LIVE_CADENCE_WORKFLOW.md](docs/setup/LIVE_CADENCE_WORKFLOW.md)
 - Distribution/release guide: [docs/DISTRIBUTION_RELEASE.md](docs/DISTRIBUTION_RELEASE.md)
 - Release notes: [docs/RELEASE_NOTES.md](docs/RELEASE_NOTES.md)
 - Comparison with upstream: [docs/COMPARISON.md](docs/COMPARISON.md)
