@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 
 @server.tool()
 @handle_http_errors("search_custom", is_read_only=True, service_type="customsearch")
-@require_google_service("customsearch", "customsearch")
+@require_google_service("customsearch", [])
 async def search_custom(
     service,
     user_google_email: str,
@@ -151,7 +151,7 @@ async def search_custom(
 
 @server.tool()
 @handle_http_errors("get_search_engine_info", is_read_only=True, service_type="customsearch")
-@require_google_service("customsearch", "customsearch")
+@require_google_service("customsearch", [])
 async def get_search_engine_info(service, user_google_email: str) -> str:
     """
     Retrieves metadata about a Programmable Search Engine.
@@ -218,7 +218,7 @@ async def get_search_engine_info(service, user_google_email: str) -> str:
 
 @server.tool()
 @handle_http_errors("search_custom_siterestrict", is_read_only=True, service_type="customsearch")
-@require_google_service("customsearch", "customsearch")
+@require_google_service("customsearch", [])
 async def search_custom_siterestrict(
     service,
     user_google_email: str,

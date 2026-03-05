@@ -59,9 +59,6 @@ SLIDES_READONLY_SCOPE = "https://www.googleapis.com/auth/presentations.readonly"
 TASKS_SCOPE = "https://www.googleapis.com/auth/tasks"
 TASKS_READONLY_SCOPE = "https://www.googleapis.com/auth/tasks.readonly"
 
-# Google Custom Search API scope
-CUSTOM_SEARCH_SCOPE = "https://www.googleapis.com/auth/cse"
-
 # Google Apps Script API scopes
 SCRIPT_PROJECTS_SCOPE = "https://www.googleapis.com/auth/script.projects"
 SCRIPT_PROJECTS_READONLY_SCOPE = "https://www.googleapis.com/auth/script.projects.readonly"
@@ -103,8 +100,6 @@ SLIDES_SCOPES = [SLIDES_SCOPE, SLIDES_READONLY_SCOPE]
 
 TASKS_SCOPES = [TASKS_SCOPE, TASKS_READONLY_SCOPE]
 
-CUSTOM_SEARCH_SCOPES = [CUSTOM_SEARCH_SCOPE]
-
 APPS_SCRIPT_SCOPES = [
     # APPS-04/05 least-privilege lock for Apps Script tool surface:
     # - read project/content/version tools -> script.projects.readonly
@@ -135,7 +130,6 @@ TOOL_SCOPES_MAP = {
     "forms": FORMS_SCOPES,
     "slides": SLIDES_SCOPES,
     "tasks": TASKS_SCOPES,
-    "search": CUSTOM_SEARCH_SCOPES,
     "appscript": APPS_SCRIPT_SCOPES,
 }
 

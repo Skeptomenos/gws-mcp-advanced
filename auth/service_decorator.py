@@ -23,7 +23,6 @@ from auth.scopes import (
     CHAT_READONLY_SCOPE,
     CHAT_SPACES_SCOPE,
     CHAT_WRITE_SCOPE,
-    CUSTOM_SEARCH_SCOPE,
     DOCS_READONLY_SCOPE,
     DOCS_WRITE_SCOPE,
     DRIVE_FILE_SCOPE,
@@ -463,8 +462,6 @@ SCOPE_GROUPS = {
     # Tasks scopes
     "tasks": TASKS_SCOPE,
     "tasks_read": TASKS_READONLY_SCOPE,
-    # Custom Search scope
-    "customsearch": CUSTOM_SEARCH_SCOPE,
     # Apps Script scopes
     "script_projects": SCRIPT_PROJECTS_SCOPE,
     "script_projects_read": SCRIPT_PROJECTS_READONLY_SCOPE,
