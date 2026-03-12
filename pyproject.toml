@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "google-workspace-mcp-advanced"
-version = "1.0.6"
+version = "1.0.7"
 description = "Advanced Google Workspace MCP Server - Gmail, Calendar, Drive, Docs, Sheets, Slides, Forms, Tasks, Chat, Search with bidirectional sync"
 readme = "README.md"
 keywords = ["mcp", "google", "workspace", "llm", "ai", "claude", "model", "context", "protocol", "server"]
