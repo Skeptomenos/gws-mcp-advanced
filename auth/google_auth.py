@@ -815,6 +815,7 @@ def create_oauth_flow(
     redirect_uri: str,
     state: str | None = None,
     oauth_client: OAuthClientSelection | None = None,
+    code_verifier: str | None = None,
 ) -> Flow:
     """Creates an OAuth flow using environment variables or client secrets file."""
     if oauth_client is not None:
@@ -828,7 +829,13 @@ def create_oauth_flow(
                 "redirect_uris": [redirect_uri],
             }
         }
-        flow = Flow.from_client_config(client_config, scopes=scopes, redirect_uri=redirect_uri, state=state)
+        flow = Flow.from_client_config(
+            client_config,
+            scopes=scopes,
+            redirect_uri=redirect_uri,
+            state=state,
+            code_verifier=code_verifier,
+        )
         logger.debug("Created OAuth flow from client selection '%s'", oauth_client.client_key)
         return flow
 
@@ -836,7 +843,13 @@ def create_oauth_flow(
     env_config = load_client_secrets_from_env()
     if env_config:
         # Use client config directly
-        flow = Flow.from_client_config(env_config, scopes=scopes, redirect_uri=redirect_uri, state=state)
+        flow = Flow.from_client_config(
+            env_config,
+            scopes=scopes,
+            redirect_uri=redirect_uri,
+            state=state,
+            code_verifier=code_verifier,
+        )
         logger.debug("Created OAuth flow from environment variables")
         return flow
 
@@ -851,6 +864,7 @@ def create_oauth_flow(
         scopes=scopes,
         redirect_uri=redirect_uri,
         state=state,
+        code_verifier=code_verifier,
     )
     logger.debug(f"Created OAuth flow from client secrets file: {CONFIG_CLIENT_SECRETS_PATH}")
     return flow
@@ -862,7 +876,7 @@ def create_oauth_flow(
 async def start_auth_flow(
     user_google_email: str | None,
     service_name: str,  # e.g., "Google Calendar", "Gmail" for user messages
-    redirect_uri: str,  # Added redirect_uri as a required parameter
+    redirect_uri: str,
     override_client_key: str | None = None,
 ) -> str:
     """
@@ -891,7 +905,7 @@ async def start_auth_flow(
     try:
         if "OAUTHLIB_INSECURE_TRANSPORT" not in os.environ and (
             "localhost" in redirect_uri or "127.0.0.1" in redirect_uri
-        ):  # Use passed redirect_uri
+        ):
             logger.warning("OAUTHLIB_INSECURE_TRANSPORT not set. Setting it for localhost/local development.")
             os.environ["OAUTHLIB_INSECURE_TRANSPORT"] = "1"
 
@@ -903,13 +917,14 @@ async def start_auth_flow(
         )
 
         flow = create_oauth_flow(
-            scopes=get_current_scopes(),  # Use scopes for enabled tools only
-            redirect_uri=redirect_uri,  # Use passed redirect_uri
+            scopes=get_current_scopes(),
+            redirect_uri=redirect_uri,
             state=oauth_state,
             oauth_client=oauth_client,
         )
 
         auth_url, _ = flow.authorization_url(access_type="offline", prompt="consent")
+        code_verifier = getattr(flow, "code_verifier", None)
 
         session_id = None
         try:
@@ -923,6 +938,7 @@ async def start_auth_flow(
             session_id=session_id,
             oauth_client_key=oauth_client.client_key,
             expected_user_email=user_google_email,
+            code_verifier=code_verifier,
             redirect_uri=redirect_uri,
         )
 
@@ -939,20 +955,17 @@ async def start_auth_flow(
             "**LLM, after presenting the link, instruct the user as follows:**",
             "1. Click the link and complete the authorization in their browser.",
         ]
-        session_info_for_llm = ""
 
         if not initial_email_provided:
             message_lines.extend(
                 [
-                    f"2. After successful authorization{session_info_for_llm}, the browser page will display the authenticated email address.",
+                    "2. After successful authorization, the browser page will display the authenticated email address.",
                     "   **LLM: Instruct the user to provide you with this email address.**",
                     "3. Once you have the email, **retry their original command, ensuring you include this `user_google_email`.**",
                 ]
             )
         else:
-            message_lines.append(
-                f"2. After successful authorization{session_info_for_llm}, **retry their original command**."
-            )
+            message_lines.append("2. After successful authorization, **retry their original command**.")
 
         message_lines.append(
             f"\nThe application will use the new credentials. If '{user_google_email}' was provided, it must match the authenticated account."
@@ -1023,6 +1036,7 @@ async def handle_auth_callback(
         state_info = store.validate_oauth_state(state, session_id=session_id)
         state_oauth_client_key = state_info.get("oauth_client_key")
         expected_user_email = state_info.get("expected_user_email")
+        code_verifier = state_info.get("code_verifier")
         redirect_uri_for_flow = state_info.get("redirect_uri") or redirect_uri
         logger.debug(
             "Validated OAuth callback state %s for session %s",
@@ -1042,6 +1056,7 @@ async def handle_auth_callback(
             redirect_uri=redirect_uri_for_flow,
             state=state,
             oauth_client=oauth_client,
+            code_verifier=code_verifier,
         )
 
         # Exchange the authorization code for credentials

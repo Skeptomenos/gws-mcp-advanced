@@ -343,6 +343,7 @@ class OAuth21SessionStore:
                     "session_id": data.get("session_id"),
                     "oauth_client_key": data.get("oauth_client_key"),
                     "expected_user_email": data.get("expected_user_email"),
+                    "code_verifier": data.get("code_verifier"),
                     "redirect_uri": data.get("redirect_uri"),
                     "expires_at": data["expires_at"].isoformat() if data.get("expires_at") else None,
                     "created_at": data["created_at"].isoformat() if data.get("created_at") else None,
@@ -494,6 +495,7 @@ class OAuth21SessionStore:
         session_id: str | None = None,
         oauth_client_key: str | None = None,
         expected_user_email: str | None = None,
+        code_verifier: str | None = None,
         redirect_uri: str | None = None,
         expires_in_seconds: int = 600,
     ) -> None:
@@ -514,6 +516,7 @@ class OAuth21SessionStore:
                 "session_id": session_id,
                 "oauth_client_key": oauth_client_key,
                 "expected_user_email": expected_user_email,
+                "code_verifier": code_verifier,
                 "redirect_uri": redirect_uri,
                 "expires_at": expiry,
                 "created_at": now,
