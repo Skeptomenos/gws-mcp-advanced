@@ -13,7 +13,7 @@
 ## Living Document Controls
 
 - Status: `IN_PROGRESS`
-- Last Updated (UTC): `2026-03-12T06:50:40Z`
+- Last Updated (UTC): `2026-03-12T07:05:00Z`
 - Canonical Path: `docs/plans/2026-03-11-pkce-code-verifier-investigation.md`
 - Active Branch: `fix/pkce-code-verifier-investigation`
 - Scope: `Root cause + fix implementation + release prep`
@@ -142,6 +142,9 @@ List the unit, integration, and runtime checks required before any later patch c
 - 2026-03-12: Release prep review found `.github/workflows/release-pypi.yml` enforces `pyproject.toml`/`package.json` version coupling and runs `ruff`, `ruff format --check`, `pyright`, and full `pytest` before publish. Any release bump must also update pinned `uvx` examples in user-facing docs.
 - 2026-03-12: Prepared release artifact updates for `1.0.6`: bumped `pyproject.toml` and `package.json`, refreshed `uv.lock`, added a `docs/RELEASE_NOTES.md` entry for the PKCE fix, and updated pinned `uvx` examples in README/setup/distribution docs.
 - 2026-03-12: Re-ran release-grade verification after the `1.0.6` prep changes: `uv run python scripts/check_release_version_match.py` => pass, `uv run python scripts/check_distribution_scope.py` => pass, `uv run pytest -q tests/unit/core/test_distribution_checks.py` => `5 passed`, `uv run ruff check .` => pass, `uv run ruff format --check .` => `166 files already formatted`, `uv run pyright --project pyrightconfig.json` => `0 errors`, `uv run pytest -q` => `738 passed, 3 skipped`.
+- 2026-03-12: Review follow-up validation found the setup-doc indentation comments were correct: several JSON/code-block examples lost leading whitespace during the pinned-version update. Fixed the affected lines in Claude Code, Cursor, Gemini CLI, OpenCode, and migration setup docs.
+- 2026-03-12: Review follow-up validation found the packaging concern about `docs/plans/` shipping to users was not accurate for this repo. `uv build` produced `dist/google_workspace_mcp_advanced-1.0.6.tar.gz` and `dist/google_workspace_mcp_advanced-1.0.6-py3-none-any.whl`; inspection confirmed no `docs/plans/` entries in either artifact because `pyproject.toml` excludes `docs*` from packaged sources.
+- 2026-03-12: Kept the exact `google-auth-oauthlib==1.3.0` runtime pin for release parity, but documented the reason inline in `pyproject.toml`: pre-`1.3.0` behavior masks PKCE autogeneration and would hide the production-relevant callback failure locally.
 
 ## Current Findings
 
