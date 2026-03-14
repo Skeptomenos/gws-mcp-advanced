@@ -39,6 +39,10 @@ Provides 50+ async tools for Gmail, Drive, Calendar, Docs, Sheets, Chat, Forms, 
 4.  **CODE:** Implement using `uv` for dependencies and `ruff` for formatting.
 5.  **VERIFY:** Run the Verification Protocol below.
 
+### 🚀 DISTRIBUTION / PUBLISHING
+- Before any version bump, tag, push-for-release, PyPI publish, or npm publish, read and follow:
+  - `agent-docs/testing/DISTRIBUTION_PUBLISHING_PLAYBOOK.md`
+
 ## 3. VERIFICATION PROTOCOL (DEFINITION OF DONE)
 
 Before marking a task as complete, run these commands in order:
