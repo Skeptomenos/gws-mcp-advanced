@@ -16,6 +16,7 @@ import logging
 import socket
 import threading
 import time
+from collections.abc import Callable
 from urllib.parse import urlparse
 
 import uvicorn
@@ -34,6 +35,75 @@ logger = logging.getLogger(__name__)
 
 PORT_RANGE_START = 9876
 PORT_RANGE_END = 9899
+
+
+def _build_redirect_uri(base_uri: str, port: int) -> str:
+    return f"{base_uri}:{port}/oauth2callback"
+
+
+def _is_port_available(port: int) -> bool:
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            s.bind(("localhost", port))
+        return True
+    except OSError:
+        return False
+
+
+def _validate_running_server_reuse(
+    running_redirect_uri: str,
+    allowed_redirect_uris: list[str] | None,
+) -> tuple[bool, str]:
+    """Validate whether an already-running callback server may be reused."""
+    if not allowed_redirect_uris:
+        return True, ""
+
+    if running_redirect_uri in allowed_redirect_uris:
+        return True, ""
+
+    return (
+        False,
+        "Another local callback auth challenge is active on "
+        f"{running_redirect_uri}. Finish that auth flow before starting a callback flow for a "
+        "different registered redirect URI.",
+    )
+
+
+def _resolve_callback_bind_port(
+    preferred_ports: list[int] | None,
+    allow_sequential_fallback: bool,
+    *,
+    is_port_available: Callable[[int], bool] | None = None,
+    find_fallback_port: Callable[[], int | None] | None = None,
+) -> tuple[int | None, str]:
+    """Resolve which local callback port should be bound."""
+    port_checker = is_port_available or _is_port_available
+    fallback_finder = find_fallback_port or find_available_port
+
+    for candidate in preferred_ports or []:
+        if port_checker(candidate):
+            return candidate, ""
+
+    if preferred_ports and not allow_sequential_fallback:
+        return (
+            None,
+            "All registered OAuth callback ports "
+            f"{preferred_ports} are occupied. Another local callback auth challenge is active or the "
+            "registered redirect_uris are already in use.",
+        )
+
+    if preferred_ports:
+        logger.warning(
+            "All preferred OAuth callback ports %s are occupied; falling back to sequential allocation",
+            preferred_ports,
+        )
+
+    fallback_port = fallback_finder() if allow_sequential_fallback else None
+    if fallback_port is None:
+        return None, f"No available port in range {PORT_RANGE_START}-{PORT_RANGE_END}"
+
+    return fallback_port, ""
 
 
 def find_available_port(start: int = PORT_RANGE_START, end: int = PORT_RANGE_END) -> int | None:
@@ -64,7 +134,7 @@ class MinimalOAuthServer:
     def __init__(self, port: int, base_uri: str = "http://localhost"):
         self.port = port
         self.base_uri = base_uri
-        self.redirect_uri = f"{base_uri}:{port}/oauth2callback"
+        self.redirect_uri = _build_redirect_uri(base_uri, port)
         self.app = FastAPI()
         self.server: uvicorn.Server | None = None
         self.server_thread: threading.Thread | None = None
@@ -235,6 +305,7 @@ _minimal_oauth_server: MinimalOAuthServer | None = None
 def start_oauth_callback_server(
     base_uri: str = "http://localhost",
     preferred_ports: list[int] | None = None,
+    allow_sequential_fallback: bool = True,
 ) -> tuple[bool, str, str | None]:
     """
     Start OAuth callback server, preferring ports declared in the OAuth client's redirect_uris.
@@ -245,47 +316,36 @@ def start_oauth_callback_server(
             Each port is tried in order so the callback URL matches one of the URIs
             registered in Google Cloud Console.  Falls back to sequential allocation
             only when every preferred port is occupied.
+        allow_sequential_fallback: Whether sequential localhost fallback remains
+            allowed after preferred ports are exhausted.
 
     Returns:
         Tuple of (success, error_message, redirect_uri)
     """
     global _minimal_oauth_server
 
+    allowed_redirect_uris = [_build_redirect_uri(base_uri, port) for port in preferred_ports or []] or None
+
     if _minimal_oauth_server is not None and _minimal_oauth_server.is_running:
-        return True, "", _minimal_oauth_server.redirect_uri
-
-    port: int | None = None
-
-    # Try each preferred port in declaration order (from OAuth client redirect_uris)
-    for candidate in preferred_ports or []:
-        try:
-            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-                s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-                s.bind(("localhost", candidate))
-            port = candidate
-            logger.info("Using preferred OAuth callback port %d (from client redirect_uris)", candidate)
-            break
-        except OSError:
-            logger.debug(
-                "Preferred OAuth callback port %d is occupied; trying next registered port",
-                candidate,
-            )
-
-    if port is None and preferred_ports:
-        logger.warning(
-            "All preferred OAuth callback ports %s are occupied; falling back to sequential allocation",
-            preferred_ports,
+        can_reuse, reuse_error = _validate_running_server_reuse(
+            running_redirect_uri=_minimal_oauth_server.redirect_uri,
+            allowed_redirect_uris=allowed_redirect_uris,
         )
+        if can_reuse:
+            return True, "", _minimal_oauth_server.redirect_uri
+        return False, reuse_error, None
 
-    # Sequential fallback
+    port, error_msg = _resolve_callback_bind_port(
+        preferred_ports=preferred_ports,
+        allow_sequential_fallback=allow_sequential_fallback,
+        is_port_available=_is_port_available,
+        find_fallback_port=find_available_port,
+    )
     if port is None:
-        port = find_available_port()
-        if port is None:
-            return (
-                False,
-                f"No available port in range {PORT_RANGE_START}-{PORT_RANGE_END}",
-                None,
-            )
+        return False, error_msg, None
+
+    if preferred_ports and port in preferred_ports:
+        logger.info("Using preferred OAuth callback port %d (from client redirect_uris)", port)
 
     logger.info(f"Starting OAuth callback server on {base_uri}:{port}")
     _minimal_oauth_server = MinimalOAuthServer(port, base_uri)

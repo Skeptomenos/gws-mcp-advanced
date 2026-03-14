@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+from collections.abc import Awaitable, Callable
 from datetime import datetime, timedelta, timezone
+from types import SimpleNamespace
+from typing import Any, cast
 from unittest.mock import AsyncMock
 
 import pytest
@@ -13,9 +16,11 @@ from auth.google_auth import (
     AUTH_FLOW_CALLBACK,
     AUTH_FLOW_DEVICE,
     _get_effective_auth_flow_mode,
+    _resolve_callback_port_policy,
     _start_or_resume_device_auth_flow,
     get_authenticated_google_service,
     initiate_auth_challenge,
+    resolve_oauth_redirect_uri_for_auth_flow,
 )
 from auth.oauth_clients import OAuthClientSelection
 from core.errors import GoogleAuthenticationError
@@ -33,10 +38,10 @@ def _valid_credentials() -> Credentials:
     )
 
 
-def _tool_callable(tool_obj):
+def _tool_callable(tool_obj: object) -> Callable[..., Awaitable[str]]:
     tool_fn = getattr(tool_obj, "fn", None) or getattr(tool_obj, "func", None) or getattr(tool_obj, "_fn", None)
     assert callable(tool_fn), "Could not resolve callable tool function"
-    return tool_fn
+    return cast(Callable[..., Awaitable[str]], tool_fn)
 
 
 def test_effective_auth_flow_mode_auto_prefers_device_for_stdio(monkeypatch):
@@ -97,6 +102,113 @@ def test_effective_auth_flow_mode_honors_client_flow_preference_device(monkeypat
     )
 
     assert _get_effective_auth_flow_mode("user@example.com") == AUTH_FLOW_DEVICE
+
+
+def test_resolve_callback_port_policy_fails_for_mapped_client_missing_client_type():
+    oauth_client = OAuthClientSelection(
+        client_key="work",
+        client_id="client-id",
+        client_secret="client-secret",
+        source="account_map",
+        selection_mode="mapped_only",
+        redirect_uris=["http://localhost:9876/oauth2callback"],
+        client_type=None,
+    )
+
+    with pytest.raises(GoogleAuthenticationError, match="client_type"):
+        _resolve_callback_port_policy(oauth_client)
+
+
+def test_resolve_callback_port_policy_fails_for_mapped_web_client_missing_redirect_uris():
+    oauth_client = OAuthClientSelection(
+        client_key="work",
+        client_id="client-id",
+        client_secret="client-secret",
+        source="domain_map",
+        selection_mode="mapped_only",
+        redirect_uris=None,
+        client_type="web",
+    )
+
+    with pytest.raises(GoogleAuthenticationError, match="redirect_uris"):
+        _resolve_callback_port_policy(oauth_client)
+
+
+def test_resolve_callback_port_policy_disables_fallback_for_mapped_web_redirects():
+    oauth_client = OAuthClientSelection(
+        client_key="work",
+        client_id="client-id",
+        client_secret="client-secret",
+        source="script_map",
+        selection_mode="mapped_only",
+        redirect_uris=[
+            "http://localhost:9876/oauth2callback",
+            "http://localhost:9877/oauth2callback",
+            "http://localhost:9876/oauth2callback",
+        ],
+        client_type="web",
+    )
+
+    preferred_ports, allow_sequential_fallback = _resolve_callback_port_policy(oauth_client)
+
+    assert preferred_ports == [9876, 9877]
+    assert allow_sequential_fallback is False
+
+
+def test_resolve_callback_port_policy_allows_fallback_for_installed_client():
+    oauth_client = OAuthClientSelection(
+        client_key="local-default",
+        client_id="client-id",
+        client_secret="client-secret",
+        source="default_client",
+        selection_mode="default_first",
+        redirect_uris=None,
+        client_type="installed",
+    )
+
+    preferred_ports, allow_sequential_fallback = _resolve_callback_port_policy(oauth_client)
+
+    assert preferred_ports == []
+    assert allow_sequential_fallback is True
+
+
+def test_resolve_callback_port_policy_allows_fallback_for_legacy_env_client():
+    oauth_client = OAuthClientSelection(
+        client_key="legacy-env",
+        client_id="client-id",
+        client_secret="client-secret",
+        source="legacy_env",
+        selection_mode="legacy",
+        redirect_uris=None,
+        client_type=None,
+    )
+
+    preferred_ports, allow_sequential_fallback = _resolve_callback_port_policy(oauth_client)
+
+    assert preferred_ports == []
+    assert allow_sequential_fallback is True
+
+
+def test_resolve_oauth_redirect_uri_threads_sequential_fallback_policy(monkeypatch):
+    observed: dict[str, object] = {}
+
+    def _start_server(*, preferred_ports=None, allow_sequential_fallback=True, base_uri="http://localhost"):
+        observed["preferred_ports"] = preferred_ports
+        observed["allow_sequential_fallback"] = allow_sequential_fallback
+        observed["base_uri"] = base_uri
+        return True, "", "http://localhost:9877/oauth2callback"
+
+    monkeypatch.setattr("auth.google_auth.get_transport_mode", lambda: "stdio")
+    monkeypatch.setattr("auth.oauth_callback_server.start_oauth_callback_server", _start_server)
+
+    redirect_uri = resolve_oauth_redirect_uri_for_auth_flow(
+        preferred_ports=[9876, 9877],
+        allow_sequential_fallback=False,
+    )
+
+    assert redirect_uri == "http://localhost:9877/oauth2callback"
+    assert observed["preferred_ports"] == [9876, 9877]
+    assert observed["allow_sequential_fallback"] is False
 
 
 def test_start_or_resume_device_auth_reuses_pending_flow(monkeypatch):
@@ -198,6 +310,17 @@ async def test_initiate_auth_challenge_device_invalid_client_falls_back_to_callb
 
     monkeypatch.setattr("auth.google_auth._get_auth_flow_mode", lambda: AUTH_FLOW_AUTO)
     monkeypatch.setattr("auth.google_auth._get_effective_auth_flow_mode", lambda *_, **__: AUTH_FLOW_DEVICE)
+    monkeypatch.setattr(
+        "auth.google_auth._resolve_oauth_client_selection",
+        lambda *_args, **_kwargs: OAuthClientSelection(
+            client_key="legacy-env",
+            client_id="client-id",
+            client_secret="client-secret",
+            source="legacy_env",
+            selection_mode="legacy",
+            client_type=None,
+        ),
+    )
     monkeypatch.setattr("auth.google_auth._poll_pending_device_auth_flow", AsyncMock(return_value=(None, None)))
     monkeypatch.setattr(
         "auth.google_auth._start_or_resume_device_auth_flow",
@@ -252,6 +375,17 @@ async def test_initiate_auth_challenge_poll_invalid_client_falls_back_to_callbac
     monkeypatch.setattr("auth.google_auth._get_auth_flow_mode", lambda: AUTH_FLOW_AUTO)
     monkeypatch.setattr("auth.google_auth._get_effective_auth_flow_mode", lambda *_, **__: AUTH_FLOW_DEVICE)
     monkeypatch.setattr(
+        "auth.google_auth._resolve_oauth_client_selection",
+        lambda *_args, **_kwargs: OAuthClientSelection(
+            client_key="legacy-env",
+            client_id="client-id",
+            client_secret="client-secret",
+            source="legacy_env",
+            selection_mode="legacy",
+            client_type=None,
+        ),
+    )
+    monkeypatch.setattr(
         "auth.google_auth._poll_pending_device_auth_flow",
         AsyncMock(return_value=(None, "error:invalid_client:Invalid client type for device flow")),
     )
@@ -279,6 +413,17 @@ async def test_initiate_auth_challenge_callback_mode_uses_start_auth_flow(monkey
     start_auth_flow_mock = AsyncMock(return_value="callback-auth-link")
 
     monkeypatch.setattr("auth.google_auth._get_effective_auth_flow_mode", lambda *_, **__: AUTH_FLOW_CALLBACK)
+    monkeypatch.setattr(
+        "auth.google_auth._resolve_oauth_client_selection",
+        lambda *_args, **_kwargs: OAuthClientSelection(
+            client_key="legacy-env",
+            client_id="client-id",
+            client_secret="client-secret",
+            source="legacy_env",
+            selection_mode="legacy",
+            client_type=None,
+        ),
+    )
     monkeypatch.setattr(
         "auth.google_auth.resolve_oauth_redirect_uri_for_auth_flow",
         lambda **_: "http://localhost:9876/oauth2callback",
@@ -308,13 +453,7 @@ async def test_start_google_auth_manual_path_delegates_to_shared_challenge(monke
     monkeypatch.setattr(core_server, "get_credentials", lambda **_: None)
     monkeypatch.setattr(core_server, "initiate_auth_challenge", challenge_mock)
 
-    start_google_auth_tool = core_server.start_google_auth
-    start_google_auth = (
-        getattr(start_google_auth_tool, "fn", None)
-        or getattr(start_google_auth_tool, "func", None)
-        or getattr(start_google_auth_tool, "_fn", None)
-    )
-    assert callable(start_google_auth), "Could not resolve callable start_google_auth tool function"
+    start_google_auth = _tool_callable(core_server.start_google_auth)
 
     result = await start_google_auth(
         service_name="Google Drive",
@@ -352,11 +491,6 @@ async def test_complete_google_auth_prefers_callback_url(monkeypatch):
     callback_mock = AsyncMock(return_value=("user@example.com", object()))
     monkeypatch.setattr(core_server, "get_current_scopes", lambda: {"scope.a"})
     monkeypatch.setattr(core_server, "handle_auth_callback", callback_mock)
-    monkeypatch.setattr(
-        core_server,
-        "get_oauth_redirect_uri_for_current_mode",
-        lambda: "http://localhost:9876/oauth2callback",
-    )
 
     complete_google_auth = _tool_callable(core_server.complete_google_auth)
     callback_url = "http://localhost:9876/oauth2callback?code=abc&state=xyz"
@@ -368,21 +502,65 @@ async def test_complete_google_auth_prefers_callback_url(monkeypatch):
 
     assert "Authentication completed successfully" in result
     assert "user@example.com" in result
+    assert callback_mock.await_args is not None
     assert callback_mock.await_args.kwargs["authorization_response"] == callback_url
+
+
+@pytest.mark.asyncio
+async def test_complete_google_auth_uses_persisted_redirect_uri_for_callback_url_state(monkeypatch):
+    import core.server as core_server
+
+    class _Store:
+        def validate_oauth_state(self, state, session_id=None):
+            assert state == "state-1"
+            assert session_id is None
+            return {
+                "redirect_uri": "http://localhost:9877/oauth2callback",
+                "oauth_client_key": "work",
+                "expected_user_email": "user@example.com",
+                "code_verifier": "persisted-verifier",
+                "session_id": None,
+            }
+
+    callback_mock = AsyncMock(return_value=("user@example.com", object()))
+    monkeypatch.setattr(core_server, "get_current_scopes", lambda: {"scope.a"})
+    monkeypatch.setattr(core_server, "handle_auth_callback", callback_mock)
+    monkeypatch.setattr(core_server, "get_oauth21_session_store", lambda: _Store())
+
+    complete_google_auth = _tool_callable(core_server.complete_google_auth)
+    callback_url = "http://localhost:9876/oauth2callback?code=abc&state=state-1"
+    result = await complete_google_auth(
+        service_name="Google Drive",
+        user_google_email="user@example.com",
+        callback_url=callback_url,
+    )
+
+    assert "Authentication completed successfully" in result
+    assert callback_mock.await_args is not None
+    assert callback_mock.await_args.kwargs["authorization_response"] == callback_url
+    assert callback_mock.await_args.kwargs["redirect_uri"] == "http://localhost:9877/oauth2callback"
 
 
 @pytest.mark.asyncio
 async def test_complete_google_auth_supports_code_state_fallback(monkeypatch):
     import core.server as core_server
 
+    class _Store:
+        def validate_oauth_state(self, state, session_id=None):
+            assert state == "state-1"
+            assert session_id is None
+            return {
+                "redirect_uri": "http://localhost:9877/oauth2callback",
+                "oauth_client_key": "work",
+                "expected_user_email": "user@example.com",
+                "code_verifier": "persisted-verifier",
+                "session_id": None,
+            }
+
     callback_mock = AsyncMock(return_value=("user@example.com", object()))
     monkeypatch.setattr(core_server, "get_current_scopes", lambda: {"scope.a"})
     monkeypatch.setattr(core_server, "handle_auth_callback", callback_mock)
-    monkeypatch.setattr(
-        core_server,
-        "get_oauth_redirect_uri_for_current_mode",
-        lambda: "http://localhost:9876/oauth2callback",
-    )
+    monkeypatch.setattr(core_server, "get_oauth21_session_store", lambda: _Store())
 
     complete_google_auth = _tool_callable(core_server.complete_google_auth)
     result = await complete_google_auth(
@@ -393,9 +571,50 @@ async def test_complete_google_auth_supports_code_state_fallback(monkeypatch):
     )
 
     assert "Authentication completed successfully" in result
+    assert callback_mock.await_args is not None
     auth_response = callback_mock.await_args.kwargs["authorization_response"]
+    assert auth_response.startswith("http://localhost:9877/oauth2callback?")
     assert "code=4%2Fabc" in auth_response
     assert "state=state-1" in auth_response
+    assert callback_mock.await_args.kwargs["redirect_uri"] == "http://localhost:9877/oauth2callback"
+
+
+@pytest.mark.asyncio
+async def test_legacy_oauth2_callback_uses_persisted_redirect_uri(monkeypatch):
+    import core.server as core_server
+
+    callback_mock = AsyncMock(return_value=("user@example.com", _valid_credentials()))
+
+    def store_session_mock(**kwargs):
+        return None
+
+    class _Store:
+        def store_session(self, **kwargs):
+            store_session_mock(**kwargs)
+
+    request = SimpleNamespace(
+        query_params={"state": "state-1", "code": "abc"},
+        url="http://localhost:9876/oauth2callback?code=abc&state=state-1",
+        state=SimpleNamespace(session_id="mcp-session-123"),
+    )
+
+    monkeypatch.setattr(core_server, "check_client_secrets", lambda: None)
+    monkeypatch.setattr(core_server, "get_current_scopes", lambda: {"scope.a"})
+    monkeypatch.setattr(core_server, "handle_auth_callback", callback_mock)
+    monkeypatch.setattr(core_server, "get_oauth21_session_store", lambda: _Store())
+    monkeypatch.setattr(
+        core_server,
+        "_get_persisted_redirect_uri_for_state",
+        lambda state: "http://localhost:9877/oauth2callback",
+    )
+
+    response = await core_server.legacy_oauth2_callback(cast(Any, request))
+
+    assert response.status_code == 200
+    assert callback_mock.await_args is not None
+    assert callback_mock.await_args.kwargs["authorization_response"] == str(request.url)
+    assert callback_mock.await_args.kwargs["redirect_uri"] == "http://localhost:9877/oauth2callback"
+    assert callback_mock.await_args.kwargs["session_id"] == "mcp-session-123"
 
 
 @pytest.mark.asyncio
@@ -469,6 +688,7 @@ async def test_handle_auth_callback_rehydrates_flow_with_persisted_code_verifier
     assert verified_user == "user@example.com"
     assert credentials is flow.credentials
     assert captured["code_verifier"] == "persisted-verifier"
+    assert flow.fetch_kwargs is not None
     assert flow.fetch_kwargs["authorization_response"].endswith("code=abc&state=state-1")
     assert store.consumed_state == "state-1"
 

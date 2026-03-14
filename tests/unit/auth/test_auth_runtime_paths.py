@@ -4,10 +4,12 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
+from typing import Any, cast
 
 import pytest
 from google.oauth2.credentials import Credentials
 
+import auth.diagnostics as diagnostics_module
 import auth.oauth21_session_store as oauth21_session_store_module
 from auth.google_auth import get_credentials
 from auth.middleware.auth_info import AuthInfoMiddleware
@@ -47,7 +49,9 @@ async def test_try_stdio_session_auth_uses_requested_user_binding(monkeypatch):
     monkeypatch.setattr("auth.config.get_transport_mode", lambda: "stdio")
     monkeypatch.setattr("auth.oauth21_session_store.get_oauth21_session_store", lambda: _Store())
 
-    authenticated = await middleware._try_stdio_session_auth(context)  # noqa: SLF001 - private method tested by design
+    authenticated = await middleware._try_stdio_session_auth(  # noqa: SLF001 - private method tested by design
+        cast(Any, context)
+    )
 
     assert authenticated is True
     assert context_obj.get_state("authenticated_user_email") == "alice@example.com"
@@ -76,7 +80,9 @@ async def test_try_stdio_session_auth_falls_back_to_single_user(monkeypatch):
     monkeypatch.setattr("auth.config.get_transport_mode", lambda: "stdio")
     monkeypatch.setattr("auth.oauth21_session_store.get_oauth21_session_store", lambda: _Store())
 
-    authenticated = await middleware._try_stdio_session_auth(context)  # noqa: SLF001 - private method tested by design
+    authenticated = await middleware._try_stdio_session_auth(  # noqa: SLF001 - private method tested by design
+        cast(Any, context)
+    )
 
     assert authenticated is True
     assert context_obj.get_state("authenticated_user_email") == "solo@example.com"
@@ -100,7 +106,9 @@ async def test_try_mcp_session_binding_sets_authenticated_user(monkeypatch):
 
     monkeypatch.setattr("auth.oauth21_session_store.get_oauth21_session_store", lambda: _Store())
 
-    authenticated = await middleware._try_mcp_session_binding(context)  # noqa: SLF001 - private method tested by design
+    authenticated = await middleware._try_mcp_session_binding(  # noqa: SLF001 - private method tested by design
+        cast(Any, context)
+    )
 
     assert authenticated is True
     assert context_obj.get_state("authenticated_user_email") == "bound@example.com"
@@ -117,11 +125,14 @@ def test_ensure_session_from_access_token_uses_claim_email_and_stores_session(mo
             captured.update(kwargs)
 
     expiry = datetime.now(tz=timezone.utc) + timedelta(hours=1)
-    access_token = SimpleNamespace(
-        token="ya29.claim_token",
-        claims={"email": "claim@example.com"},
-        scopes=["scope.read"],
-        expires_at=int(expiry.timestamp()),
+    access_token = cast(
+        Any,
+        SimpleNamespace(
+            token="ya29.claim_token",
+            claims={"email": "claim@example.com"},
+            scopes=["scope.read"],
+            expires_at=int(expiry.timestamp()),
+        ),
     )
 
     monkeypatch.setattr(oauth21_session_store_module, "_auth_provider", None)
@@ -260,3 +271,43 @@ def test_get_credentials_logs_credential_source_selection(monkeypatch, caplog):
 
     assert credentials is not None
     assert any("[CRED_SOURCE] source=file_store" in rec.message for rec in caplog.records)
+
+
+def test_get_credentials_logs_resolved_auth_decision(monkeypatch, caplog):
+    class _Store:
+        def get_credential(self, _user_email: str) -> Credentials:
+            return Credentials(
+                token="token-from-file",
+                refresh_token="refresh-token",
+                token_uri="https://oauth2.googleapis.com/token",
+                client_id="client-id",
+                client_secret="client-secret",
+                scopes=["scope.read"],
+                expiry=datetime.utcnow() + timedelta(hours=1),
+            )
+
+    caplog.set_level("INFO")
+    monkeypatch.setattr(diagnostics_module, "DIAGNOSTICS_ENABLED", True)
+    monkeypatch.setattr("auth.google_auth.is_stateless_mode", lambda: False)
+    monkeypatch.setattr("auth.google_auth.get_credential_store", lambda: _Store())
+    monkeypatch.setattr(
+        "auth.google_auth.resolve_oauth_client_for_user",
+        lambda _user_google_email, override_client_key=None: OAuthClientSelection(
+            client_key="work-client",
+            client_id="client-id",
+            client_secret="client-secret",
+            source="account_map",
+            selection_mode="mapped_only",
+            client_type="web",
+            redirect_uris=["http://localhost:9876/oauth2callback"],
+        ),
+    )
+
+    credentials = get_credentials(
+        user_google_email="diag@example.com",
+        required_scopes=["scope.read"],
+        session_id=None,
+    )
+
+    assert credentials is not None
+    assert any("[AUTH_DECISION]" in rec.message for rec in caplog.records)

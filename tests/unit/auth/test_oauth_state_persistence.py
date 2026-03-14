@@ -188,6 +188,35 @@ class TestOAuthStatePersistence:
             state_info = store2.validate_and_consume_oauth_state(test_state)
             assert state_info["session_id"] == "survivor_session"
 
+    def test_state_metadata_survives_store_recreation(self):
+        """Persisted OAuth state should retain redirect/client metadata across restart."""
+        from auth.oauth21_session_store import OAuth21SessionStore
+
+        with patch.dict(os.environ, {"GOOGLE_MCP_CREDENTIALS_DIR": self.temp_dir}):
+            store1 = OAuth21SessionStore()
+            store1._states_file_path = self.states_file
+
+            store1.store_oauth_state(
+                "survivor_state",
+                session_id="survivor_session",
+                oauth_client_key="work",
+                expected_user_email="user@example.com",
+                code_verifier="persisted-verifier",
+                redirect_uri="http://localhost:9877/oauth2callback",
+            )
+
+            store2 = OAuth21SessionStore()
+            store2._states_file_path = self.states_file
+            store2._load_oauth_states_from_disk()
+
+            state_info = store2.validate_oauth_state("survivor_state")
+
+            assert state_info["session_id"] == "survivor_session"
+            assert state_info["oauth_client_key"] == "work"
+            assert state_info["expected_user_email"] == "user@example.com"
+            assert state_info["code_verifier"] == "persisted-verifier"
+            assert state_info["redirect_uri"] == "http://localhost:9877/oauth2callback"
+
     def test_handles_missing_file_gracefully(self):
         """Test that loading handles missing file gracefully."""
         from auth.oauth21_session_store import OAuth21SessionStore

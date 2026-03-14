@@ -1,5 +1,34 @@
 # Release Notes
 
+## 2026-03-14 - Deterministic OAuth Callback and Auth Policy Stabilization
+
+### Fixed
+- Resolved callback auth policy before browser launch so one auth attempt now commits to one OAuth client, one flow, and one redirect policy.
+- Stopped mapped `web` callback auth from silently falling back to unregistered localhost ports.
+- Reused persisted OAuth challenge metadata during manual completion so restart or runtime redirect changes no longer cause callback completion to drift away from the original redirect URI.
+- Restricted local callback server reuse to identical allowed redirect URIs so concurrent callback attempts fail closed instead of rebinding implicitly.
+
+### Added
+- Deterministic callback-port policy enforcement for mapped multi-client auth profiles.
+- Auth decision diagnostics behind `AUTH_DIAGNOSTICS=1`.
+- Regression coverage for callback policy resolution, callback server reuse rules, runtime diagnostics, and persisted OAuth completion state:
+  - `tests/unit/auth/test_google_auth_flow_modes.py`
+  - `tests/unit/auth/test_oauth_callback_server.py`
+  - `tests/unit/auth/test_auth_runtime_paths.py`
+  - `tests/unit/auth/test_oauth_state_persistence.py`
+
+### Changed
+- Mapped profiles loaded from `auth_clients.json` must preserve `client_type`; mapped `web` profiles must also preserve `redirect_uris` for local callback auth.
+- `import_google_auth_client` is now the recommended way to populate mapped client config because it preserves the Google OAuth client metadata needed for deterministic callback policy.
+- Local `installed` and legacy env-only auth still allow sequential localhost callback fallback, while mapped `web` auth now binds only to registered ports.
+
+### Validation
+- `uv run pytest tests/unit/auth/test_google_auth_flow_modes.py tests/unit/auth/test_oauth_callback_server.py tests/unit/auth/test_auth_runtime_paths.py tests/unit/auth/test_oauth_state_persistence.py -q`
+- `uv run ruff check .`
+- `uv run ruff format --check .`
+- `uv run pytest tests/unit/auth/test_google_auth_flow_modes.py tests/unit/auth/test_oauth_callback_server.py tests/unit/auth/test_auth_runtime_paths.py tests/unit/auth/test_oauth_state_persistence.py tests/unit/auth/test_oauth_clients.py -v`
+- `uv run pytest`
+
 ## 2026-03-12 - PKCE Callback Verifier Persistence + Release v1.0.6
 
 ### Fixed

@@ -155,3 +155,34 @@ def log_session_binding(
         f"[SESSION_BIND] mcp_session={mcp_session_id[:8] if mcp_session_id else None} "
         f"email={user_email} action={action} success={success} reason={reason}"
     )
+
+
+def log_resolved_auth_decision(
+    *,
+    user_email: str | None,
+    client_key: str | None,
+    client_type: str | None,
+    source: str | None,
+    selection_mode: str | None,
+    selected_flow: str,
+    redirect_uri: str | None,
+    preferred_ports: list[int] | None,
+    allow_sequential_fallback: bool,
+) -> None:
+    """Log the resolved auth decision for one auth attempt."""
+    if not DIAGNOSTICS_ENABLED:
+        return
+
+    logger.info(
+        "[AUTH_DECISION] user=%s client_key=%s client_type=%s source=%s selection_mode=%s "
+        "flow=%s redirect_uri=%s preferred_ports=%s allow_sequential_fallback=%s",
+        user_email,
+        client_key,
+        client_type,
+        source,
+        selection_mode,
+        selected_flow,
+        redirect_uri,
+        preferred_ports or [],
+        allow_sequential_fallback,
+    )

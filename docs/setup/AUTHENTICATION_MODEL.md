@@ -11,9 +11,13 @@ This document explains how authentication works at runtime, beyond the quick set
 - In `stdio`, default auth interaction is device flow (`WORKSPACE_MCP_AUTH_FLOW=auto`).
 - In `streamable-http`, default auth interaction is callback flow.
 - In `auto` mode, device-flow `invalid_client` falls back to callback flow automatically.
+- Callback auth resolves one client, one flow, and one redirect policy before the browser challenge is created.
+- Mapped `web` clients use registered redirect URIs only; malformed mapped profiles fail closed with repair guidance.
 - Credentials are persisted and reused across restarts.
+- Manual completion reuses persisted OAuth challenge metadata (including redirect URI) across restart.
 - Session binding is used to prevent cross-account credential access.
 - Optional single-MCP multi-client routing supports private + enterprise OAuth client separation.
+- `AUTH_DIAGNOSTICS=1` emits auth decision and credential lookup diagnostics for one auth attempt.
 - Mutating tools still require explicit `dry_run=False` to execute writes.
 
 ## Runtime Modes
@@ -34,12 +38,15 @@ This document explains how authentication works at runtime, beyond the quick set
    - MCP session binding.
 3. The tool decorator (`@require_google_service`) enforces service auth before tool logic runs.
 4. If credentials are missing, expired without refresh, or missing required scopes:
-   - auth challenge is created based on `WORKSPACE_MCP_AUTH_FLOW`.
+   - auth challenge is created based on `WORKSPACE_MCP_AUTH_FLOW` after OAuth client and redirect policy are resolved.
 5. In `stdio` default mode (`auto`):
-   - the server starts/resumes Google device auth and returns verification URL + user code.
+    - the server starts/resumes Google device auth and returns verification URL + user code.
 6. In callback mode:
-   - the server returns OAuth URL and waits for browser redirect callback.
+    - the server returns OAuth URL and waits for browser redirect callback,
+    - local `installed` auth may use sequential localhost callback fallback,
+    - mapped `web` auth may bind only to registered localhost redirect ports.
 7. After auth completes, credentials are stored and bound to session/user.
+   - manual completion via `callback_url` or `authorization_code + state` reuses the stored challenge metadata.
 8. Later calls reuse stored credentials and refresh tokens when needed.
 
 ## Auth Interaction Modes
@@ -49,6 +56,14 @@ This document explains how authentication works at runtime, beyond the quick set
 | `auto` (default) | Device flow | Callback flow | Most deployments |
 | `device` | Device flow | Device flow | Callback-hostile agent runtimes |
 | `callback` | Callback flow | Callback flow | Explicit browser callback preference |
+
+## Callback Policy Resolution
+
+- `installed` is the primary local/default auth path.
+- Legacy env-only single-client local auth still behaves like `installed` for localhost callback fallback.
+- Mapped `web` clients remain supported, but they must declare `redirect_uris` and may use only registered localhost callback ports.
+- A mapped profile with `client_type=None` is invalid for callback-policy resolution and fails closed with repair guidance.
+- A running local callback server may be reused only when the new auth attempt resolves to the identical redirect URI already being served.
 
 ## First-Time Authentication
 
@@ -112,6 +127,7 @@ Setup guide:
 | `USER_GOOGLE_EMAIL` | Preferred target account hint for local client setups | Yes for standard client setup |
 | `WORKSPACE_MCP_CONFIG_DIR` | Custom config/credential directory | No |
 | `WORKSPACE_MCP_AUTH_FLOW` | Auth interaction mode (`auto`, `device`, `callback`) | No |
+| `AUTH_DIAGNOSTICS` | Enables auth decision diagnostics when set to `1` | No |
 
 ## Security Controls and Flags
 
@@ -144,7 +160,8 @@ Practical recovery sequence:
   - device flow: verification completed with the same account and code not expired,
   - callback flow: callback URL opened and consent completed.
 - Confirm `GOOGLE_OAUTH_CLIENT_ID` and `GOOGLE_OAUTH_CLIENT_SECRET` are set.
-- If callback mode is used, confirm callback URL registered in Google Cloud matches runtime configuration.
+- If callback mode is used, confirm the started auth challenge used a redirect URI that is actually registered in Google Cloud.
+- Manual completion uses the redirect URI persisted when the challenge started, not whatever callback setting is active now.
 - If running in an MCP client with strict tool-call timeouts, prefer `WORKSPACE_MCP_AUTH_FLOW=auto` or `device`.
 
 ### Credentials exist but wrong account is used
@@ -159,6 +176,16 @@ Practical recovery sequence:
 - Verify `script_clients`, `account_clients`, and `domain_clients` map the request to the intended client.
 - Verify client `allowed_domains` includes the account domain.
 - Use `import_google_auth_client` and re-run auth if mappings are incomplete.
+
+### Mapped client is missing `client_type` or `redirect_uris`
+
+- Re-import the original Google OAuth client JSON with `import_google_auth_client`.
+- Avoid hand-editing mapped client profiles unless you also preserve `client_type` and, for `web`, the exact `redirect_uris`.
+
+### "Another local callback auth challenge is active"
+
+- Finish the currently running callback flow first.
+- If you intentionally want reuse, the new challenge must resolve to the exact same redirect URI the local callback server is already serving.
 
 ### HTTP mode token/session confusion
 

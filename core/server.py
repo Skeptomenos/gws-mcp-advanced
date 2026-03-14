@@ -4,7 +4,7 @@ import os
 from collections.abc import Callable
 from importlib import import_module, metadata
 from typing import Any
-from urllib.parse import quote_plus
+from urllib.parse import parse_qs, quote_plus, urlparse
 
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastmcp import FastMCP
@@ -16,9 +16,6 @@ from starlette.requests import Request
 from auth.config import (
     USER_GOOGLE_EMAIL,
     get_transport_mode,
-)
-from auth.config import (
-    get_oauth_redirect_uri as get_oauth_redirect_uri_for_current_mode,
 )
 from auth.config import (
     set_transport_mode as _set_transport_mode,
@@ -47,6 +44,28 @@ _auth_provider: GoogleProvider | None = None
 _legacy_callback_registered = False
 
 session_middleware = Middleware(MCPSessionMiddleware)
+
+
+def _load_pending_oauth_state(state: str | None) -> dict[str, Any] | None:
+    """Load pending OAuth state metadata without consuming it."""
+    if not state:
+        return None
+
+    store = get_oauth21_session_store()
+    return store.validate_oauth_state(state, session_id=None)
+
+
+def _get_persisted_redirect_uri_for_state(state: str | None) -> str:
+    """Resolve redirect URI for auth completion from persisted challenge state."""
+    try:
+        state_info = _load_pending_oauth_state(state)
+    except ValueError:
+        state_info = None
+    if not state_info or not state_info.get("redirect_uri"):
+        raise ValueError(
+            "Could not load stored OAuth challenge metadata for this state. Restart authentication and try again."
+        )
+    return str(state_info["redirect_uri"])
 
 
 # Custom FastMCP that adds secure middleware stack for OAuth 2.1
@@ -461,10 +480,12 @@ async def legacy_oauth2_callback(request: Request) -> HTMLResponse:
         if hasattr(request, "state") and hasattr(request.state, "session_id"):
             mcp_session_id = request.state.session_id
 
+        stored_redirect_uri = _get_persisted_redirect_uri_for_state(state)
+
         verified_user_id, credentials = await handle_auth_callback(
             scopes=get_current_scopes(),
             authorization_response=str(request.url),
-            redirect_uri=get_oauth_redirect_uri_for_current_mode(),
+            redirect_uri=stored_redirect_uri,
             session_id=mcp_session_id,
         )
 
@@ -560,8 +581,15 @@ async def complete_google_auth(
 
     if callback_url:
         authorization_response = callback_url
+        parsed_response = urlparse(callback_url)
+        state_values = parse_qs(parsed_response.query).get("state")
+        callback_state = state_values[0] if state_values else None
+        try:
+            redirect_uri = _get_persisted_redirect_uri_for_state(callback_state)
+        except ValueError:
+            redirect_uri = f"{parsed_response.scheme}://{parsed_response.netloc}{parsed_response.path}"
     elif authorization_code and state:
-        redirect_uri = get_oauth_redirect_uri_for_current_mode()
+        redirect_uri = _get_persisted_redirect_uri_for_state(state)
         authorization_response = f"{redirect_uri}?code={quote_plus(authorization_code)}&state={quote_plus(state)}"
     else:
         return "**Authentication Error:** Provide `callback_url` (preferred) or both `authorization_code` and `state`."
@@ -571,7 +599,7 @@ async def complete_google_auth(
         verified_user_id, _ = await handle_auth_callback(
             scopes=required_scopes,
             authorization_response=authorization_response,
-            redirect_uri=get_oauth_redirect_uri_for_current_mode(),
+            redirect_uri=redirect_uri,
             session_id=None,
         )
         return (

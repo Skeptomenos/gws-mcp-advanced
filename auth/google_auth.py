@@ -28,6 +28,7 @@ from auth.config import (
     get_oauth_redirect_uri as get_oauth_redirect_uri_for_current_mode,
 )
 from auth.credential_store import get_credential_store
+from auth.diagnostics import log_resolved_auth_decision
 from auth.oauth21_session_store import get_oauth21_session_store
 from auth.oauth_clients import OAuthClientSelection, ensure_auth_clients_config, resolve_oauth_client_for_user
 from auth.scopes import SCOPES, get_current_scopes  # noqa
@@ -197,6 +198,45 @@ def _extract_ports_from_redirect_uris(redirect_uris: list[str] | None) -> list[i
     return ports
 
 
+def _resolve_callback_port_policy(oauth_client: OAuthClientSelection) -> tuple[list[int], bool]:
+    """Resolve callback port behavior for one OAuth client selection."""
+    if oauth_client.source == "legacy_env":
+        return [], True
+
+    client_type = (oauth_client.client_type or "").strip().lower() or None
+    if not client_type:
+        raise GoogleAuthenticationError(
+            f"OAuth client '{oauth_client.client_key}' is missing client_type in auth_clients.json. "
+            "Re-import the original Google OAuth client JSON with import_google_auth_client or add "
+            "client_type explicitly."
+        )
+
+    if client_type == "installed":
+        return [], True
+
+    if client_type != "web":
+        raise GoogleAuthenticationError(
+            f"OAuth client '{oauth_client.client_key}' has unsupported client_type '{oauth_client.client_type}'. "
+            "Use 'installed' or 'web', or re-import the original Google OAuth client JSON."
+        )
+
+    if not oauth_client.redirect_uris:
+        raise GoogleAuthenticationError(
+            f"OAuth client '{oauth_client.client_key}' is missing redirect_uris in auth_clients.json. "
+            "Add redirect_uris or re-import the original Google OAuth client JSON with "
+            "import_google_auth_client."
+        )
+
+    preferred_ports = _extract_ports_from_redirect_uris(oauth_client.redirect_uris)
+    if not preferred_ports:
+        raise GoogleAuthenticationError(
+            f"OAuth client '{oauth_client.client_key}' does not declare any localhost redirect_uris for local "
+            "callback auth. Add localhost redirect_uris or re-import the original Google OAuth client JSON."
+        )
+
+    return preferred_ports, False
+
+
 async def _start_callback_auth_challenge(
     user_google_email: str,
     service_name: str,
@@ -210,26 +250,30 @@ async def _start_callback_auth_challenge(
     its registered redirect_uris, ensuring the callback server binds to the port
     that matches Google Cloud Console registration.
     """
-    # Resolve OAuth client to extract preferred port from its redirect_uris.
-    # Wrapped in try/except so that failures here (e.g. missing config during
-    # tests) fall back gracefully to sequential port allocation.
-    preferred_ports: list[int] = []
-    try:
-        oauth_client = _resolve_oauth_client_selection(user_google_email, override_client_key)
-        # For "installed" (Desktop) clients, Google accepts any localhost port,
-        # so we only need to extract preferred ports for "web" clients.
-        if oauth_client.client_type != "installed":
-            preferred_ports = _extract_ports_from_redirect_uris(oauth_client.redirect_uris)
-            if preferred_ports:
-                logger.info(
-                    "Using preferred OAuth callback ports %s from client '%s' redirect_uris",
-                    preferred_ports,
-                    oauth_client.client_key,
-                )
-    except Exception as exc:
-        logger.debug("Could not resolve OAuth client for port extraction: %s", exc)
+    oauth_client = _resolve_oauth_client_selection(user_google_email, override_client_key)
+    preferred_ports, allow_sequential_fallback = _resolve_callback_port_policy(oauth_client)
+    if preferred_ports:
+        logger.info(
+            "Using preferred OAuth callback ports %s from client '%s' redirect_uris",
+            preferred_ports,
+            oauth_client.client_key,
+        )
 
-    oauth_redirect_uri = resolve_oauth_redirect_uri_for_auth_flow(preferred_ports=preferred_ports or None)
+    oauth_redirect_uri = resolve_oauth_redirect_uri_for_auth_flow(
+        preferred_ports=preferred_ports or None,
+        allow_sequential_fallback=allow_sequential_fallback,
+    )
+    log_resolved_auth_decision(
+        user_email=user_google_email,
+        client_key=oauth_client.client_key,
+        client_type=oauth_client.client_type,
+        source=oauth_client.source,
+        selection_mode=oauth_client.selection_mode,
+        selected_flow=AUTH_FLOW_CALLBACK,
+        redirect_uri=oauth_redirect_uri,
+        preferred_ports=preferred_ports,
+        allow_sequential_fallback=allow_sequential_fallback,
+    )
     auth_message = await start_auth_flow(
         user_google_email=user_google_email,
         service_name=service_name,
@@ -303,7 +347,10 @@ def _store_put_credential_for_client(
     return credential_store.store_credential(user_google_email, credentials)
 
 
-def resolve_oauth_redirect_uri_for_auth_flow(preferred_ports: list[int] | None = None) -> str:
+def resolve_oauth_redirect_uri_for_auth_flow(
+    preferred_ports: list[int] | None = None,
+    allow_sequential_fallback: bool = True,
+) -> str:
     """
     Resolve redirect URI for callback-based auth and ensure callback availability in stdio mode.
 
@@ -311,6 +358,8 @@ def resolve_oauth_redirect_uri_for_auth_flow(preferred_ports: list[int] | None =
         preferred_ports: Ports extracted from the OAuth client's registered redirect_uris.
             Passed through to the callback server so it tries each registered port
             before falling back to sequential allocation.
+        allow_sequential_fallback: Whether callback binding may fall back to the
+            default localhost scan after registered ports are exhausted.
     """
     transport_mode = get_transport_mode()
     if transport_mode != "stdio":
@@ -318,7 +367,10 @@ def resolve_oauth_redirect_uri_for_auth_flow(preferred_ports: list[int] | None =
 
     from auth.oauth_callback_server import start_oauth_callback_server
 
-    success, error_msg, oauth_redirect_uri = start_oauth_callback_server(preferred_ports=preferred_ports)
+    success, error_msg, oauth_redirect_uri = start_oauth_callback_server(
+        preferred_ports=preferred_ports,
+        allow_sequential_fallback=allow_sequential_fallback,
+    )
     if not success or not oauth_redirect_uri:
         error_detail = f" ({error_msg})" if error_msg else ""
         raise GoogleAuthenticationError(f"Cannot initiate OAuth flow - callback server unavailable{error_detail}")
@@ -384,6 +436,17 @@ def _start_or_resume_device_auth_flow(
     oauth_client, client_id, client_secret = _resolve_client_id_and_secret(
         user_google_email,
         override_client_key=override_client_key,
+    )
+    log_resolved_auth_decision(
+        user_email=user_google_email,
+        client_key=oauth_client.client_key,
+        client_type=oauth_client.client_type,
+        source=oauth_client.source,
+        selection_mode=oauth_client.selection_mode,
+        selected_flow=AUTH_FLOW_DEVICE,
+        redirect_uri=None,
+        preferred_ports=None,
+        allow_sequential_fallback=True,
     )
 
     store = get_oauth21_session_store()
@@ -1200,6 +1263,7 @@ def get_credentials(
         Valid Credentials object or None.
     """
     oauth_client_key: str | None = None
+    oauth_client_selection: OAuthClientSelection | None = None
     if user_google_email:
         try:
             oauth_client_selection = _resolve_oauth_client_selection(
@@ -1207,6 +1271,20 @@ def get_credentials(
                 override_client_key=override_client_key,
             )
             oauth_client_key = oauth_client_selection.client_key
+            log_resolved_auth_decision(
+                user_email=user_google_email,
+                client_key=oauth_client_selection.client_key,
+                client_type=oauth_client_selection.client_type,
+                source=oauth_client_selection.source,
+                selection_mode=oauth_client_selection.selection_mode,
+                selected_flow=_get_effective_auth_flow_mode(
+                    user_google_email,
+                    override_client_key=override_client_key,
+                ),
+                redirect_uri=None,
+                preferred_ports=None,
+                allow_sequential_fallback=True,
+            )
         except Exception as e:
             logger.warning("[get_credentials] OAuth client resolution failed for %s: %s", user_google_email, e)
             return None
